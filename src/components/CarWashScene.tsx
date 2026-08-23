@@ -1669,7 +1669,7 @@ export default function CarWashScene() {
         if (e.s < e.sMin) e.s = e.sMax;
         // roues qui tournent proportionnellement à la distance parcourue
         e.wheels.forEach((w) => {
-          w.rotation.x -= (step / 0.35) * 2;
+          w.rotation.x -= ((w.userData.spinSign as number) ?? 1) * (step / 0.35) * 2;
         });
       });
 
