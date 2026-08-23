@@ -424,6 +424,13 @@ export default function CarWashScene() {
       }
       if (Array.isArray(state.city)) planIoRef.current.load(state.city);
       if (Array.isArray(state.houses)) planIoRef.current.loadHouses(state.houses);
+      if (Array.isArray(state.decor)) planIoRef.current.loadDecor(state.decor);
+      if (state.washStyle) {
+        const s = sanitizeWashStyle(state.washStyle);
+        washStyleRef.current = s;
+        setWashStyle(s);
+        washApplyRef.current(s);
+      }
       if (typeof state.residents === "number" && Number.isFinite(state.residents)) {
         const r = Math.max(0, Math.round(state.residents));
         residentsRef.current = r;
