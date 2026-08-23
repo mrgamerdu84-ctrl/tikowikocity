@@ -933,32 +933,45 @@ export default function CarWashScene() {
       });
 
 
-      // Arbres réguliers le long des trottoirs
+      // Arbres alignés le long des trottoirs, un sur deux entre carrefours
       Z_STREETS.forEach((z, zi) => {
         for (let x = xMin + 3; x <= xMax - 3; x += 6) {
           if (nearCross(x, X_STREETS)) continue;
           [-1, 1].forEach((side) => {
             const tr = makeTree();
-            tr.position.set(x, 0, z + side * (STREET_W / 2 + 0.9));
+            tr.position.set(x, 0, z + side * (STREET_W / 2 + 1.1));
             tr.scale.setScalar(0.85 + ((zi + x) % 3) * 0.06);
+            setShadow(tr);
             scene.add(tr);
           });
         }
       });
+      // Rangées d'arbres au cœur des îlots verts
+      for (let xi = 0; xi < X_STREETS.length - 1; xi++) {
+        for (let zi = 0; zi < Z_STREETS.length - 1; zi++) {
+          if ((xi + zi) % 2 === 0) continue;
+          const bx = (X_STREETS[xi]! + X_STREETS[xi + 1]!) / 2;
+          const bz = (Z_STREETS[zi]! + Z_STREETS[zi + 1]!) / 2;
+          [-1, 1].forEach((s) => {
+            const tr = makeTree();
+            tr.position.set(bx + s * 2.4, 0, bz + s * 2.4);
+            tr.scale.setScalar(0.75);
+            setShadow(tr);
+            scene.add(tr);
+          });
+        }
+      }
 
-      /* Mobilier urbain structuré sur trois grilles indépendantes.
-         Les feux sont réservés à six carrefours majeurs : exactement un poteau
-         par angle, donc quatre par carrefour, sans doublon. */
-      const CURB_OFFSET = STREET_W / 2 + 0.32;
+      /* Mobilier urbain 100 % Kenney, posé sur une grille stricte :
+         feux aux carrefours majeurs, lampadaires et bennes en bord de bloc. */
+      const CURB_OFFSET = STREET_W / 2 + 0.45;
       const signalX = X_STREETS.filter((_, i) => i % 2 === 1);
       const signalZ = Z_STREETS.filter((_, i) => i % 2 === 1);
       signalX.forEach((cx) => {
         signalZ.forEach((cz) => {
           const corners: Array<{ x: number; z: number; axis: "x" | "z" }> = [
             { x: cx - CURB_OFFSET, z: cz - CURB_OFFSET, axis: "x" },
-            { x: cx + CURB_OFFSET, z: cz - CURB_OFFSET, axis: "z" },
-            { x: cx + CURB_OFFSET, z: cz + CURB_OFFSET, axis: "x" },
-            { x: cx - CURB_OFFSET, z: cz + CURB_OFFSET, axis: "z" },
+            { x: cx + CURB_OFFSET, z: cz + CURB_OFFSET, axis: "z" },
           ];
           corners.forEach(({ x, z, axis }) => {
             const light = makeTrafficLight(axis);
@@ -970,41 +983,43 @@ export default function CarWashScene() {
         });
       });
 
-      /* Bancs et poubelles au milieu des côtés de blocs : leur centre reste
-         dans la bande de trottoir et loin des zones de circulation. */
-      const FURNITURE_OFFSET = STREET_W / 2 + 0.38;
+      const FURNITURE_OFFSET = STREET_W / 2 + 0.6;
+      const placeKit = (
+        name: string,
+        x: number,
+        z: number,
+        rotY: number,
+        scale = 6,
+      ) => {
+        const tpl = kit[name];
+        if (!tpl) return;
+        const inst = tpl.clone(true);
+        inst.scale.setScalar(scale);
+        inst.position.set(x, 0, z);
+        inst.rotation.y = rotY;
+        setShadow(inst);
+        scene.add(inst);
+      };
+
       for (let xi = 0; xi < X_STREETS.length - 1; xi++) {
         for (let zi = 0; zi < Z_STREETS.length - 1; zi++) {
-          if ((xi + zi) % 2 !== 0) continue;
           const bx = (X_STREETS[xi]! + X_STREETS[xi + 1]!) / 2;
           const southStreet = Z_STREETS[zi]!;
-
-          const bench = makeBench();
-          bench.position.set(bx, 0, southStreet + FURNITURE_OFFSET);
-          bench.rotation.y = 0;
-          setShadow(bench);
-          scene.add(bench);
-
-          const bin = makeBin();
-          bin.position.set(bx + 1.25, 0, southStreet + FURNITURE_OFFSET);
-          setShadow(bin);
-          scene.add(bin);
-        }
-      }
-
-      /* Lampadaires régulièrement espacés sur le bord nord des mêmes blocs,
-         toujours alignés avec la bordure et jamais dans un carrefour. */
-      for (let xi = 0; xi < X_STREETS.length - 1; xi += 2) {
-        for (let zi = 0; zi < Z_STREETS.length - 1; zi++) {
-          const bx = (X_STREETS[xi]! + X_STREETS[xi + 1]!) / 2;
           const northStreet = Z_STREETS[zi + 1]!;
-          const lamp = makeLamp();
-          lamp.position.set(bx, 0, northStreet - FURNITURE_OFFSET);
-          lamp.rotation.y = Math.PI;
-          setShadow(lamp);
-          scene.add(lamp);
+
+          // lampadaires alternés de part et d'autre du bloc
+          placeKit("light-square", bx - 2, southStreet + FURNITURE_OFFSET, Math.PI);
+          placeKit("light-square", bx + 2, northStreet - FURNITURE_OFFSET, 0);
+
+          // bennes et panneaux de rue, un bloc sur deux
+          if ((xi + zi) % 2 === 0) {
+            placeKit("dumpster", bx + 2.4, southStreet + FURNITURE_OFFSET, Math.PI / 2, 6);
+          } else {
+            placeKit("road-sign-street", bx - 2.4, northStreet - FURNITURE_OFFSET, 0, 6);
+          }
         }
       }
+
 
 
 
