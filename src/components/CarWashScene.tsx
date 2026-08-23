@@ -1074,13 +1074,12 @@ export default function CarWashScene() {
         line.position.set(-12 + i * 4.4, 0.024, parkZ);
         scene.add(line);
       }
-      // Voitures en attente, alignées au centre de leur place
-      const parkTemplates = [models["taxi"]!, models["sedan"]!, models["taxi"]!];
-      parkTemplates.forEach((tpl, i) => {
-        const parked = tpl.clone(true);
+      // Voitures Kenney en attente, alignées au centre de leur place
+      [0, 1, 2, 3].forEach((i) => {
+        const parked = kitCar(i * 2 + 4).clone(true);
         setShadow(parked);
         parked.rotation.y = Math.PI / 2;
-        parked.position.set(-12 + 2.2 + i * 4.4, CAR_Y, parkZ);
+        parked.position.set(-12 + 2.2 + i * 4.4, 0, parkZ);
         scene.add(parked);
       });
 
@@ -1089,12 +1088,12 @@ export default function CarWashScene() {
         const tr = makeTree();
         tr.position.set(x, 0, WASH_SITE_Z + 12);
         tr.scale.setScalar(0.9);
+        setShadow(tr);
         scene.add(tr);
 
       }
 
       // ----- Circulation : deux voies par rue, sens opposés, bien centrées -----
-      const cityTemplates = [models["taxi"]!, models["sedan"]!];
       let ti = 0;
       const addTraffic = (
         axis: "x" | "z",
@@ -1102,15 +1101,15 @@ export default function CarWashScene() {
         dir: number,
         s: number,
       ) => {
-        const car = cityTemplates[ti % cityTemplates.length]!.clone(true);
+        const car = kitCar(ti).clone(true);
         setShadow(car);
         scene.add(car);
         // modèles Kenney : le nez pointe vers +Z
         const heading =
           axis === "x" ? (dir > 0 ? Math.PI / 2 : -Math.PI / 2) : dir > 0 ? 0 : Math.PI;
         /* on ne circule que sur la chaussée : bornes = extrémités de la rue */
-        const sMin = (axis === "x" ? xMin : zMin) - STREET_W / 2;
-        const sMax = (axis === "x" ? xMax : zMax) + STREET_W / 2;
+        const sMin = axis === "x" ? xMin : zMin;
+        const sMax = axis === "x" ? xMax : zMax;
         trafficCars.push({
           car,
           axis,
@@ -1120,11 +1119,12 @@ export default function CarWashScene() {
           speed: 3.4 + (ti % 3) * 0.5,
           heading,
           yaw: 0,
-          baseY: CAR_Y,
+          baseY: 0,
           wheels: findWheels(car),
           sMin,
           sMax,
         });
+
 
 
         ti++;
