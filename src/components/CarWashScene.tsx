@@ -496,28 +496,17 @@ export default function CarWashScene() {
           );
         });
 
-      // Tunnel détaillé : il remplace le tunnel en primitives
-      load(tunnelAsset.url)
+      // Bâtiment de lavage : il remplace le tunnel sur la route
+      load(washCartoonAsset.url)
         .then((raw) => {
           if (disposed) return;
-          const tunnel = normalizeModel(raw, 7.5);
-          tunnel.position.set(2, 0, 0);
-          scene.add(tunnel);
+          const building = normalizeModel(raw, 7.5);
+          building.position.set(2, 0, 0);
+          scene.add(building);
           if (kenneyTunnel) {
             scene.remove(kenneyTunnel);
             kenneyTunnel = null;
           }
-        })
-        .catch((err: unknown) => console.error("tunnel Meshy", err));
-
-      // Bâtiment de lavage décoratif, en retrait de la route
-      load(washCartoonAsset.url)
-        .then((raw) => {
-          if (disposed) return;
-          const building = normalizeModel(raw, 5);
-          building.position.set(-4, 0, -7);
-
-          scene.add(building);
         })
         .catch((err: unknown) => console.error("bâtiment Meshy", err));
 
