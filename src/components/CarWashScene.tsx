@@ -803,6 +803,42 @@ export default function CarWashScene() {
         }
       });
 
+      /* Mobilier urbain identique à CHAQUE carrefour : 4 feux, 2 lampadaires,
+         un banc et une poubelle sur les coins. */
+      const CORNER = STREET_W / 2 + 1.1;
+      X_STREETS.forEach((cx) => {
+        Z_STREETS.forEach((cz) => {
+          const corners: Array<[number, number]> = [
+            [cx - CORNER, cz - CORNER],
+            [cx + CORNER, cz - CORNER],
+            [cx + CORNER, cz + CORNER],
+            [cx - CORNER, cz + CORNER],
+          ];
+          corners.forEach(([px, pz], k) => {
+            // feu tricolore : il régule l'axe de la rue qu'il borde
+            const light = makeTrafficLight(k % 2 === 0 ? "x" : "z");
+            light.position.set(px, 0, pz);
+            light.rotation.y = Math.atan2(cx - px, cz - pz);
+            setShadow(light);
+            scene.add(light);
+
+            let item: THREE.Group | null = null;
+            if (k === 0 || k === 2) item = makeLamp();
+            else if (k === 1) item = makeBench();
+            else item = makeBin();
+            item.position.set(
+              px + (px > cx ? 1.1 : -1.1),
+              0,
+              pz + (pz > cz ? 1.1 : -1.1),
+            );
+            item.rotation.y = Math.atan2(cx - px, cz - pz);
+            setShadow(item);
+            scene.add(item);
+          });
+        });
+      });
+
+
       /* ----- Parcelle dédiée du car wash (périphérie sud) ----- */
       const concreteMat = new THREE.MeshStandardMaterial({
         color: 0x9aa0a6,
