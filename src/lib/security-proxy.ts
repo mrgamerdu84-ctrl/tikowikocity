@@ -14,6 +14,9 @@ function json(status: number, payload: unknown) {
       "content-type": "application/json; charset=utf-8",
       "cache-control": "no-store",
       "x-content-type-options": "nosniff",
+      // This endpoint contains no secret and is deliberately shared by all
+      // TikoWiko games. The fixed code itself remains only in Apps Script.
+      "access-control-allow-origin": "*",
     },
   });
 }
@@ -91,7 +94,10 @@ export async function handleSecurityRequest(request: Request): Promise<Response 
   }
 
   try {
-    const body = (await request.json()) as { code?: unknown };
+    // Games use text/plain to keep the cross-origin request simple (no CORS
+    // preflight). The body itself is still JSON.
+    const rawRequest = await request.text();
+    const body = JSON.parse(rawRequest || "{}") as { code?: unknown };
     const code = String(body.code ?? "");
     if (!/^\d{6}$/.test(code)) {
       return json(400, { valid: false });
