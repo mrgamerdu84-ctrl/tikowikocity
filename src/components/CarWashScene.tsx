@@ -182,7 +182,15 @@ export default function CarWashScene() {
       root.add(inner);
 
       let box = new THREE.Box3().setFromObject(inner);
-      const size = box.getSize(new THREE.Vector3());
+      let size = box.getSize(new THREE.Vector3());
+
+      // modèle couché (export Z-up) : on le redresse
+      if (size.y < size.x && size.y < size.z && size.y < size.x * 0.55) {
+        inner.rotation.x = -Math.PI / 2;
+        inner.updateMatrixWorld(true);
+        box = new THREE.Box3().setFromObject(inner);
+        size = box.getSize(new THREE.Vector3());
+      }
 
       // la plus grande dimension au sol suit l'axe X (sens de circulation)
       if (size.z > size.x) {
@@ -190,6 +198,7 @@ export default function CarWashScene() {
         inner.updateMatrixWorld(true);
         box = new THREE.Box3().setFromObject(inner);
       }
+
 
       const finalSize = box.getSize(new THREE.Vector3());
       const center = box.getCenter(new THREE.Vector3());
