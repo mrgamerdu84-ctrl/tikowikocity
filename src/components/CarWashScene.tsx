@@ -1529,13 +1529,30 @@ export default function CarWashScene() {
         aheadD = e.d;
       }
 
+      /* Fin de l'itinéraire : la voiture, propre, reprend sa vie en ville */
       for (let i = washCars.length - 1; i >= 0; i--) {
         const e = washCars[i]!;
         if (e.d >= ROUTE_LEN - 0.05) {
-          scene.remove(e.car);
+          const o = e.origin;
+          tintCar(o.car, 0);
+          /* on la réinjecte sur sa rue, à une place libre */
+          let s = o.sMin + Math.random() * (o.sMax - o.sMin);
+          for (let k = 0; k < 12; k++) {
+            const clash = trafficCars.some(
+              (c) =>
+                c.axis === o.axis &&
+                Math.abs(c.lane - o.lane) < 0.5 &&
+                Math.abs(c.s - s) < 6,
+            );
+            if (!clash) break;
+            s = o.sMin + Math.random() * (o.sMax - o.sMin);
+          }
+          o.s = s;
+          trafficCars.push(o);
           washCars.splice(i, 1);
         }
       }
+
 
       const carInWash = washCars.some((c) => c.d > WASH_D0 && c.d < WASH_D1);
 
