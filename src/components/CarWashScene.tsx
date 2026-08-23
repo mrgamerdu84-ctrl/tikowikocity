@@ -94,8 +94,19 @@ export default function CarWashScene() {
 
   const [driveState, setDriveState] = useState<"idle" | "saving" | "done" | "error">("idle");
   const [loadState, setLoadState] = useState<"idle" | "loading" | "done" | "error">("idle");
+  const [driveMenuOpen, setDriveMenuOpen] = useState(false);
   const saveFn = useServerFn(saveToDrive);
   const loadFn = useServerFn(loadFromDrive);
+
+  useEffect(() => {
+    if (!driveMenuOpen) return;
+    const onDocClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest("[data-drive-menu]")) setDriveMenuOpen(false);
+    };
+    document.addEventListener("click", onDocClick);
+    return () => document.removeEventListener("click", onDocClick);
+  }, [driveMenuOpen]);
   const cinemaStateRef = useRef(cinema);
   cinemaStateRef.current = cinema;
 
