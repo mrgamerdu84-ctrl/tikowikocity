@@ -1508,10 +1508,12 @@ export default function CarWashScene() {
 
 
       const ctl = machinesRef.current;
+      const up = upgradesRef.current;
+      const beltBoost = beltFactor(up.speed);
       const SPEED = 2.6;
       /* même tapis à l'arrêt, la voiture avance lentement pour ne jamais
          rester bloquée dans le portique */
-      const BELT_SPEED = ctl.belt ? 1.1 : 0.45;
+      const BELT_SPEED = (ctl.belt ? 1.1 : 0.45) * beltBoost;
       const GAP = 3.2;
       const [zoneStart, zoneEnd] = WASH_ZONE;
 
