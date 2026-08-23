@@ -920,7 +920,7 @@ export default function CarWashScene() {
       blockCentersX.forEach((bx, ix) => {
         blockCentersZ.forEach((bz, iz) => {
           // pelouse du pâté de maisons (entre les trottoirs)
-          addSlab(lawnMat, 12 - STREET_W - 1.2, 12 - STREET_W - 1.2, bx, bz, 0.01);
+          addSlab(lawnMat, 12 - STREET_W, 12 - STREET_W, bx, bz, 0.01);
 
           // anneau : 0 = centre-ville, 2 = périphérie pavillonnaire
           const ring = Math.max(Math.abs(bx) / 12, Math.abs(bz) / 12);
