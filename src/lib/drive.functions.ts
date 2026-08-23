@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 
 const GATEWAY = "https://connector-gateway.lovable.dev/google_drive";
-const FOLDER_NAME = "TikowikoCarWash";
+const FOLDER_NAME = "TikowikoCity";
 
 type SaveInput = { fileName: string; payload: unknown };
 
@@ -85,7 +85,7 @@ export const saveToDrive = createServerFn({ method: "POST" })
 
 export type SaveEnvelope = {
   version: number;
-  app: "TikowikoCarWash";
+  app: "TikowikoCity";
   savedAt: string;
   state: Record<string, unknown>;
 };
@@ -107,7 +107,7 @@ export const loadFromDrive = createServerFn({ method: "POST" }).handler(async ()
   if (!folderId) return { found: false as const };
 
   const listQ = encodeURIComponent(
-    `'${folderId}' in parents and name contains 'tikowikocarwash-' and trashed=false`,
+    `'${folderId}' in parents and name contains 'tikowiko' and trashed=false`,
   );
   const listRes = await fetch(
     `${GATEWAY}/drive/v3/files?q=${listQ}&orderBy=createdTime desc&pageSize=10&fields=files(id,name,createdTime)`,
@@ -140,8 +140,8 @@ export const loadFromDrive = createServerFn({ method: "POST" }).handler(async ()
     throw new Error("Sauvegarde illisible (JSON invalide).");
   }
   const obj = parsed as Partial<SaveEnvelope> & { machines?: unknown; cinema?: unknown };
-  if (obj?.app !== "TikowikoCarWash") {
-    throw new Error("Ce fichier n'est pas une sauvegarde TikowikoCarWash.");
+  if (obj?.app !== "TikowikoCity" && obj?.app !== "TikowikoCarWash") {
+    throw new Error("Ce fichier n'est pas une sauvegarde TikowikoCity.");
   }
   // v0 saves stored fields at the root; normalize to the versioned envelope.
   const state =

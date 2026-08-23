@@ -231,10 +231,10 @@ export default function CarWashScene() {
       const stamp = new Date().toISOString().replace(/[:.]/g, "-");
       const res = await saveFn({
         data: {
-          fileName: `tikowikocarwash-${stamp}.json`,
+          fileName: `tikowikocity-${stamp}.json`,
           payload: {
             version: SAVE_VERSION,
-            app: "TikowikoCarWash",
+            app: "TikowikoCity",
             savedAt: new Date().toISOString(),
             // Extensible: new progression fields can be added here without
             // breaking older saves (loader applies only known keys).
@@ -272,7 +272,7 @@ export default function CarWashScene() {
       const res = await loadFn({ data: undefined });
       if (!res.found) {
         setLoadState("idle");
-        toast.info("Aucune sauvegarde trouvée dans le dossier TikowikoCarWash.");
+        toast.info("Aucune sauvegarde trouvée dans le dossier TikowikoCity.");
         return;
       }
       const state = JSON.parse(res.stateJson || "{}") as {
