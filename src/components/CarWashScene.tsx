@@ -2492,6 +2492,21 @@ export default function CarWashScene() {
         else dirtiness = 1 - (e.d - WASH_D0) / (WASH_D1 - WASH_D0);
         tintCar(e.car, dirtiness);
 
+        /* Mousse : elle se dépose sur la première moitié du tunnel puis
+           est rincée sur la seconde. */
+        if (e.soap) {
+          const prog = 1 - dirtiness; // 0 → 1 dans le tunnel
+          const inTunnel = e.d > WASH_D0 && e.d < WASH_D1;
+          const cover = inTunnel ? Math.sin(Math.PI * Math.min(prog * 1.15, 1)) : 0;
+          e.soap.visible = cover > 0.02;
+          e.soap.children.forEach((b, j) => {
+            const s = (b.userData['s'] as number) ?? 1;
+            b.scale.setScalar(Math.max(cover * s * (0.8 + Math.sin(t * 5 + j) * 0.12), 0.001));
+            b.rotation.y += dt * 1.5;
+          });
+        }
+
+
         const p = posAt(e.d);
         e.car.position.set(
           p.x,
