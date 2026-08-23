@@ -666,19 +666,16 @@ export default function CarWashScene() {
           if (ring < 1.2) {
             // Centre : immeuble unique, hauteur qui décroît doucement vers l'extérieur
             const h = 8.5 - ring * 3 + ((ix + iz) % 2) * 0.8;
-            makeBuilding(bx, bz, 5, h, 5, (ix + iz) % 5);
+            makeBuilding(bx, bz, 4.2, h, 4.2, (ix + iz) % 5);
           } else if (ring < 1.8) {
-            // Transition : deux petits immeubles de 3 à 4 m
-            const h = 4.2 - (ring - 1.2) * 1.2;
-            makeBuilding(bx - 1.6, bz, 2.6, h, 4.6, (ix + iz + 1) % 5);
-            makeBuilding(bx + 1.6, bz, 2.6, h + 0.6, 4.6, (ix + iz + 3) % 5);
+            // Transition : petit immeuble de 3 à 4 étages
+            const h = 4.4 - (ring - 1.2) * 1.2 + ((ix + iz) % 2) * 0.5;
+            makeBuilding(bx, bz, 4.2, h, 4.2, (ix + iz + 1) % 5);
           } else {
-            // Périphérie : pavillons alignés, tous face à la rue la plus proche
-            const faceZ = bz > 0 ? Math.PI : 0;
-            [-1.7, 1.7].forEach((ox, k) => {
-              buildHouse(bx + ox, bz, faceZ, ix + iz + k);
-            });
+            // Périphérie : pavillon aligné, face à la rue
+            buildHouse(bx, bz, bz > 0 ? Math.PI : 0, ix + iz);
           }
+
         });
       });
 
