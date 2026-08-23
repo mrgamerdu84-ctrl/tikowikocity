@@ -2567,6 +2567,18 @@ export default function CarWashScene() {
         if (on) b.spin.rotation.y += dt * brushSpeed * b.dir;
         const engage = carInWash ? 1 : 0;
         const wobble = carInWash ? Math.sin(t * 6 + i) * 0.06 : 0;
+
+        /* Lanières : elles s'écartent avec la vitesse de rotation et
+           battent contre la carrosserie quand une voiture passe. */
+        const flaps = b.spin.userData['flaps'] as THREE.Group | undefined;
+        if (flaps) {
+          const fly = (on ? 1 : 0) * (carInWash ? 0.95 : 0.4);
+          flaps.children.forEach((f, k) => {
+            const beat = Math.sin(t * (on ? 9 : 2) + k * 0.7) * 0.18 * (0.4 + fly);
+            f.rotation.z = 0.35 + fly * 0.75 + beat;
+          });
+        }
+
         if (b.kind === "roller") {
           const side = Math.sign(b.pivot.position.z) || 1;
           const target = side * (1.45 - engage * 0.32 + wobble);
@@ -2576,6 +2588,7 @@ export default function CarWashScene() {
           b.pivot.position.y += (target - b.pivot.position.y) * Math.min(dt * 4, 1);
         }
       });
+
 
       // Tapis roulant : les lattes défilent en boucle
       const beltLen = zoneEnd - zoneStart;
