@@ -378,8 +378,6 @@ export default function CarWashScene() {
       place(models["hRoof"]!, x, 2.4, z);
     };
 
-    let kenneyTunnel: THREE.Object3D | null = null;
-
     const buildScene = () => {
 
       for (let x = -13; x <= 13; x += 1) {
@@ -391,7 +389,6 @@ export default function CarWashScene() {
       tunnel.position.set(2, 0, 0);
       setShadow(tunnel);
       scene.add(tunnel);
-      kenneyTunnel = tunnel;
 
 
       // Tapis roulant
