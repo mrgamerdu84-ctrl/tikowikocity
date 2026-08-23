@@ -43,6 +43,10 @@ const CAR_Y = 0.3;
 const PATH_START = -13;
 const PATH_END = 13;
 const WASH_ZONE: [number, number] = [-1.5, 5.5];
+/* Le car wash a sa propre parcelle en périphérie sud de la ville,
+   reliée à la grille par une voie d'accès dédiée. */
+const WASH_SITE_Z = -42;
+const WASH_ACCESS_X = 6;
 const DIRT_COLOR = new THREE.Color(0x8a7355);
 
 function b64ToArrayBuffer(b64: string) {
@@ -358,6 +362,11 @@ export default function CarWashScene() {
       baseY: number;
     };
     const trafficCars: TrafficCar[] = [];
+    /* Toute la station de lavage (tunnel, tapis, brosses, voitures à laver)
+       vit dans ce groupe : ses coordonnées locales restent inchangées. */
+    const washSite = new THREE.Group();
+    washSite.position.z = WASH_SITE_Z;
+    scene.add(washSite);
     const CITY_MIN = -33;
     const CITY_MAX = 33;
 
@@ -379,7 +388,7 @@ export default function CarWashScene() {
       sedan.position.set(PATH_START, baseY, 0);
       sedan.userData["wheels"] = findWheels(sedan);
       tintCar(sedan, 1);
-      scene.add(sedan);
+      washSite.add(sedan);
 
       sedanCars.push(sedan);
     };
@@ -490,12 +499,12 @@ export default function CarWashScene() {
       tunnel.rotation.y = Math.PI / 2;
       tunnel.position.set(2, 0, 0);
       setShadow(tunnel);
-      scene.add(tunnel);
+      washSite.add(tunnel);
 
 
       // Tapis roulant
       const conveyor = makeConveyor();
-      scene.add(conveyor.group);
+      washSite.add(conveyor.group);
       conveyorSlats.push(...conveyor.slats);
 
       /* Rouleaux verticaux : deux paires à l'entrée (bien visibles depuis
@@ -507,7 +516,7 @@ export default function CarWashScene() {
           spin.scale.set(1.25, 1.15, 1.25);
           pivot.add(spin);
           pivot.position.set(WASH_ZONE[0] + offset, ROAD_Y + 1.1, zSide * 1.45);
-          scene.add(pivot);
+          washSite.add(pivot);
           brushes.push({
             pivot,
             spin,
@@ -525,7 +534,7 @@ export default function CarWashScene() {
         spin.scale.set(1.1, 1.5, 1.1);
         pivot.add(spin);
         pivot.position.set(x, ROAD_Y + 2.1, 0);
-        scene.add(pivot);
+        washSite.add(pivot);
         brushes.push({ pivot, spin, dir: i % 2 === 0 ? -1 : 1, kind: "brush" });
       });
 
@@ -533,7 +542,7 @@ export default function CarWashScene() {
       for (let i = 0; i < 2; i++) {
         const foam = makeFoamVeil();
         foam.position.set(1.5 + i * 2, ROAD_Y + 1.2, 0);
-        scene.add(foam);
+        washSite.add(foam);
         foamSprites.push(foam);
       }
 
@@ -684,7 +693,6 @@ export default function CarWashScene() {
       };
 
       Z_STREETS.forEach((z, i) => {
-        if (z === 0) return; // rue du car wash réservée aux voitures à laver
         addTraffic("x", z + LANE, 1, xMin + ((i * 11) % 40));
         addTraffic("x", z - LANE, -1, xMin + ((i * 17) % 40));
       });
@@ -752,7 +760,7 @@ export default function CarWashScene() {
       for (let i = sedanCars.length - 1; i >= 0; i--) {
         const car = sedanCars[i]!;
         if (car.position.x > PATH_END) {
-          scene.remove(car);
+          washSite.remove(car);
           sedanCars.splice(i, 1);
         }
       }
