@@ -231,13 +231,18 @@ export default function CarWashScene() {
     );
     scene.add(skyDome);
 
+    /* Cadrage responsive : en portrait (mobile) on rapproche la caméra
+       et on élargit le champ pour que la ville et le car wash remplissent l'écran. */
+    const isPortrait = () => window.innerHeight >= window.innerWidth;
     const camera = new THREE.PerspectiveCamera(
-      45,
+      isPortrait() ? 58 : 45,
       window.innerWidth / window.innerHeight,
       0.1,
       2000,
     );
-    camera.position.set(-34, 26, WASH_SITE_Z + 40);
+    if (isPortrait()) camera.position.set(-21, 17, WASH_SITE_Z + 26);
+    else camera.position.set(-34, 26, WASH_SITE_Z + 40);
+
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
