@@ -461,17 +461,19 @@ export default function CarWashScene() {
         0.18,
         0.62,
       );
-      const seen = new Set<THREE.Material>();
+      const tinted = new Map<THREE.Material, THREE.MeshStandardMaterial>();
       g.traverse((n) => {
         const mesh = n as THREE.Mesh;
         if (!mesh.isMesh) return;
         const mat = mesh.material as THREE.MeshStandardMaterial;
         if (mat.transparent || mat.name === "glass") return;
-        if (seen.has(mat)) return;
-        const cloned = mat.clone();
-        cloned.color.multiply(tint).multiplyScalar(1.5);
+        let cloned = tinted.get(mat);
+        if (!cloned) {
+          cloned = mat.clone();
+          cloned.color.multiply(tint).multiplyScalar(1.5);
+          tinted.set(mat, cloned);
+        }
         mesh.material = cloned;
-        seen.add(mat);
       });
 
 
