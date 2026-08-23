@@ -373,33 +373,48 @@ export default function CarWashScene() {
       return wheels;
     };
 
+    /* Rouleau de lavage : axe central + manchon de mousse sombre nervuré.
+       On évite les milliers de micro-poils colorés qui produisaient un
+       scintillement type « neige TV » une fois le rouleau mis à l'échelle. */
+    const brushCoreMat = new THREE.MeshStandardMaterial({
+      color: 0x9aa3ad,
+      roughness: 0.5,
+      metalness: 0.35,
+    });
+    const brushPadMat = new THREE.MeshStandardMaterial({
+      color: 0x2b2f36,
+      roughness: 1,
+      metalness: 0,
+      flatShading: true,
+    });
+    const brushRibMat = new THREE.MeshStandardMaterial({
+      color: 0x1f6f9c,
+      roughness: 0.85,
+    });
+    const brushCoreGeo = new THREE.CylinderGeometry(0.09, 0.09, 1.9, 12);
+    const brushPadGeo = new THREE.CylinderGeometry(0.3, 0.3, 1.62, 16, 1);
+    const brushRibGeo = new THREE.TorusGeometry(0.31, 0.035, 8, 20);
+
     const makeBrush = () => {
       const g = new THREE.Group();
-      const core = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.12, 0.12, 1.7, 10),
-        new THREE.MeshStandardMaterial({ color: 0x333333 }),
-      );
+      const core = new THREE.Mesh(brushCoreGeo, brushCoreMat);
       core.castShadow = true;
       g.add(core);
 
-      const bristleColors = [0x1fb6ff, 0xff5b5b, 0x1fb6ff, 0xffe14d];
-      const bristleCount = 40;
-      const bristleGeo = new THREE.BoxGeometry(0.045, 0.045, 0.42);
-      for (let i = 0; i < bristleCount; i++) {
-        const mat = new THREE.MeshStandardMaterial({
-          color: bristleColors[i % bristleColors.length]!,
-          roughness: 0.9,
-        });
-        const b = new THREE.Mesh(bristleGeo, mat);
-        const t = (i / bristleCount) * Math.PI * 2;
-        const yPos = -0.8 + (i / bristleCount) * 1.6;
-        b.position.set(Math.cos(t) * 0.14, yPos, Math.sin(t) * 0.14);
-        b.lookAt(new THREE.Vector3(0, yPos, 0));
-        b.translateZ(0.2);
-        g.add(b);
+      const pad = new THREE.Mesh(brushPadGeo, brushPadMat);
+      pad.castShadow = true;
+      g.add(pad);
+
+      // quelques nervures espacées : lisible, sans bruit visuel
+      for (let i = 0; i < 5; i++) {
+        const rib = new THREE.Mesh(brushRibGeo, brushRibMat);
+        rib.rotation.x = Math.PI / 2;
+        rib.position.y = -0.62 + i * 0.31;
+        g.add(rib);
       }
       return g;
     };
+
 
     const makeFoamVeil = () => {
       const group = new THREE.Group();
