@@ -876,7 +876,6 @@ export default function CarWashScene() {
 
     const buildScene = () => {
       buildLandscape();
-      (window as unknown as Record<string, unknown>).__scene = scene;
 
 
 
