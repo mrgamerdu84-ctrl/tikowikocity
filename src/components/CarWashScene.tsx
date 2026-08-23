@@ -305,6 +305,12 @@ export default function CarWashScene() {
         economyRef.current = next;
         setEconomy(next);
       }
+      if (state.upgrades) {
+        const up = sanitizeUpgrades(state.upgrades);
+        upgradesRef.current = up;
+        setUpgrades(up);
+      }
+
       if (typeof state.cinema === "boolean" && state.cinema !== cinemaStateRef.current) {
         cinemaRef.current();
       }
