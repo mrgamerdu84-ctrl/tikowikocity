@@ -1,4 +1,8 @@
 import { useEffect, useRef, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
+import { toast } from "sonner";
+import { saveToDrive } from "@/lib/drive.functions";
+
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
@@ -84,6 +88,40 @@ export default function CarWashScene() {
       return next;
     });
   };
+
+  const [driveState, setDriveState] = useState<"idle" | "saving" | "done" | "error">("idle");
+  const saveFn = useServerFn(saveToDrive);
+  const handleSaveToDrive = async () => {
+    setDriveState("saving");
+    try {
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+      const res = await saveFn({
+        data: {
+          fileName: `tikowikocarwash-${stamp}.json`,
+          payload: {
+            app: "TikowikoCarWash",
+            savedAt: new Date().toISOString(),
+            machines: machinesRef.current,
+            cinema,
+          },
+        },
+      });
+      setDriveState("done");
+      toast.success("Sauvegardé sur Google Drive", {
+        description: res.name,
+        ...(res.webViewLink
+          ? { action: { label: "Ouvrir", onClick: () => window.open(res.webViewLink, "_blank") } }
+          : {}),
+      });
+      window.setTimeout(() => setDriveState("idle"), 4000);
+    } catch (err) {
+      console.error(err);
+      setDriveState("error");
+      toast.error("Échec de la sauvegarde sur Drive");
+    }
+  };
+
+
 
   useEffect(() => {
     let mi = 0;
@@ -1718,7 +1756,22 @@ export default function CarWashScene() {
         >
           🎥 {cinema ? "Vue libre" : "Vue cinéma"}
         </button>
+        <button
+          type="button"
+          disabled={driveState === "saving"}
+          onClick={handleSaveToDrive}
+          className="rounded-full bg-ink/10 px-3.5 py-2.5 text-[12.5px] font-bold text-ink transition-transform active:translate-y-0.5 disabled:opacity-60"
+        >
+          {driveState === "saving"
+            ? "⏳ Envoi..."
+            : driveState === "done"
+              ? "✅ Sur Drive"
+              : driveState === "error"
+                ? "⚠️ Réessayer"
+                : "☁️ Sauver sur Drive"}
+        </button>
       </div>
+
     </>
   );
 }
