@@ -235,12 +235,12 @@ export default function CarWashScene() {
        et on élargit le champ pour que la ville et le car wash remplissent l'écran. */
     const isPortrait = () => window.innerHeight >= window.innerWidth;
     const camera = new THREE.PerspectiveCamera(
-      isPortrait() ? 52 : 45,
+      isPortrait() ? 50 : 45,
       window.innerWidth / window.innerHeight,
       0.1,
       2000,
     );
-    if (isPortrait()) camera.position.set(-50, 40, WASH_SITE_Z + 58);
+    if (isPortrait()) camera.position.set(-26, 36, WASH_SITE_Z + 54);
     else camera.position.set(-34, 26, WASH_SITE_Z + 40);
 
 
@@ -253,7 +253,7 @@ export default function CarWashScene() {
     wrap.appendChild(renderer.domElement);
 
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.target.set(2, 1.5, WASH_SITE_Z + (isPortrait() ? 18 : 6));
+    controls.target.set(isPortrait() ? -4 : 2, 1.5, WASH_SITE_Z + (isPortrait() ? 12 : 6));
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
     controls.minDistance = 6;
@@ -1656,7 +1656,7 @@ export default function CarWashScene() {
 
     const onResize = () => {
       camera.aspect = window.innerWidth / window.innerHeight;
-      camera.fov = isPortrait() ? 52 : 45;
+      camera.fov = isPortrait() ? 50 : 45;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
     };
@@ -1781,7 +1781,7 @@ export default function CarWashScene() {
         </div>
       )}
 
-      <div className="pointer-events-none fixed left-2 top-2 z-30 max-w-[calc(100vw-150px)] rounded-2xl bg-white/80 px-3 py-2 text-ink shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur sm:left-4 sm:top-4 sm:max-w-[300px] sm:px-4 sm:py-3">
+      <div className="pointer-events-none fixed left-2 top-2 z-40 max-w-[calc(100vw-146px)] rounded-2xl bg-white/90 ring-1 ring-ink/10 px-3 py-2 text-ink shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur sm:left-4 sm:top-4 sm:max-w-[300px] sm:px-4 sm:py-3">
         <p className="flex items-center gap-2 text-[17px] font-bold tracking-wide sm:text-[22px]">
           <span aria-hidden>🫧</span> TikowikoCarWash
         </p>
@@ -1801,7 +1801,7 @@ export default function CarWashScene() {
       </div>
 
 
-      <div className="fixed right-2 top-2 z-30 w-[124px] rounded-2xl bg-white/80 p-2 sm:right-4 sm:top-4 sm:w-[190px] sm:p-3 shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur">
+      <div className="fixed right-2 top-2 z-40 w-[118px] rounded-2xl bg-white/90 ring-1 ring-ink/10 p-2 sm:right-4 sm:top-4 sm:w-[190px] sm:p-3 shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur">
         <p className="mb-2 text-[12px] font-bold uppercase tracking-wide text-ink opacity-80">
           Panneau de contrôle
         </p>
