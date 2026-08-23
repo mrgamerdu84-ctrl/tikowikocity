@@ -15,6 +15,19 @@ import modelsAsset from "@/assets/car-wash-models.json.asset.json";
 
 import tunnelAsset from "@/assets/tunnel.glb.asset.json";
 import kenneyPackAsset from "@/assets/kenney-pack.glb.asset.json";
+import { CityPlan, type SerializedPlan } from "@/game/cityPlan";
+import {
+  TILE,
+  DIR_VEC,
+  opposite,
+  axisOf,
+  rightOf,
+  parseKey,
+  worldToCell,
+  type Dir,
+} from "@/game/grid";
+import { TOOL_LABEL, type BuildTool, type RoadHint } from "@/game/catalog";
+
 
 /* Modèles issus des kits Kenney (car-kit, city-kit-roads, building-kit),
    regroupés dans un seul GLB optimisé. */
