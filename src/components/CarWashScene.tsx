@@ -914,49 +914,65 @@ export default function CarWashScene() {
         }
       });
 
-      /* Mobilier urbain : UN seul poteau de feu par angle de carrefour (4 max),
-         et un peu de mobilier bas sur quelques carrefours seulement. */
-      const CORNER = STREET_W / 2 + 1.1;
-      X_STREETS.forEach((cx, xi) => {
-        Z_STREETS.forEach((cz, zi) => {
-          const corners: Array<[number, number]> = [
-            [cx - CORNER, cz - CORNER],
-            [cx + CORNER, cz - CORNER],
-            [cx + CORNER, cz + CORNER],
-            [cx - CORNER, cz + CORNER],
+      /* Mobilier urbain structuré sur trois grilles indépendantes.
+         Les feux sont réservés à six carrefours majeurs : exactement un poteau
+         par angle, donc quatre par carrefour, sans doublon. */
+      const CURB_OFFSET = STREET_W / 2 + 0.32;
+      const signalX = X_STREETS.filter((_, i) => i % 2 === 1);
+      const signalZ = Z_STREETS.filter((_, i) => i % 2 === 1);
+      signalX.forEach((cx) => {
+        signalZ.forEach((cz) => {
+          const corners: Array<{ x: number; z: number; axis: "x" | "z" }> = [
+            { x: cx - CURB_OFFSET, z: cz - CURB_OFFSET, axis: "x" },
+            { x: cx + CURB_OFFSET, z: cz - CURB_OFFSET, axis: "z" },
+            { x: cx + CURB_OFFSET, z: cz + CURB_OFFSET, axis: "x" },
+            { x: cx - CURB_OFFSET, z: cz + CURB_OFFSET, axis: "z" },
           ];
-          corners.forEach(([px, pz], k) => {
-            // feu tricolore : il régule l'axe de la rue qu'il borde
-            const light = makeTrafficLight(k % 2 === 0 ? "x" : "z");
-            light.position.set(px, 0, pz);
-            light.rotation.y = Math.atan2(cx - px, cz - pz);
+          corners.forEach(({ x, z, axis }) => {
+            const light = makeTrafficLight(axis);
+            light.position.set(x, 0, z);
+            light.rotation.y = Math.atan2(cx - x, cz - z);
             setShadow(light);
             scene.add(light);
           });
-
-          // mobilier bas (pas de poteaux) sur un carrefour sur deux
-          if ((xi + zi) % 2 === 0) {
-            const bench = makeBench();
-            bench.position.set(cx + CORNER + 1.4, 0, cz - CORNER - 1.4);
-            bench.rotation.y = Math.PI / 2;
-            setShadow(bench);
-            scene.add(bench);
-
-            const bin = makeBin();
-            bin.position.set(cx - CORNER - 1.4, 0, cz + CORNER + 1.4);
-            setShadow(bin);
-            scene.add(bin);
-          }
-
-          // un lampadaire discret, un carrefour sur deux (l'autre parité)
-          if ((xi + zi) % 2 === 1) {
-            const lamp = makeLamp();
-            lamp.position.set(cx + CORNER + 1.2, 0, cz + CORNER + 1.2);
-            setShadow(lamp);
-            scene.add(lamp);
-          }
         });
       });
+
+      /* Bancs et poubelles au milieu des côtés de blocs : leur centre reste
+         dans la bande de trottoir et loin des zones de circulation. */
+      const FURNITURE_OFFSET = STREET_W / 2 + 0.38;
+      for (let xi = 0; xi < X_STREETS.length - 1; xi++) {
+        for (let zi = 0; zi < Z_STREETS.length - 1; zi++) {
+          if ((xi + zi) % 2 !== 0) continue;
+          const bx = (X_STREETS[xi]! + X_STREETS[xi + 1]!) / 2;
+          const southStreet = Z_STREETS[zi]!;
+
+          const bench = makeBench();
+          bench.position.set(bx, 0, southStreet + FURNITURE_OFFSET);
+          bench.rotation.y = 0;
+          setShadow(bench);
+          scene.add(bench);
+
+          const bin = makeBin();
+          bin.position.set(bx + 1.25, 0, southStreet + FURNITURE_OFFSET);
+          setShadow(bin);
+          scene.add(bin);
+        }
+      }
+
+      /* Lampadaires régulièrement espacés sur le bord nord des mêmes blocs,
+         toujours alignés avec la bordure et jamais dans un carrefour. */
+      for (let xi = 0; xi < X_STREETS.length - 1; xi += 2) {
+        for (let zi = 0; zi < Z_STREETS.length - 1; zi++) {
+          const bx = (X_STREETS[xi]! + X_STREETS[xi + 1]!) / 2;
+          const northStreet = Z_STREETS[zi + 1]!;
+          const lamp = makeLamp();
+          lamp.position.set(bx, 0, northStreet - FURNITURE_OFFSET);
+          lamp.rotation.y = Math.PI;
+          setShadow(lamp);
+          scene.add(lamp);
+        }
+      }
 
 
 
