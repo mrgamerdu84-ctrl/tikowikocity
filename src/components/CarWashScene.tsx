@@ -569,7 +569,7 @@ export default function CarWashScene() {
 
       <div className="pointer-events-none fixed left-4 top-4 max-w-[280px] text-ink drop-shadow-[0_1px_0_rgba(255,255,255,.6)]">
         <p className="flex items-center gap-2 text-[22px] font-bold tracking-wide">
-          <span aria-hidden>🫧</span> Le Car Wash 3D
+          <span aria-hidden>🫧</span> TikowikoCarWash
         </p>
 
         <p className="mt-1 text-[12.5px] leading-relaxed opacity-85">
@@ -581,6 +581,8 @@ export default function CarWashScene() {
       <div className="pointer-events-none fixed bottom-4 left-4 text-[11.5px] text-ink opacity-75 drop-shadow-[0_1px_0_rgba(255,255,255,.6)]">
         <p>🖱️ Glisser = tourner • Molette = zoomer • Clic droit = déplacer</p>
         <p className="mt-1 opacity-80">Modèles Kenney (kenney.nl) — licence CC0</p>
+        <p className="mt-1 font-semibold opacity-90">© {new Date().getFullYear()} tikowikoFamily</p>
+
       </div>
 
       <div className="fixed bottom-4 right-4 flex items-center gap-2 rounded-2xl bg-white/80 p-2.5 shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur">
