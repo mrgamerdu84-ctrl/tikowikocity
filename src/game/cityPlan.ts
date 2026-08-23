@@ -1,5 +1,6 @@
 import { key, opposite, type Dir, DIR_VEC } from "./grid";
 import { variantFor, type RoadHint } from "./catalog";
+import { isDecorKind, type DecorKind } from "./decor";
 
 export type PlanCell = {
   hint: RoadHint;
@@ -16,6 +17,10 @@ export type SerializedPlan = Array<
 >;
 
 export type SerializedHouses = Array<[number, number, number]>;
+
+export type SerializedDecor = Array<[number, number, DecorKind, number]>;
+
+export type DecorCell = { kind: DecorKind; rot: number };
 
 export type HouseCell = { level: number };
 
