@@ -670,19 +670,9 @@ export default function CarWashScene() {
           );
         });
 
-      // Tunnel de lavage Meshy détaillé : posé sur la voie, aligné sur la route
-      load(tunnelAsset.url)
-        .then((raw) => {
-          if (disposed) return;
-          const tunnel = normalizeModel(raw, WASH_ZONE[1] - WASH_ZONE[0] + 1.5);
-          tunnel.position.set((WASH_ZONE[0] + WASH_ZONE[1]) / 2, 0, 0);
-          scene.add(tunnel);
-          if (kenneyTunnel) {
-            scene.remove(kenneyTunnel);
-            kenneyTunnel = null;
-          }
-        })
-        .catch((err: unknown) => console.error("tunnel Meshy", err));
+      // Le tunnel de lavage reste le modèle Kenney (le modèle Meshy est abîmé)
+
+
 
 
       // Véhicules : ajoutés au pool de spawn au fur et à mesure
