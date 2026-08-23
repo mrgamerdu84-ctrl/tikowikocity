@@ -1,0 +1,112 @@
+name: Corriger voitures Kenney et tunnel
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/fix-kenney-car-materials.yml]
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Corriger les voitures blanches et le tunnel multicolore
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('src/components/CarWashScene.tsx')
+          s = p.read_text(encoding='utf-8')
+
+          s = s.replace(
+            'const DIRT_COLOR = new THREE.Color(0x8a7355);',
+            'const DIRT_COLOR = new THREE.Color(0x8a7355);\nconst CAR_FALLBACK_COLORS = [0xd94848, 0x2f80ed, 0xf2c94c, 0x27ae60, 0xf2994a, 0x9b51e0, 0x00a6a6] as const;',
+            1,
+          )
+
+          old = '''    const kitCar = (i: number) => {
+      const name = KIT_CARS[i % KIT_CARS.length]!;
+      return kit[name] ?? kit["sedan"] ?? models["sedan"]!;
+    };'''
+          new = '''    const kitCar = (i: number) => {
+      const name = KIT_CARS[i % KIT_CARS.length]!;
+      return kit[name] ?? kit["sedan"] ?? models["sedan"]!;
+    };
+
+    /* Certains exports du pack Kenney arrivent avec une carrosserie presque
+       blanche. On garde la géométrie Kenney et tous les matériaux existants,
+       mais on donne une vraie couleur uniquement aux surfaces neutres sans
+       texture. Les roues et vitres restent distinctes. */
+    const cloneKenneyCar = (i: number) => {
+      const car = kitCar(i).clone(true);
+      const fallback = new THREE.Color(CAR_FALLBACK_COLORS[i % CAR_FALLBACK_COLORS.length]!);
+      car.traverse((n) => {
+        const mesh = n as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        const source = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        const cloned = source.map((raw) => {
+          const m = raw.clone() as THREE.MeshStandardMaterial;
+          const tag = `${mesh.name} ${m.name}`.toLowerCase();
+          const wheel = tag.includes("wheel") || tag.includes("tire") || tag.includes("tyre");
+          const glass = tag.includes("glass") || tag.includes("window") || tag.includes("windshield");
+          if (wheel && m.color) {
+            m.color.setHex(0x20242a);
+            m.roughness = 0.95;
+            m.metalness = 0.05;
+          } else if (glass && m.color) {
+            m.color.setHex(0x8fc7df);
+            m.roughness = 0.2;
+            m.metalness = 0.05;
+          } else if (m.color) {
+            const hsl = { h: 0, s: 0, l: 0 };
+            m.color.getHSL(hsl);
+            const noTexture = !m.map;
+            if (noTexture && hsl.s < 0.12 && hsl.l > 0.42) {
+              m.color.copy(fallback);
+              m.roughness = Math.min(m.roughness ?? 0.7, 0.72);
+            }
+          }
+          return m;
+        });
+        mesh.material = Array.isArray(mesh.material) ? cloned : cloned[0]!;
+      });
+      return car;
+    };'''
+          if old not in s:
+            raise SystemExit('bloc kitCar introuvable')
+          s = s.replace(old, new, 1)
+
+          replacements = {
+            'const car = kitCar(ti).clone(true);': 'const car = cloneKenneyCar(ti);',
+            'const parked = kitCar(i * 2 + 4).clone(true);': 'const parked = cloneKenneyCar(i * 2 + 4);',
+            'const c = kitCar(Math.floor(rnd(i) * 8) + i).clone(true);': 'const c = cloneKenneyCar(Math.floor(rnd(i) * 8) + i);',
+            'const c = kitCar(Math.floor(rnd(2) * 8)).clone(true);': 'const c = cloneKenneyCar(Math.floor(rnd(2) * 8));',
+          }
+          for a, b in replacements.items():
+            s = s.replace(a, b)
+
+          # Le tunnel Meshy est la source du rendu multicolore/corrompu visible
+          # dans la station. On garde le hall, les rouleaux, l'eau et la mousse,
+          # mais on empêche ce GLB de s'ajouter à la scène.
+          marker = '    const loadMeshy = async () => {\n'
+          if marker not in s:
+            raise SystemExit('fonction loadMeshy introuvable')
+          s = s.replace(
+            marker,
+            marker + '      /* Désactivé : ce GLB produit des textures corrompues sur certains GPU/WebView. */\n      return;\n',
+            1,
+          )
+
+          p.write_text(s, encoding='utf-8')
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bunx tsc --noEmit
+      - name: Enregistrer
+        run: |
+          rm -f .github/workflows/fix-kenney-car-materials.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/CarWashScene.tsx .github/workflows/fix-kenney-car-materials.yml
+          git commit -m "Corrige voitures Kenney blanches et tunnel multicolore"
+          git push origin HEAD:main
