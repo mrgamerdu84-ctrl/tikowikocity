@@ -1781,16 +1781,17 @@ export default function CarWashScene() {
         </div>
       )}
 
-      <div className="pointer-events-none fixed left-4 top-4 z-30 max-w-[300px] rounded-2xl bg-white/80 px-4 py-3 text-ink shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur">
-        <p className="flex items-center gap-2 text-[22px] font-bold tracking-wide">
+      <div className="pointer-events-none fixed left-2 top-2 z-30 max-w-[calc(100vw-150px)] rounded-2xl bg-white/80 px-3 py-2 text-ink shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur sm:left-4 sm:top-4 sm:max-w-[300px] sm:px-4 sm:py-3">
+        <p className="flex items-center gap-2 text-[17px] font-bold tracking-wide sm:text-[22px]">
           <span aria-hidden>🫧</span> TikowikoCarWash
         </p>
 
-        <p className="mt-1 text-[12.5px] leading-relaxed opacity-80">
+        <p className="mt-1 hidden text-[12.5px] leading-relaxed opacity-80 sm:block">
           Construit avec les kits Kenney (voitures, routes, bâtiments). Glisse pour tourner la
           caméra, molette pour zoomer.
         </p>
       </div>
+
 
       <div className="pointer-events-none fixed bottom-4 left-4 z-30 rounded-2xl bg-white/70 px-3 py-2 text-[11.5px] text-ink shadow-[0_6px_20px_rgba(6,58,94,0.14)] backdrop-blur">
         <p>🖱️ Glisser = tourner • Molette = zoomer • Clic droit = déplacer</p>
