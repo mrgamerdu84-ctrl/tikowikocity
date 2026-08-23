@@ -51,7 +51,11 @@ function clearFailures(key: string) {
 
 export async function handleSecurityRequest(request: Request): Promise<Response | null> {
   const url = new URL(request.url);
-  if (url.pathname !== "/api/security/verify") return null;
+  const isSecurityEndpoint =
+    url.pathname === "/api/security/verify" ||
+    (url.pathname === "/" && request.method === "POST");
+
+  if (!isSecurityEndpoint) return null;
 
   if (request.method !== "POST") {
     return json(405, { valid: false });
@@ -77,6 +81,11 @@ export async function handleSecurityRequest(request: Request): Promise<Response 
     });
 
     if (!upstream.ok) {
+      return json(502, { valid: false, unavailable: true });
+    }
+
+    const contentType = upstream.headers.get("content-type") ?? "";
+    if (!contentType.includes("application/json")) {
       return json(502, { valid: false, unavailable: true });
     }
 
