@@ -24,7 +24,7 @@ import {
   type SerializedDecor,
 } from "@/game/cityPlan";
 import {
-  DECOR,
+  
   decorDef,
   decorOf,
   DEFAULT_WASH_STYLE,
