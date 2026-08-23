@@ -310,6 +310,89 @@ export default function CarWashScene() {
       return g;
     };
 
+    /* ---------- Mobilier urbain ---------- */
+    const poleMat = new THREE.MeshStandardMaterial({ color: 0x3d4249, roughness: 0.7 });
+
+    const makeLamp = () => {
+      const g = new THREE.Group();
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 3.6, 8), poleMat);
+      pole.position.y = 1.8;
+      g.add(pole);
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.08, 0.08), poleMat);
+      arm.position.set(0.45, 3.55, 0);
+      g.add(arm);
+      const head = new THREE.Mesh(
+        new THREE.BoxGeometry(0.5, 0.14, 0.28),
+        new THREE.MeshStandardMaterial({
+          color: 0xfff4c2,
+          emissive: 0xffe58a,
+          emissiveIntensity: 0.5,
+        }),
+      );
+      head.position.set(0.85, 3.46, 0);
+      g.add(head);
+      return g;
+    };
+
+    const makeBench = () => {
+      const g = new THREE.Group();
+      const woodMat = new THREE.MeshStandardMaterial({ color: 0xa9713f, roughness: 0.9 });
+      const seat = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.1, 0.55), woodMat);
+      seat.position.y = 0.45;
+      g.add(seat);
+      const back = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.5, 0.09), woodMat);
+      back.position.set(0, 0.72, -0.24);
+      g.add(back);
+      [-0.7, 0.7].forEach((x) => {
+        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.45, 0.5), poleMat);
+        leg.position.set(x, 0.22, 0);
+        g.add(leg);
+      });
+      return g;
+    };
+
+    const makeBin = () => {
+      const g = new THREE.Group();
+      const body = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.26, 0.22, 0.75, 10),
+        new THREE.MeshStandardMaterial({ color: 0x2f7d4f, roughness: 0.85 }),
+      );
+      body.position.y = 0.38;
+      g.add(body);
+      const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.29, 0.29, 0.08, 10), poleMat);
+      lid.position.y = 0.79;
+      g.add(lid);
+      return g;
+    };
+
+    type TrafficLight = { axis: "x" | "z"; red: THREE.Mesh; green: THREE.Mesh };
+    const trafficLights: TrafficLight[] = [];
+
+    const makeTrafficLight = (axis: "x" | "z") => {
+      const g = new THREE.Group();
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 2.6, 8), poleMat);
+      pole.position.y = 1.3;
+      g.add(pole);
+      const box = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.9, 0.3), poleMat);
+      box.position.y = 2.9;
+      g.add(box);
+      const bulb = (color: number, y: number) => {
+        const m = new THREE.Mesh(
+          new THREE.SphereGeometry(0.1, 10, 10),
+          new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.2 }),
+        );
+        m.position.set(0, y, 0.17);
+        box.add(m);
+        return m;
+      };
+      const red = bulb(0xff3b30, 0.28);
+      bulb(0xffcc00, 0);
+      const green = bulb(0x33d17a, -0.28);
+      trafficLights.push({ axis, red, green });
+      return g;
+    };
+
+
     // Tapis roulant : lattes qui défilent dans la zone de lavage
     const makeConveyor = () => {
       const group = new THREE.Group();
