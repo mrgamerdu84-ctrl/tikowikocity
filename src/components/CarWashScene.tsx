@@ -720,13 +720,13 @@ export default function CarWashScene() {
 
       Z_STREETS.forEach((z, i) => {
         if (z === 0) return; // rue du car wash réservée aux voitures à laver
-        addTraffic("x", z - LANE, 1, xMin + ((i * 11) % 40));
-        addTraffic("x", z + LANE, -1, xMin + ((i * 17) % 40));
+        addTraffic("x", z + LANE, 1, xMin + ((i * 11) % 40));
+        addTraffic("x", z - LANE, -1, xMin + ((i * 17) % 40));
       });
       X_STREETS.forEach((x, i) => {
         if (i % 2 !== 0) return;
-        addTraffic("z", x + LANE, 1, zMin + ((i * 13) % 34));
-        addTraffic("z", x - LANE, -1, zMin + ((i * 7) % 34));
+        addTraffic("z", x - LANE, 1, zMin + ((i * 13) % 34));
+        addTraffic("z", x + LANE, -1, zMin + ((i * 7) % 34));
       });
     };
 
