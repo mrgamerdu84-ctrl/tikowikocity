@@ -2017,19 +2017,26 @@ export default function CarWashScene() {
       ghost.visible = true;
       ghost.position.set(c.cx * TILE, 0.07, c.cz * TILE);
       const existing = plan.get(c.cx, c.cz);
+      const occupied =
+        !!existing || !!plan.house(c.cx, c.cz) || !!plan.decorAt(c.cx, c.cz);
       const tool = toolRef.current;
+      const destructive = tool === "bulldoze" || tool === "erase";
       const ok =
         tool === "bulldoze"
           ? !!existing
           : tool === "erase"
-            ? !!existing && !existing.locked
+            ? occupied
             : tool === "light" || tool === "lamp"
               ? !!existing
               : tool === "house"
                 ? plan.canPlaceHouse(c.cx, c.cz) || !!plan.house(c.cx, c.cz)
-                : canBuild(c.cx, c.cz);
+                : tool === "park" || tool === "parking"
+                  ? canBuild(c.cx, c.cz) && plan.canPlaceDecor(c.cx, c.cz)
+                  : tool === "wash"
+                    ? false
+                    : canBuild(c.cx, c.cz) && !occupied;
       (ghost.material as THREE.MeshBasicMaterial).color.set(
-        tool === "bulldoze" ? (ok ? 0xe05252 : 0x9aa5ad) : ok ? 0x2bd07c : 0xe05252,
+        destructive ? (ok ? 0xe05252 : 0x9aa5ad) : ok ? 0x2bd07c : 0xe05252,
       );
       if (downAt?.id === ev.pointerId && isDragTool(toolRef.current)) {
         ev.preventDefault();
