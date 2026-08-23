@@ -1336,7 +1336,20 @@ export default function CarWashScene() {
           );
         });
 
-      // Le tunnel de lavage reste le modèle Kenney (le modèle Meshy est abîmé)
+      // Tunnel de lavage : le modèle Meshy détaillé remplace le portique Kenney
+      await load(tunnelAsset.url)
+        .then((raw) => {
+          if (disposed) return;
+          const meshyTunnel = normalizeModel(raw, 13);
+          meshyTunnel.position.set(2, 0, 0);
+          setShadow(meshyTunnel);
+          washSite.add(meshyTunnel);
+          if (tunnelPlaceholder) {
+            washSite.remove(tunnelPlaceholder);
+            tunnelPlaceholder = null;
+          }
+        })
+        .catch((err: unknown) => console.error("tunnel Meshy", err));
 
 
 
