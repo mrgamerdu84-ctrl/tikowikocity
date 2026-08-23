@@ -872,14 +872,19 @@ export default function CarWashScene() {
         }
       }
 
-      // Palette pastel variée pour éviter des immeubles tous identiques
+      /* Palette pastel variée : hash pseudo-aléatoire sur la position pour
+         que deux immeubles voisins n'aient jamais la même teinte (l'ancienne
+         formule linéaire retombait toujours sur les mêmes indices). */
       const PASTELS = [
-        0xffc2d1, 0xffe0b2, 0xd7c3f2, 0xc8e6c9, 0xffe9a8, 0xbfe3f0,
-        0xf6d5c0, 0xe3d5ff, 0xd5f0dc, 0xffd6a5,
+        0xffb3c6, 0xffd39b, 0xc9a7f0, 0xa8e6a3, 0xffe066, 0x9fd8ef,
+        0xf7b267, 0xb8b3f0, 0x8fd6b4, 0xffa987, 0xf2e2c4, 0xe58fb0,
       ];
+      const hash = Math.abs(Math.sin(x * 12.9898 + z * 78.233) * 43758.5453) % 1;
       const tint = new THREE.Color(
-        PASTELS[Math.abs(Math.round(x * 7 + z * 13)) % PASTELS.length],
+        PASTELS[Math.floor(hash * PASTELS.length) % PASTELS.length],
       );
+      // légère variation de luminosité en plus de la teinte
+      const bright = 1.02 + ((Math.abs(Math.sin(x * 3.17 + z * 5.11)) * 100) % 1) * 0.22;
       const tinted = new Map<THREE.Material, THREE.MeshStandardMaterial>();
       g.traverse((n) => {
         const mesh = n as THREE.Mesh;
@@ -889,11 +894,12 @@ export default function CarWashScene() {
         let cloned = tinted.get(mat);
         if (!cloned) {
           cloned = mat.clone();
-          cloned.color.lerp(tint, 0.75).multiplyScalar(1.15);
+          cloned.color.lerp(tint, 0.9).multiplyScalar(bright);
           tinted.set(mat, cloned);
         }
         mesh.material = cloned;
       });
+
 
 
       g.position.set(x, 0, z);
