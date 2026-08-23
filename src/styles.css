@@ -59,7 +59,13 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --color-ink: var(--ink);
+  --color-splash: var(--splash);
+  --color-splash-foreground: var(--splash-foreground);
+  --color-sunny: var(--sunny);
+  --color-sunny-foreground: var(--sunny-foreground);
 }
+
 
 :root {
   --radius: 0.625rem;
