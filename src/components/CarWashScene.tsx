@@ -356,6 +356,7 @@ export default function CarWashScene() {
         houses?: SerializedHouses;
         residents?: unknown;
         economy?: { money?: unknown; washes?: unknown };
+        history?: unknown;
         upgrades?: unknown;
 
       };
