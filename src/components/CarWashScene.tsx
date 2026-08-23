@@ -107,7 +107,7 @@ export default function CarWashScene() {
       0.1,
       300,
     );
-    camera.position.set(-24, 18, WASH_SITE_Z + 26);
+    camera.position.set(-34, 26, WASH_SITE_Z + 40);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -118,7 +118,7 @@ export default function CarWashScene() {
     wrap.appendChild(renderer.domElement);
 
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.target.set(2, 1.5, WASH_SITE_Z);
+    controls.target.set(2, 1.5, WASH_SITE_Z + 6);
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
     controls.minDistance = 6;
