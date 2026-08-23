@@ -174,6 +174,7 @@ export default function CarWashScene() {
         cinemaRef.current();
       }
       setLoadState("done");
+      setDriveMenuOpen(false);
       toast.success("Progression restaurée depuis Drive", { description: res.fileName });
       window.setTimeout(() => setLoadState("idle"), 4000);
     } catch (err) {
