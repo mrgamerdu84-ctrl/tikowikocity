@@ -5,9 +5,9 @@ import PlayerSetup from "@/components/PlayerSetup";
 import { usePlayer } from "@/lib/player";
 
 
-const TITLE = "TikowikoCarWash — station de lavage 3D interactive";
+const TITLE = "TikowikoCity — monde du jeu TikowikoCarWash";
 const DESCRIPTION =
-  "TikowikoCarWash : une station de lavage auto en 3D. Envoyez des voitures dans le tunnel et regardez les brosses et la mousse faire briller la carrosserie.";
+  "TikowikoCity : le monde ouvert de TikowikoCarWash. Construisez votre ville autour du car wash, gérez le trafic et développez votre petite cité.";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -28,7 +28,7 @@ function Index() {
 
   return (
     <main className="min-h-screen">
-      <h1 className="sr-only">TikowikoCarWash</h1>
+      <h1 className="sr-only">TikowikoCity</h1>
       {ready && !player ? <PlayerSetup /> : null}
       {ready && player ? <CarWashScene /> : null}
     </main>
