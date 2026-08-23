@@ -739,17 +739,23 @@ export default function CarWashScene() {
         // modèles Kenney : le nez pointe vers +Z
         const heading =
           axis === "x" ? (dir > 0 ? Math.PI / 2 : -Math.PI / 2) : dir > 0 ? 0 : Math.PI;
+        /* on ne circule que sur la chaussée : bornes = extrémités de la rue */
+        const sMin = (axis === "x" ? xMin : zMin) - STREET_W / 2;
+        const sMax = (axis === "x" ? xMax : zMax) + STREET_W / 2;
         trafficCars.push({
           car,
           axis,
           lane,
-          s,
+          s: Math.min(Math.max(s, sMin), sMax),
           dir,
           speed: 3.4 + (ti % 3) * 0.5,
           heading,
           yaw: 0,
           baseY: CAR_Y,
+          sMin,
+          sMax,
         });
+
         ti++;
       };
 
