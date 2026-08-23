@@ -1685,11 +1685,13 @@ export default function CarWashScene() {
       if (ev.pointerType === "mouse" && ev.button !== 0) return;
       const tool = toolRef.current;
       const c = cellUnderPointer(ev);
-      if (isRoadTool(tool)) {
+      if (isDragTool(tool)) {
         if (c) traceRoadTo(c);
         roadDragLast = null;
+        renderHouses();
         return;
       }
+
       const tapTolerance = start.type === "touch" || start.type === "pen" ? 24 : 8;
       if (Math.hypot(ev.clientX - start.x, ev.clientY - start.y) > tapTolerance) return;
       if (!c) return;
