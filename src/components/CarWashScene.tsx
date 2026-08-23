@@ -984,6 +984,60 @@ export default function CarWashScene() {
     const propsGroup = new THREE.Group();
     scene.add(propsGroup);
 
+    const housesGroup = new THREE.Group();
+    scene.add(housesGroup);
+
+    /* Maison stylisée Kenney-like : corps + toit à deux pentes + détails. */
+    const makeHouse = (level: number) => {
+      const def = houseDef(level);
+      const g = new THREE.Group();
+      const wallMat = new THREE.MeshStandardMaterial({ color: def.color, roughness: 0.95 });
+      const roofMat = new THREE.MeshStandardMaterial({ color: def.roof, roughness: 0.9 });
+      const floors = level === 3 ? 3 : level === 2 ? 2 : 1;
+      const w = level === 3 ? 3.1 : 2.7;
+      const h = 1.5 * floors;
+      const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, w), wallMat);
+      body.position.y = h / 2;
+      g.add(body);
+
+      const roof = new THREE.Mesh(new THREE.ConeGeometry(w * 0.86, 1.25, 4), roofMat);
+      roof.position.y = h + 0.6;
+      roof.rotation.y = Math.PI / 4;
+      g.add(roof);
+
+      // fenêtres
+      const winMat = new THREE.MeshStandardMaterial({ color: 0x9fd7f2, roughness: 0.4 });
+      const winGeo = new THREE.BoxGeometry(0.55, 0.55, 0.06);
+      for (let f = 0; f < floors; f++) {
+        for (const sx of [-0.65, 0.65]) {
+          const win = new THREE.Mesh(winGeo, winMat);
+          win.position.set(sx, 0.85 + f * 1.5, w / 2 + 0.02);
+          g.add(win);
+        }
+      }
+      const door = new THREE.Mesh(
+        new THREE.BoxGeometry(0.6, 0.95, 0.08),
+        new THREE.MeshStandardMaterial({ color: 0x7a5230, roughness: 0.9 }),
+      );
+      door.position.set(0, 0.475, w / 2 + 0.02);
+      g.add(door);
+      setShadow(g);
+      return g;
+    };
+
+    const renderHouses = () => {
+      [...housesGroup.children].forEach((c) => housesGroup.remove(c));
+      plan.houses.forEach((h, k) => {
+        const [cx, cz] = parseKey(k);
+        const m = makeHouse(h.level);
+        m.position.set(cx * TILE, 0, cz * TILE);
+        // légère variation d'orientation pour casser la rigidité
+        m.rotation.y = ((cx * 7 + cz * 13) % 4) * 0.06;
+        housesGroup.add(m);
+      });
+      cityStatsRef.current(plan.houseLevels());
+    };
+
     const renderPlan = () => {
       [...roadsGroup.children].forEach((c) => roadsGroup.remove(c));
       [...propsGroup.children].forEach((c) => propsGroup.remove(c));
@@ -1507,7 +1561,9 @@ export default function CarWashScene() {
           ? !!existing && !existing.locked
           : tool === "light" || tool === "lamp"
             ? !!existing
-            : canBuild(c.cx, c.cz);
+            : tool === "house"
+              ? plan.canPlaceHouse(c.cx, c.cz) || !!plan.house(c.cx, c.cz)
+              : canBuild(c.cx, c.cz);
       (ghost.material as THREE.MeshBasicMaterial).color.set(ok ? 0x2bd07c : 0xe05252);
     };
     const onPointerDown = (ev: PointerEvent) => {
@@ -1522,7 +1578,29 @@ export default function CarWashScene() {
       if (!c) return;
       const tool = toolRef.current;
       if (tool === "erase") {
+        if (plan.removeHouse(c.cx, c.cz)) {
+          renderHouses();
+          return;
+        }
         if (plan.remove(c.cx, c.cz)) renderPlan();
+        return;
+      }
+      if (tool === "house") {
+        const existingHouse = plan.house(c.cx, c.cz);
+        if (existingHouse) {
+          // clic sur une maison existante : amélioration de niveau
+          const target = Math.min(MAX_HOUSE_LEVEL, existingHouse.level + 1);
+          if (target === existingHouse.level) return;
+          if (!spendRef.current(houseDef(target).cost)) return;
+          plan.placeHouse(c.cx, c.cz, target);
+          renderHouses();
+          return;
+        }
+        if (!plan.canPlaceHouse(c.cx, c.cz)) return;
+        const lvl = houseLevelRef.current;
+        if (!spendRef.current(houseDef(lvl).cost)) return;
+        plan.placeHouse(c.cx, c.cz, lvl);
+        renderHouses();
         return;
       }
       if (tool === "light" || tool === "lamp") {
@@ -1550,6 +1628,11 @@ export default function CarWashScene() {
       load: (data) => {
         plan.load(data);
         renderPlan();
+      },
+      saveHouses: () => plan.serializeHouses(),
+      loadHouses: (data) => {
+        plan.loadHouses(data);
+        renderHouses();
       },
     };
 
@@ -1652,7 +1735,9 @@ export default function CarWashScene() {
       washCooldown -= dt;
       if (washCooldown <= 0) {
         const [lo, hi] = washInterval(up.speed);
-        washCooldown = lo + Math.random() * (hi - lo + 3);
+        // plus la ville compte d'habitants, plus les clients affluent
+        const crowd = 1 / (1 + residentsRef.current / 25);
+        washCooldown = (lo + Math.random() * (hi - lo + 3)) * crowd;
         if (ctl.traffic && washCars.length < capacityOf(up.capacity)) sendCityCarToWash();
       }
 
