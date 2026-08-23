@@ -17,7 +17,7 @@ import modelsAsset from "@/assets/car-wash-models.json.asset.json";
 
 import tunnelAsset from "@/assets/tunnel.glb.asset.json";
 import kenneyPackAsset from "@/assets/kenney-pack.glb.asset.json";
-import { CityPlan, type SerializedPlan } from "@/game/cityPlan";
+import { CityPlan, type SerializedPlan, type SerializedHouses } from "@/game/cityPlan";
 import {
   TILE,
   DIR_VEC,
@@ -42,6 +42,7 @@ import {
   type UpgradeKey,
   type UpgradeLevels,
 } from "@/game/upgrades";
+import { HOUSE_LEVELS, MAX_HOUSE_LEVEL, houseDef, totalCapacity } from "@/game/houses";
 
 
 /* Modèles issus des kits Kenney (car-kit, city-kit-roads, building-kit),
@@ -167,6 +168,53 @@ export default function CarWashScene() {
     });
   };
 
+  /* ----- Quartiers résidentiels : maisons posées par le joueur ----- */
+  const [houseLevel, setHouseLevel] = useState(1);
+  const houseLevelRef = useRef(1);
+  const [city, setCity] = useState({ houses: 0, capacity: 0 });
+  const [residents, setResidents] = useState(0);
+  const residentsRef = useRef(0);
+  const cityRef = useRef(city);
+  const cityStatsRef = useRef<(levels: number[]) => void>(() => {});
+  cityStatsRef.current = (levels: number[]) => {
+    const next = { houses: levels.length, capacity: totalCapacity(levels) };
+    cityRef.current = next;
+    setCity(next);
+  };
+  /* Dépense d'argent depuis la scène 3D (pose / amélioration de maison). */
+  const spendRef = useRef<(amount: number) => boolean>(() => false);
+  spendRef.current = (amount: number) => {
+    if (economyRef.current.money < amount) {
+      toast.error(`Il manque ${(amount - economyRef.current.money).toLocaleString("fr-FR")} €`);
+      return false;
+    }
+    const next = { ...economyRef.current, money: economyRef.current.money - amount };
+    economyRef.current = next;
+    setEconomy(next);
+    return true;
+  };
+
+  /* Les habitants arrivent progressivement jusqu'à la capacité des maisons. */
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setResidents((prev) => {
+        const cap = cityRef.current.capacity;
+        const next = prev < cap ? prev + 1 : prev > cap ? cap : prev;
+        residentsRef.current = next;
+        if (next > prev && (next === 1 || next % 10 === 0)) {
+          toast.success(`👥 ${next} habitant${next > 1 ? "s" : ""} à TikowikoCity`);
+        }
+        return next;
+      });
+    }, 2200);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const chooseHouseLevel = (l: number) => {
+    houseLevelRef.current = l;
+    setHouseLevel(l);
+  };
+
   /* ----- Mode construction (pose de routes / mobilier par le joueur) ----- */
   const [buildMode, setBuildMode] = useState(false);
   const [tool, setTool] = useState<BuildTool>("straight");
@@ -178,7 +226,9 @@ export default function CarWashScene() {
   const planIoRef = useRef<{
     save: () => SerializedPlan;
     load: (data: SerializedPlan) => void;
-  }>({ save: () => [], load: () => {} });
+    saveHouses: () => SerializedHouses;
+    loadHouses: (data: SerializedHouses) => void;
+  }>({ save: () => [], load: () => {}, saveHouses: () => [], loadHouses: () => {} });
 
   const chooseTool = (t: BuildTool) => {
     toolRef.current = t;
@@ -242,6 +292,8 @@ export default function CarWashScene() {
               machines: machinesRef.current,
               cinema: cinemaStateRef.current,
               city: planIoRef.current.save(),
+              houses: planIoRef.current.saveHouses(),
+              residents: residentsRef.current,
               economy: economyRef.current,
               upgrades: upgradesRef.current,
 
@@ -279,6 +331,8 @@ export default function CarWashScene() {
         machines?: Partial<typeof machines>;
         cinema?: unknown;
         city?: SerializedPlan;
+        houses?: SerializedHouses;
+        residents?: unknown;
         economy?: { money?: unknown; washes?: unknown };
         upgrades?: unknown;
 
@@ -295,6 +349,12 @@ export default function CarWashScene() {
         });
       }
       if (Array.isArray(state.city)) planIoRef.current.load(state.city);
+      if (Array.isArray(state.houses)) planIoRef.current.loadHouses(state.houses);
+      if (typeof state.residents === "number" && Number.isFinite(state.residents)) {
+        const r = Math.max(0, Math.round(state.residents));
+        residentsRef.current = r;
+        setResidents(r);
+      }
       if (state.economy && typeof state.economy === "object") {
         const money = state.economy.money;
         const washes = state.economy.washes;
