@@ -1432,15 +1432,34 @@ export default function CarWashScene() {
         scene.add(parked);
       });
 
-      // Arbres en bordure de parcelle, pour séparer la station de la ville
-      for (let x = -17; x <= 17; x += 5) {
+      /* Arbres de la parcelle : uniquement sur la pelouse, jamais sur la
+         chaussée (voie de lavage, rue de desserte, raccords, accès ville). */
+      const onSiteRoad = (x: number, z: number) => {
+        const halfW = STREET_W / 2 + 1.2;
+        if (Math.abs(z - WASH_SITE_Z) <= halfW) return true; // voie de lavage
+        if (Math.abs(z - SITE_ROAD_Z) <= halfW) return true; // rue de desserte
+        const inLink = z >= WASH_SITE_Z - halfW && z <= SITE_ROAD_Z + halfW;
+        if (inLink && (Math.abs(x - WASH_IN_X) <= halfW || Math.abs(x - WASH_OUT_X) <= halfW))
+          return true;
+        if (z >= WASH_SITE_Z && Math.abs(x - WASH_ACCESS_X) <= halfW) return true;
+        return false;
+      };
+      const plantSiteTree = (x: number, z: number) => {
+        if (onSiteRoad(x, z)) return;
         const tr = makeTree();
-        tr.position.set(x, 0, WASH_SITE_Z + 12);
+        tr.position.set(x, 0, z);
         tr.scale.setScalar(0.9);
         setShadow(tr);
         scene.add(tr);
-
+      };
+      // bande enherbée au nord de la voie de lavage
+      for (let x = -17; x <= 17; x += 4.5) plantSiteTree(x, WASH_SITE_Z - 6.8);
+      // bordures est / ouest de la parcelle
+      for (let z = WASH_SITE_Z - 7; z <= SITE_ROAD_Z + 4; z += 4.5) {
+        plantSiteTree(-18.5, z);
+        plantSiteTree(18.5, z);
       }
+
 
       // ----- Circulation : deux voies par rue, sens opposés, bien centrées -----
       let ti = 0;
