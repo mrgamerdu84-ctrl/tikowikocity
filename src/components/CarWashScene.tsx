@@ -2763,9 +2763,9 @@ export default function CarWashScene() {
 
 
         <p className="mt-1 hidden text-[12.5px] leading-relaxed opacity-80 sm:block">
-          Construit avec les kits Kenney (voitures, routes, bâtiments). Glisse pour tourner la
-          caméra, molette pour zoomer.
+          Glisse pour tourner la caméra, molette pour zoomer.
         </p>
+
       </div>
 
 
