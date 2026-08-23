@@ -87,6 +87,7 @@ function b64ToArrayBuffer(b64: string) {
 
 export default function CarWashScene() {
   const wrapRef = useRef<HTMLDivElement>(null);
+  const { player } = usePlayer();
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState(MESSAGES[0]!);
   const cinemaRef = useRef<() => void>(() => {});
