@@ -1,0 +1,66 @@
+name: Améliorer nuit caméra et voitures
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/fix-night-camera-cars.yml]
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Corriger rendu de la ville
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('src/components/CarWashScene.tsx')
+          s = p.read_text(encoding='utf-8')
+
+          # Caméra desktop : rapproche la ville et le car wash sans toucher au mobile.
+          s = s.replace('else camera.position.set(-25, 24, 20);', 'else camera.position.set(-22, 22, 8);', 1)
+          s = s.replace('isPortrait() ? WASH_SITE_Z + 12 : -15,', 'isPortrait() ? WASH_SITE_Z + 12 : -20,', 1)
+
+          # Nuit lisible mais réellement sombre.
+          s = s.replace('const nightFog = new THREE.Color(0x071426);', 'const nightFog = new THREE.Color(0x0e2740);', 1)
+          s = s.replace('const nightSkyTint = new THREE.Color(0x07152d);', 'const nightSkyTint = new THREE.Color(0x0b1f38);', 1)
+          s = s.replace('moon.intensity = night * 0.42;', 'moon.intensity = night * 0.72;', 1)
+          s = s.replace('hemi.intensity = 0.12 + daylight * 0.78;', 'hemi.intensity = 0.26 + daylight * 0.72;', 1)
+          s = s.replace('light.intensity = night * 5.2;', 'light.intensity = night * 8.5;', 1)
+          s = s.replace('light.intensity = night * 2.8;', 'light.intensity = night * 4.2;', 1)
+          s = s.replace('const light = new THREE.PointLight(0xffd27a, 0, 18, 2);', 'const light = new THREE.PointLight(0xffd27a, 0, 24, 1.55);', 1)
+          s = s.replace('const homeLight = new THREE.PointLight(0xffc56e, 0, 13 + h.level * 2, 2);', 'const homeLight = new THREE.PointLight(0xffc56e, 0, 18 + h.level * 3, 1.6);', 1)
+
+          # Les modules Kenney des maisons étaient trop petits dans une tuile de ville.
+          house_anchor = '''        const m = makeHouse(h.level);\n        m.position.set(cx * TILE, 0, cz * TILE);'''
+          house_new = '''        const m = makeHouse(h.level);\n        m.scale.setScalar(1.55);\n        m.position.set(cx * TILE, 0, cz * TILE);'''
+          if house_anchor not in s:
+            raise SystemExit('bloc maisons introuvable')
+          s = s.replace(house_anchor, house_new, 1)
+
+          # Carte joueur plus discrète sur ordinateur.
+          s = s.replace('sm:max-w-[260px] sm:px-3 sm:py-2', 'sm:max-w-[230px] sm:px-3 sm:py-2', 1)
+          s = s.replace('sm:text-[19px]', 'sm:text-[18px]', 1)
+
+          # Préserver exactement les couleurs Kenney des voitures pendant le lavage.
+          old = '''    const isolateMaterials = (car: THREE.Object3D) => {\n      const materials: THREE.MeshStandardMaterial[] = [];\n      car.traverse((n) => {\n        const mesh = n as THREE.Mesh;\n        if (mesh.isMesh) {\n          const cloned = (mesh.material as THREE.MeshStandardMaterial).clone();\n          mesh.material = cloned;\n          materials.push(cloned);\n        }\n      });\n      return materials;\n    };\n\n    const tintCar = (car: THREE.Object3D, dirtiness: number) => {\n      const data = car.userData as { materials?: THREE.MeshStandardMaterial[] };\n      const materials = data.materials ?? isolateMaterials(car);\n      data.materials = materials;\n      const clean = 1 - dirtiness;\n      materials.forEach((m) => {\n        m.color.setHex(0xffffff).lerp(DIRT_COLOR, dirtiness);\n        /* Carrosserie fraîchement lavée : vernis brillant + léger éclat. */\n        m.roughness = 0.85 - clean * 0.7;\n        m.metalness = 0.05 + clean * 0.55;\n        m.emissive.setHex(0xffffff);\n        m.emissiveIntensity = clean * 0.12;\n      });\n    };'''
+          new = '''    type CarMaterialState = {\n      material: THREE.MeshStandardMaterial;\n      baseColor: THREE.Color;\n      baseRoughness: number;\n      baseMetalness: number;\n      baseEmissive: THREE.Color;\n      baseEmissiveIntensity: number;\n    };\n\n    const isolateMaterials = (car: THREE.Object3D) => {\n      const materials: CarMaterialState[] = [];\n      car.traverse((n) => {\n        const mesh = n as THREE.Mesh;\n        if (!mesh.isMesh) return;\n        const source = Array.isArray(mesh.material) ? mesh.material : [mesh.material];\n        const cloned = source.map((raw) => {\n          const m = (raw as THREE.MeshStandardMaterial).clone();\n          materials.push({\n            material: m,\n            baseColor: m.color.clone(),\n            baseRoughness: m.roughness,\n            baseMetalness: m.metalness,\n            baseEmissive: m.emissive.clone(),\n            baseEmissiveIntensity: m.emissiveIntensity,\n          });\n          return m;\n        });\n        mesh.material = Array.isArray(mesh.material) ? cloned : cloned[0]!;\n      });\n      return materials;\n    };\n\n    const tintCar = (car: THREE.Object3D, dirtiness: number) => {\n      const data = car.userData as { materials?: CarMaterialState[] };\n      const materials = data.materials ?? isolateMaterials(car);\n      data.materials = materials;\n      const dirt = THREE.MathUtils.clamp(dirtiness, 0, 1);\n      materials.forEach((state) => {\n        const m = state.material;\n        m.color.copy(state.baseColor).lerp(DIRT_COLOR, dirt * 0.22);\n        m.roughness = THREE.MathUtils.clamp(state.baseRoughness + dirt * 0.14, 0.08, 1);\n        m.metalness = state.baseMetalness;\n        m.emissive.copy(state.baseEmissive);\n        m.emissiveIntensity = state.baseEmissiveIntensity;\n      });\n    };'''
+          if old not in s:
+            raise SystemExit('bloc couleurs voitures introuvable')
+          s = s.replace(old, new, 1)
+
+          p.write_text(s, encoding='utf-8')
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bunx tsc --noEmit
+      - name: Enregistrer
+        run: |
+          rm -f .github/workflows/fix-night-camera-cars.yml
+          rm -f .github/workflows/fix-car-colors.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/CarWashScene.tsx .github/workflows/fix-night-camera-cars.yml .github/workflows/fix-car-colors.yml
+          git commit -m "Améliore nuit cadrage maisons et couleurs voitures"
+          git push origin HEAD:main
