@@ -1221,6 +1221,7 @@ export default function CarWashScene() {
         entry.car = next;
         entry.baseY = 0.02;
         entry.yaw = MESHY_YAW;
+        entry.wheels = findWheels(next);
       });
     };
 
@@ -1235,8 +1236,9 @@ export default function CarWashScene() {
         setLoading(false);
         animate();
         queueTimer = window.setInterval(() => {
-          if (sedanCars.length < 5) spawnSedan();
+          if (washCars.length < 5) spawnSedan();
         }, 4000);
+
         void loadMeshy();
       })
       .catch((err: unknown) => {
