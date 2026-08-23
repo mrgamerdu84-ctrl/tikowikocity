@@ -1,0 +1,151 @@
+name: Commandes caméra mobile construction
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/mobile-build-camera-controls.yml]
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ajouter navigation caméra pendant construction
+        shell: python
+        run: |
+          from pathlib import Path
+          p=Path('src/components/CarWashScene.tsx')
+          s=p.read_text(encoding='utf-8')
+
+          old='''  const buildApplyRef = useRef<(on: boolean) => void>(() => {});'''
+          new='''  const buildApplyRef = useRef<(on: boolean) => void>(() => {});
+  type BuildCameraAction = "left" | "right" | "forward" | "back" | "zoomIn" | "zoomOut" | "rotateLeft" | "rotateRight" | "reset";
+  const buildCameraRef = useRef<(action: BuildCameraAction) => void>(() => {});
+  const cameraHoldRef = useRef<number | null>(null);
+  const stopCameraHold = () => {
+    if (cameraHoldRef.current !== null) {
+      window.clearInterval(cameraHoldRef.current);
+      cameraHoldRef.current = null;
+    }
+  };
+  const startCameraHold = (action: BuildCameraAction) => {
+    stopCameraHold();
+    buildCameraRef.current(action);
+    cameraHoldRef.current = window.setInterval(() => buildCameraRef.current(action), 70);
+  };
+  const requestGameFullscreen = async () => {
+    try {
+      if (!document.fullscreenElement) await document.documentElement.requestFullscreen();
+      else await document.exitFullscreen();
+    } catch {
+      toast.info("Le plein écran n'est pas disponible sur ce navigateur.");
+    }
+  };'''
+          if old not in s: raise SystemExit('anchor buildApplyRef introuvable')
+          s=s.replace(old,new,1)
+
+          anchor='''    controls.maxPolarAngle = Math.PI * 0.49;
+    controls.update();'''
+          insert='''    controls.maxPolarAngle = Math.PI * 0.49;
+    controls.update();
+
+    /* Navigation dédiée au mode construction mobile. Les boutons d'écran
+       déplacent directement caméra + cible : on peut donc continuer à poser
+       au doigt sans conflit entre OrbitControls et les événements de construction. */
+    const resetBuildCamera = () => {
+      if (isPortrait()) {
+        camera.position.set(-26, 36, WASH_SITE_Z + 54);
+        controls.target.set(-4, 1.5, WASH_SITE_Z + 12);
+      } else {
+        camera.position.set(-25, 24, 20);
+        controls.target.set(5, 1.5, -15);
+      }
+      controls.update();
+    };
+    buildCameraRef.current = (action) => {
+      if (action === "reset") {
+        resetBuildCamera();
+        return;
+      }
+      const target = controls.target;
+      const offset = camera.position.clone().sub(target);
+      const distance = Math.max(offset.length(), 1);
+      const panStep = THREE.MathUtils.clamp(distance * 0.055, 1.2, 7.5);
+      const flatForward = new THREE.Vector3(-offset.x, 0, -offset.z);
+      if (flatForward.lengthSq() < 0.0001) flatForward.set(0, 0, -1);
+      flatForward.normalize();
+      const right = new THREE.Vector3().crossVectors(flatForward, new THREE.Vector3(0, 1, 0)).normalize();
+      const move = new THREE.Vector3();
+
+      if (action === "forward") move.copy(flatForward).multiplyScalar(panStep);
+      if (action === "back") move.copy(flatForward).multiplyScalar(-panStep);
+      if (action === "left") move.copy(right).multiplyScalar(-panStep);
+      if (action === "right") move.copy(right).multiplyScalar(panStep);
+      if (move.lengthSq() > 0) {
+        camera.position.add(move);
+        target.add(move);
+      } else if (action === "zoomIn" || action === "zoomOut") {
+        const factor = action === "zoomIn" ? 0.88 : 1.14;
+        const next = THREE.MathUtils.clamp(distance * factor, controls.minDistance, controls.maxDistance);
+        offset.setLength(next);
+        camera.position.copy(target).add(offset);
+      } else if (action === "rotateLeft" || action === "rotateRight") {
+        const spherical = new THREE.Spherical().setFromVector3(offset);
+        spherical.theta += action === "rotateLeft" ? -0.12 : 0.12;
+        offset.setFromSpherical(spherical);
+        camera.position.copy(target).add(offset);
+      }
+      controls.update();
+    };'''
+          if anchor not in s: raise SystemExit('anchor OrbitControls introuvable')
+          s=s.replace(anchor,insert,1)
+
+          # Keep placement controls disabled in build mode; camera is handled by the virtual pad.
+          # Add mobile camera pad immediately before the construction bottom bar.
+          anchor2='''      {/* Mode construction plein écran : une seule barre ancrée en bas,
+          onglets + outils de la catégorie active, la vue 3D reste dégagée. */}
+      {buildMode && ('''
+          pad='''      {/* Commandes caméra tactiles : restent disponibles pendant la pose. */}
+      {buildMode && (
+        <div className="fixed right-2 top-1/2 z-50 -translate-y-1/2 select-none rounded-2xl bg-white/88 p-1.5 text-ink shadow-[0_8px_24px_rgba(6,58,94,0.22)] ring-1 ring-ink/10 backdrop-blur sm:right-3 sm:p-2">
+          <div className="grid grid-cols-3 gap-1">
+            <span />
+            <button type="button" aria-label="Avancer la caméra" onPointerDown={(e) => { e.preventDefault(); startCameraHold("forward"); }} onPointerUp={stopCameraHold} onPointerCancel={stopCameraHold} onPointerLeave={stopCameraHold} className="size-10 rounded-xl bg-ink/10 text-lg font-black active:bg-splash/30 sm:size-11">▲</button>
+            <span />
+            <button type="button" aria-label="Déplacer la caméra à gauche" onPointerDown={(e) => { e.preventDefault(); startCameraHold("left"); }} onPointerUp={stopCameraHold} onPointerCancel={stopCameraHold} onPointerLeave={stopCameraHold} className="size-10 rounded-xl bg-ink/10 text-lg font-black active:bg-splash/30 sm:size-11">◀</button>
+            <button type="button" aria-label="Recentrer la caméra" onClick={() => buildCameraRef.current("reset")} className="size-10 rounded-xl bg-sunny text-base font-black text-sunny-foreground active:scale-95 sm:size-11">🎯</button>
+            <button type="button" aria-label="Déplacer la caméra à droite" onPointerDown={(e) => { e.preventDefault(); startCameraHold("right"); }} onPointerUp={stopCameraHold} onPointerCancel={stopCameraHold} onPointerLeave={stopCameraHold} className="size-10 rounded-xl bg-ink/10 text-lg font-black active:bg-splash/30 sm:size-11">▶</button>
+            <span />
+            <button type="button" aria-label="Reculer la caméra" onPointerDown={(e) => { e.preventDefault(); startCameraHold("back"); }} onPointerUp={stopCameraHold} onPointerCancel={stopCameraHold} onPointerLeave={stopCameraHold} className="size-10 rounded-xl bg-ink/10 text-lg font-black active:bg-splash/30 sm:size-11">▼</button>
+            <span />
+          </div>
+          <div className="mt-1 grid grid-cols-2 gap-1">
+            <button type="button" aria-label="Zoomer" onPointerDown={(e) => { e.preventDefault(); startCameraHold("zoomIn"); }} onPointerUp={stopCameraHold} onPointerCancel={stopCameraHold} onPointerLeave={stopCameraHold} className="h-9 rounded-xl bg-splash/15 text-sm font-black active:bg-splash/30">＋</button>
+            <button type="button" aria-label="Dézoomer" onPointerDown={(e) => { e.preventDefault(); startCameraHold("zoomOut"); }} onPointerUp={stopCameraHold} onPointerCancel={stopCameraHold} onPointerLeave={stopCameraHold} className="h-9 rounded-xl bg-splash/15 text-sm font-black active:bg-splash/30">－</button>
+            <button type="button" aria-label="Tourner la caméra à gauche" onPointerDown={(e) => { e.preventDefault(); startCameraHold("rotateLeft"); }} onPointerUp={stopCameraHold} onPointerCancel={stopCameraHold} onPointerLeave={stopCameraHold} className="h-9 rounded-xl bg-ink/10 text-sm font-black active:bg-splash/30">↺</button>
+            <button type="button" aria-label="Tourner la caméra à droite" onPointerDown={(e) => { e.preventDefault(); startCameraHold("rotateRight"); }} onPointerUp={stopCameraHold} onPointerCancel={stopCameraHold} onPointerLeave={stopCameraHold} className="h-9 rounded-xl bg-ink/10 text-sm font-black active:bg-splash/30">↻</button>
+          </div>
+          <button type="button" onClick={() => void requestGameFullscreen()} className="mt-1 w-full rounded-xl bg-ink px-2 py-2 text-[11px] font-extrabold text-white active:scale-95">⛶ Plein écran</button>
+        </div>
+      )}
+
+      {/* Mode construction plein écran : une seule barre ancrée en bas,
+          onglets + outils de la catégorie active, la vue 3D reste dégagée. */}
+      {buildMode && ('''
+          if anchor2 not in s: raise SystemExit('anchor barre construction introuvable')
+          s=s.replace(anchor2,pad,1)
+
+          p.write_text(s,encoding='utf-8')
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bunx tsc --noEmit
+      - name: Enregistrer
+        run: |
+          rm -f .github/workflows/mobile-build-camera-controls.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/CarWashScene.tsx .github/workflows/mobile-build-camera-controls.yml
+          git commit -m "Ajoute commandes caméra tactiles pendant la construction"
+          git push origin HEAD:main
