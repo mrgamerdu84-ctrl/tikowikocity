@@ -374,18 +374,23 @@ export default function CarWashScene() {
       }
 
       // Collines verdoyantes en avant-plan des montagnes
-      for (let i = 0; i < 40; i++) {
-        const a = (i / 40) * Math.PI * 2 + rand() * 0.12;
-        const r = 120 + rand() * 90;
-        const h = 8 + rand() * 20;
+      for (let i = 0; i < 44; i++) {
+        const a = (i / 44) * Math.PI * 2 + rand() * 0.12;
+        const r = 155 + rand() * 80;
+        const h = 8 + rand() * 22;
+        const x = Math.cos(a) * r;
+        const z = Math.sin(a) * r;
+        // on dégage la vallée du lac
+        if (Math.hypot(x + 62, z - 34) < 75) continue;
         const m = new THREE.Mesh(
           new THREE.SphereGeometry(h * 1.9, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2),
           rand() > 0.5 ? hillMat : hillMat2,
         );
         m.scale.y = 0.42 + rand() * 0.3;
-        m.position.set(Math.cos(a) * r, -1, Math.sin(a) * r);
+        m.position.set(x, -1, z);
         scene.add(m);
       }
+
 
       // Lac au nord-ouest + plage et arbres
       const lake = new THREE.Group();
