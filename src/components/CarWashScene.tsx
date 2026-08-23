@@ -888,9 +888,11 @@ export default function CarWashScene() {
           heading,
           yaw: 0,
           baseY: CAR_Y,
+          wheels: findWheels(car),
           sMin,
           sMax,
         });
+
 
         ti++;
       };
