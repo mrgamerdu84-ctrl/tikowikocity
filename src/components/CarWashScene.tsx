@@ -2907,59 +2907,87 @@ export default function CarWashScene() {
 
       </div>
 
-      {/* Mode construction : palette de pièces à poser sur la grille */}
-      <div className="fixed bottom-4 left-1/2 z-40 flex w-[min(94vw,560px)] -translate-x-1/2 flex-col items-center gap-2">
-        <button
-          type="button"
-          onClick={toggleBuild}
-          aria-pressed={buildMode}
-          className={`rounded-full px-4 py-2.5 text-[12.5px] font-bold shadow-[0_6px_20px_rgba(6,58,94,0.18)] transition-transform active:translate-y-0.5 ${
-            buildMode ? "bg-splash text-splash-foreground" : "bg-white/90 text-ink"
-          }`}
-        >
-          🏗️ {buildMode ? "Quitter la construction" : "Construire"}
-        </button>
-        {buildMode && (
-          <div className="flex max-h-[min(56vh,420px)] w-full flex-col gap-2 overflow-y-auto overscroll-contain rounded-2xl bg-white/90 p-2 shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur">
-            {(
-              [
-                ["Routes", ["straight", "bend", "intersection", "crossroad"]],
-                ["Mobilier", ["light", "lamp"]],
-                ["Bâtiments", ["house"]],
-                ["Espaces", ["park", "parking"]],
-                ["Station", ["wash"]],
-                ["Outils", ["bulldoze", "erase"]],
-              ] as Array<[string, BuildTool[]]>
-            ).map(([group, tools]) => (
-              <div key={group} className="flex w-full flex-wrap items-center gap-1.5">
-                <span className="w-full text-[10px] font-bold uppercase tracking-wide text-ink/50">
-                  {group}
-                </span>
-                {tools.map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => chooseTool(t)}
-                    aria-pressed={tool === t}
-                    className={`rounded-xl px-2.5 py-1.5 text-[11.5px] font-semibold transition-colors ${
-                      tool === t ? "bg-splash text-splash-foreground" : "bg-ink/10 text-ink"
-                    }`}
-                  >
-                    {TOOL_LABEL[t]}
-                  </button>
-                ))}
-              </div>
-            ))}
+      {/* Hors construction : bouton d'entrée en mode construction */}
+      {!buildMode && (
+        <div className="fixed bottom-4 left-1/2 z-40 -translate-x-1/2">
+          <button
+            type="button"
+            onClick={toggleBuild}
+            aria-pressed={false}
+            className="rounded-full bg-white/90 px-4 py-2.5 text-[12.5px] font-bold text-ink shadow-[0_6px_20px_rgba(6,58,94,0.18)] transition-transform active:translate-y-0.5"
+          >
+            🏗️ Construire
+          </button>
+        </div>
+      )}
 
+      {/* Mode construction plein écran : une seule barre ancrée en bas,
+          onglets + outils de la catégorie active, la vue 3D reste dégagée. */}
+      {buildMode && (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-ink/10 bg-white/92 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-1.5 shadow-[0_-6px_20px_rgba(6,58,94,0.14)] backdrop-blur">
+          <div className="mx-auto flex w-[min(100vw,900px)] flex-col gap-1.5 px-2">
+            {/* Onglets de catégories */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+              {BUILD_CATEGORIES.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => chooseCategory(c.id)}
+                  aria-pressed={buildCat === c.id}
+                  className={`shrink-0 rounded-full px-2.5 py-1.5 text-[11.5px] font-bold transition-colors ${
+                    buildCat === c.id ? "bg-ink text-white" : "bg-ink/10 text-ink"
+                  }`}
+                >
+                  {c.icon} {c.label}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={toggleBuild}
+                className="ml-auto shrink-0 rounded-full bg-splash px-3 py-1.5 text-[11.5px] font-bold text-splash-foreground"
+              >
+                ✓ Terminer
+              </button>
+            </div>
+
+            {/* Outils de la catégorie active */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+              {(BUILD_CATEGORIES.find((c) => c.id === buildCat)?.tools ?? []).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => chooseTool(t)}
+                  aria-pressed={tool === t}
+                  className={`shrink-0 rounded-xl px-2.5 py-1.5 text-[11.5px] font-semibold transition-colors ${
+                    tool === t ? "bg-splash text-splash-foreground" : "bg-ink/10 text-ink"
+                  }`}
+                >
+                  {TOOL_LABEL[t]}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => {
+                  const next = (rotRef.current + 1) % 4;
+                  rotRef.current = next;
+                  setRot(next);
+                }}
+                className="ml-auto shrink-0 rounded-xl bg-sunny px-2.5 py-1.5 text-[11.5px] font-bold text-sunny-foreground"
+              >
+                🔄 {rot * 90}°
+              </button>
+            </div>
+
+            {/* Variantes de l'outil actif */}
             {tool === "house" && (
-              <div className="flex w-full flex-wrap items-center justify-center gap-1.5 border-t border-ink/10 pt-1.5">
+              <div className="flex items-center gap-1.5 overflow-x-auto border-t border-ink/10 pt-1.5">
                 {HOUSE_LEVELS.map((h) => (
                   <button
                     key={h.level}
                     type="button"
                     onClick={() => chooseHouseLevel(h.level)}
                     aria-pressed={houseLevel === h.level}
-                    className={`rounded-xl px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${
+                    className={`shrink-0 rounded-xl px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${
                       houseLevel === h.level
                         ? "bg-sunny text-sunny-foreground"
                         : "bg-ink/10 text-ink"
@@ -2968,21 +2996,18 @@ export default function CarWashScene() {
                     {h.icon} Niv.{h.level} · {h.cost} € · {h.capacity} hab.
                   </button>
                 ))}
-                <span className="w-full text-center text-[10.5px] opacity-70">
-                  Pose sur une case libre bordant une route · reclique une maison pour l'améliorer
-                </span>
               </div>
             )}
 
             {(tool === "park" || tool === "parking") && (
-              <div className="flex w-full flex-wrap items-center justify-center gap-1.5 border-t border-ink/10 pt-1.5">
+              <div className="flex items-center gap-1.5 overflow-x-auto border-t border-ink/10 pt-1.5">
                 {decorOf(tool as DecorCategory).map((d) => (
                   <button
                     key={d.kind}
                     type="button"
                     onClick={() => chooseDecor(d.kind)}
                     aria-pressed={decorKind[tool as DecorCategory] === d.kind}
-                    className={`rounded-xl px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${
+                    className={`shrink-0 rounded-xl px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${
                       decorKind[tool as DecorCategory] === d.kind
                         ? "bg-sunny text-sunny-foreground"
                         : "bg-ink/10 text-ink"
@@ -2991,73 +3016,49 @@ export default function CarWashScene() {
                     {d.icon} {d.label} · {d.cost} €
                   </button>
                 ))}
-                <span className="w-full text-center text-[10.5px] opacity-70">
-                  Pose sur une case libre · reclique pour pivoter · 🧹 Gomme pour retirer
-                </span>
               </div>
             )}
 
             {tool === "wash" && (
-              <div className="flex w-full flex-col items-center gap-1.5 border-t border-ink/10 pt-1.5">
-                <span className="w-full text-[10.5px] font-semibold opacity-70">
-                  Couleur de la station
-                </span>
-                <div className="flex w-full flex-wrap items-center gap-1.5">
-                  {WASH_COLORS.map((c, i) => (
-                    <button
-                      key={c.label}
-                      type="button"
-                      onClick={() => applyWashStyle({ color: i })}
-                      aria-pressed={washStyle.color === i}
-                      aria-label={c.label}
-                      className={`h-7 w-7 rounded-full border-2 transition-transform ${
-                        washStyle.color === i
-                          ? "scale-110 border-ink"
-                          : "border-white/70"
-                      }`}
-                      style={{ backgroundColor: `#${c.hex.toString(16).padStart(6, "0")}` }}
-                    />
-                  ))}
-                </div>
-                <div className="flex w-full flex-wrap items-center gap-1.5">
-                  {(
-                    [
-                      ["sign", "🪧 Enseigne"],
-                      ["neon", "✨ Néon"],
-                      ["plants", "🪴 Plantes"],
-                      ["flags", "🎏 Fanions"],
-                    ] as Array<[keyof WashStyle, string]>
-                  ).map(([k, label]) => (
-                    <button
-                      key={k}
-                      type="button"
-                      onClick={() => applyWashStyle({ [k]: !washStyle[k] } as Partial<WashStyle>)}
-                      aria-pressed={!!washStyle[k]}
-                      className={`rounded-xl px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${
-                        washStyle[k] ? "bg-splash text-splash-foreground" : "bg-ink/10 text-ink"
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
+              <div className="flex items-center gap-1.5 overflow-x-auto border-t border-ink/10 pt-1.5">
+                {WASH_COLORS.map((c, i) => (
+                  <button
+                    key={c.label}
+                    type="button"
+                    onClick={() => applyWashStyle({ color: i })}
+                    aria-pressed={washStyle.color === i}
+                    aria-label={c.label}
+                    className={`h-7 w-7 shrink-0 rounded-full border-2 transition-transform ${
+                      washStyle.color === i ? "scale-110 border-ink" : "border-white/70"
+                    }`}
+                    style={{ backgroundColor: `#${c.hex.toString(16).padStart(6, "0")}` }}
+                  />
+                ))}
+                {(
+                  [
+                    ["sign", "🪧 Enseigne"],
+                    ["neon", "✨ Néon"],
+                    ["plants", "🪴 Plantes"],
+                    ["flags", "🎏 Fanions"],
+                  ] as Array<[keyof WashStyle, string]>
+                ).map(([k, label]) => (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => applyWashStyle({ [k]: !washStyle[k] } as Partial<WashStyle>)}
+                    aria-pressed={!!washStyle[k]}
+                    className={`shrink-0 rounded-xl px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${
+                      washStyle[k] ? "bg-splash text-splash-foreground" : "bg-ink/10 text-ink"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
             )}
-
-            <button
-              type="button"
-              onClick={() => {
-                const next = (rotRef.current + 1) % 4;
-                rotRef.current = next;
-                setRot(next);
-              }}
-              className="self-center rounded-xl bg-sunny px-2.5 py-1.5 text-[11.5px] font-bold text-sunny-foreground"
-            >
-              🔄 {rot * 90}°
-            </button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </>
 
   );
