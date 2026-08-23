@@ -388,6 +388,11 @@ export default function CarWashScene() {
         economyRef.current = next;
         setEconomy(next);
       }
+      if (state.history !== undefined) {
+        const h = sanitizeHistory(state.history);
+        historyRef.current = h;
+        setHistory(h);
+      }
       if (state.upgrades) {
         const up = sanitizeUpgrades(state.upgrades);
         upgradesRef.current = up;
