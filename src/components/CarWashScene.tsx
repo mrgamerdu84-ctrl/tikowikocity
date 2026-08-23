@@ -1786,7 +1786,7 @@ export default function CarWashScene() {
     return () => {
       disposed = true;
       cancelAnimationFrame(frame);
-      window.clearInterval(queueTimer);
+      
       window.removeEventListener("resize", onResize);
       controls.dispose();
       renderer.dispose();
