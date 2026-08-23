@@ -2575,7 +2575,7 @@ export default function CarWashScene() {
       )}
 
       <div
-        className={`pointer-events-none fixed left-2 top-2 z-40 max-w-[calc(100vw-146px)] rounded-2xl bg-white/90 ring-1 ring-ink/10 px-3 py-2 text-ink shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur sm:left-4 sm:top-4 sm:max-w-[300px] sm:px-4 sm:py-3 ${buildMode ? "hidden" : ""}`}
+        className={`fixed left-2 top-2 z-40 max-w-[calc(100vw-146px)] rounded-2xl bg-white/90 ring-1 ring-ink/10 px-3 py-2 text-ink shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur sm:left-4 sm:top-4 sm:max-w-[300px] sm:px-4 sm:py-3 ${buildMode ? "hidden" : ""}`}
       >
         <p className="flex items-center gap-2 text-[17px] font-bold tracking-wide sm:text-[22px]">
           <span aria-hidden>🫧</span> TikowikoCity
