@@ -696,14 +696,21 @@ export default function CarWashScene() {
         });
       }
 
-      // Circulation en ville
-      if (ctl.traffic) {
-        trafficCars.forEach(({ car, dir, speed }) => {
-          car.position.x += dt * speed * dir;
-          if (car.position.x > 14) car.position.x = -14;
-          if (car.position.x < -14) car.position.x = 14;
+      // Circulation en ville : suivi du boulevard, virages inclus
+      if (cityCurve) {
+        const curve = cityCurve;
+        trafficCars.forEach((e) => {
+          if (ctl.traffic) {
+            e.u = (e.u + (dt * e.speed * e.dir) / cityLen + 1) % 1;
+          }
+          const p = curve.getPointAt(e.u);
+          const tan = curve.getTangentAt(e.u);
+          const n = new THREE.Vector3(-tan.z, 0, tan.x).normalize();
+          e.car.position.set(p.x + n.x * e.lane, e.baseY, p.z + n.z * e.lane);
+          e.car.rotation.y = Math.atan2(tan.x * e.dir, tan.z * e.dir) + e.yaw;
         });
       }
+
 
 
       foamSprites.forEach((f) => {
