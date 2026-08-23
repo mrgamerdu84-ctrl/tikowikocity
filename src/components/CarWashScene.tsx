@@ -376,29 +376,31 @@ export default function CarWashScene() {
     type TrafficLight = { axis: "x" | "z"; red: THREE.Mesh; green: THREE.Mesh };
     const trafficLights: TrafficLight[] = [];
 
+    /* Feu tricolore Kenney (city-kit-roads) + deux ampoules émissives pour
+       pouvoir piloter le cycle rouge/vert. */
     const makeTrafficLight = (axis: "x" | "z") => {
       const g = new THREE.Group();
-      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 2.6, 8), poleMat);
-      pole.position.y = 1.3;
-      g.add(pole);
-      const box = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.9, 0.3), poleMat);
-      box.position.y = 2.9;
-      g.add(box);
+      const model = kit["traffic-light"];
+      if (model) {
+        const inst = model.clone(true);
+        inst.scale.setScalar(6);
+        g.add(inst);
+      }
       const bulb = (color: number, y: number) => {
         const m = new THREE.Mesh(
-          new THREE.SphereGeometry(0.1, 10, 10),
+          new THREE.SphereGeometry(0.12, 10, 10),
           new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.2 }),
         );
-        m.position.set(0, y, 0.17);
-        box.add(m);
+        m.position.set(0, y, 0.28);
+        g.add(m);
         return m;
       };
-      const red = bulb(0xff3b30, 0.28);
-      bulb(0xffcc00, 0);
-      const green = bulb(0x33d17a, -0.28);
+      const red = bulb(0xff3b30, 2.75);
+      const green = bulb(0x33d17a, 2.25);
       trafficLights.push({ axis, red, green });
       return g;
     };
+
 
 
     // Tapis roulant : lattes qui défilent dans la zone de lavage
