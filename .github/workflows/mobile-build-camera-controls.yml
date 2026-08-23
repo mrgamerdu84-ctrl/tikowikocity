@@ -1,4 +1,5 @@
 name: Commandes caméra mobile construction
+# Relance 2 : navigation tactile pendant construction
 on:
   push:
     branches: [main]
@@ -41,8 +42,8 @@ jobs:
       toast.info("Le plein écran n'est pas disponible sur ce navigateur.");
     }
   };'''
-          if old not in s: raise SystemExit('anchor buildApplyRef introuvable')
-          s=s.replace(old,new,1)
+          if old not in s and 'type BuildCameraAction' not in s: raise SystemExit('anchor buildApplyRef introuvable')
+          if 'type BuildCameraAction' not in s: s=s.replace(old,new,1)
 
           anchor='''    controls.maxPolarAngle = Math.PI * 0.49;
     controls.update();'''
@@ -50,15 +51,14 @@ jobs:
     controls.update();
 
     /* Navigation dédiée au mode construction mobile. Les boutons d'écran
-       déplacent directement caméra + cible : on peut donc continuer à poser
-       au doigt sans conflit entre OrbitControls et les événements de construction. */
+       déplacent directement caméra + cible sans interrompre la pose. */
     const resetBuildCamera = () => {
       if (isPortrait()) {
         camera.position.set(-26, 36, WASH_SITE_Z + 54);
         controls.target.set(-4, 1.5, WASH_SITE_Z + 12);
       } else {
-        camera.position.set(-25, 24, 20);
-        controls.target.set(5, 1.5, -15);
+        camera.position.set(-22, 22, 8);
+        controls.target.set(5, 1.5, -20);
       }
       controls.update();
     };
@@ -97,17 +97,16 @@ jobs:
       }
       controls.update();
     };'''
-          if anchor not in s: raise SystemExit('anchor OrbitControls introuvable')
-          s=s.replace(anchor,insert,1)
+          if 'const resetBuildCamera' not in s:
+            if anchor not in s: raise SystemExit('anchor OrbitControls introuvable')
+            s=s.replace(anchor,insert,1)
 
-          # Keep placement controls disabled in build mode; camera is handled by the virtual pad.
-          # Add mobile camera pad immediately before the construction bottom bar.
           anchor2='''      {/* Mode construction plein écran : une seule barre ancrée en bas,
           onglets + outils de la catégorie active, la vue 3D reste dégagée. */}
       {buildMode && ('''
-          pad='''      {/* Commandes caméra tactiles : restent disponibles pendant la pose. */}
+          pad='''      {/* Commandes caméra tactiles : disponibles sans quitter la construction. */}
       {buildMode && (
-        <div className="fixed right-2 top-1/2 z-50 -translate-y-1/2 select-none rounded-2xl bg-white/88 p-1.5 text-ink shadow-[0_8px_24px_rgba(6,58,94,0.22)] ring-1 ring-ink/10 backdrop-blur sm:right-3 sm:p-2">
+        <div className="fixed right-2 top-1/2 z-50 -translate-y-1/2 select-none rounded-2xl bg-white/90 p-1.5 text-ink shadow-[0_8px_24px_rgba(6,58,94,0.22)] ring-1 ring-ink/10 backdrop-blur sm:right-3 sm:p-2">
           <div className="grid grid-cols-3 gap-1">
             <span />
             <button type="button" aria-label="Avancer la caméra" onPointerDown={(e) => { e.preventDefault(); startCameraHold("forward"); }} onPointerUp={stopCameraHold} onPointerCancel={stopCameraHold} onPointerLeave={stopCameraHold} className="size-10 rounded-xl bg-ink/10 text-lg font-black active:bg-splash/30 sm:size-11">▲</button>
@@ -132,8 +131,9 @@ jobs:
       {/* Mode construction plein écran : une seule barre ancrée en bas,
           onglets + outils de la catégorie active, la vue 3D reste dégagée. */}
       {buildMode && ('''
-          if anchor2 not in s: raise SystemExit('anchor barre construction introuvable')
-          s=s.replace(anchor2,pad,1)
+          if 'Commandes caméra tactiles : disponibles' not in s:
+            if anchor2 not in s: raise SystemExit('anchor barre construction introuvable')
+            s=s.replace(anchor2,pad,1)
 
           p.write_text(s,encoding='utf-8')
       - uses: oven-sh/setup-bun@v2
