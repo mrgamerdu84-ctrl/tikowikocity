@@ -336,7 +336,19 @@ export default function CarWashScene() {
     }> = [];
     const foamSprites: THREE.Object3D[] = [];
     const conveyorSlats: THREE.Mesh[] = [];
-    const trafficCars: Array<{ car: THREE.Object3D; dir: number; speed: number }> = [];
+    type TrafficCar = {
+      car: THREE.Object3D;
+      dir: number;
+      u: number;
+      speed: number;
+      lane: number;
+      yaw: number;
+      baseY: number;
+    };
+    const trafficCars: TrafficCar[] = [];
+    let cityCurve: THREE.CatmullRomCurve3 | null = null;
+    let cityLen = 1;
+
 
     const spawnSedan = () => {
       const template =
