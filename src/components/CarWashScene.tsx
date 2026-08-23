@@ -439,19 +439,13 @@ export default function CarWashScene() {
         }
       }
 
-      // Toiture : dalles pleines (pas de trou) + acrotère Kenney en bordure
+      // Toiture : dalles pleines, sans trou
       const top = floors * FLOOR_H;
       for (let i = 0; i < cols; i++) {
         for (let j = 0; j < rows; j++) {
           const deck = floorTpl.clone(true);
           deck.position.set(ox + i * CELL, top, oz + j * CELL);
           g.add(deck);
-          if (i === 0 || i === cols - 1 || j === 0 || j === rows - 1) {
-            const roof = roofTpl.clone(true);
-            roof.position.set(ox + i * CELL, top + 0.1, oz + j * CELL);
-            roof.scale.set(CELL / 2.4, 0.5, CELL / 2.4);
-            g.add(roof);
-          }
         }
       }
 
