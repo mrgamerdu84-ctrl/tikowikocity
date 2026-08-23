@@ -652,8 +652,10 @@ export default function CarWashScene() {
     // Grille de rues régulière (rues nord-sud et est-ouest)
     const X_STREETS = [-30, -18, -6, 6, 18, 30];
     const Z_STREETS = [-24, -12, 0, 12, 24];
-    const STREET_W = 5;
-    const LANE = 1.25;
+    const STREET_W = 6; // = une tuile de route Kenney mise à l'échelle
+    const TILE = 6;
+    const LANE = 1.5;
+
 
     const buildScene = () => {
 
