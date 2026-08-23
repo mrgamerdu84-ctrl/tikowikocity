@@ -1919,18 +1919,61 @@ export default function CarWashScene() {
     const isRoadTool = (t: BuildTool): t is RoadHint =>
       t === "straight" || t === "bend" || t === "intersection" || t === "crossroad";
     /** outils qui se manipulent en glissant sur la grille */
-    const isDragTool = (t: BuildTool) => isRoadTool(t) || t === "bulldoze";
+    const isDragTool = (t: BuildTool) =>
+      isRoadTool(t) || t === "bulldoze" || t === "erase";
+
+    /* Rendus à rafraîchir après une série d'actions. */
+    const dirty = { plan: false, houses: false, decor: false };
+    const flushRender = () => {
+      if (dirty.plan) renderPlan();
+      if (dirty.houses) renderHouses();
+      if (dirty.decor) renderDecor();
+      dirty.plan = dirty.houses = dirty.decor = false;
+    };
+
+    /** Gomme universelle : retire n'importe quel élément posé sur la case. */
+    const eraseAt = (cx: number, cz: number) => {
+      let done = false;
+      if (plan.removeDecor(cx, cz)) {
+        dirty.decor = true;
+        done = true;
+      }
+      if (plan.removeHouse(cx, cz)) {
+        dirty.houses = true;
+        done = true;
+      }
+      if (done) return true;
+      const cell = plan.get(cx, cz);
+      if (cell && (cell.light || cell.lamp)) {
+        cell.light = false;
+        cell.lamp = false;
+        dirty.plan = true;
+        return true;
+      }
+      if (plan.removeForce(cx, cz)) {
+        dirty.plan = true;
+        return true;
+      }
+      return false;
+    };
 
     /** Applique l'outil courant sur une case (pose ou démolition). */
     const applyAt = (cx: number, cz: number) => {
       const tool = toolRef.current;
+      if (tool === "erase") return eraseAt(cx, cz);
       if (tool === "bulldoze") {
         const done = plan.removeForce(cx, cz);
         if (done) plan.removeHouse(cx, cz);
+        if (done) {
+          dirty.plan = true;
+          dirty.houses = true;
+        }
         return done;
       }
       if (!canBuild(cx, cz)) return false;
+      if (plan.decorAt(cx, cz) || plan.house(cx, cz)) return false;
       plan.place(cx, cz, isRoadTool(tool) ? tool : "straight", rotRef.current);
+      dirty.plan = true;
       return true;
     };
 
