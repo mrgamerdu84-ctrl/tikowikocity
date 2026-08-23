@@ -411,7 +411,6 @@ export default function CarWashScene() {
       const g = new THREE.Group();
       const floorTpl = models["hFloor"]!;
       const wallTpl = models["hWallWindow"]!;
-      const roofTpl = models["hRoof"]!;
       const ox = (-(cols - 1) * CELL) / 2;
       const oz = (-(rows - 1) * CELL) / 2;
 
