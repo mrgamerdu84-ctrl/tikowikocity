@@ -740,12 +740,22 @@ export default function CarWashScene() {
         (c) => c.position.x > zoneStart && c.position.x < zoneEnd,
       );
 
-      // Rouleaux : ils tournent en continu, plus vite quand une voiture passe
-      const brushSpeed = carInWash ? 9 : 2;
-      brushes.forEach((b) => {
+      /* Rouleaux et brosses : rotation continue, accélérée au passage d'une
+         voiture ; ils se resserrent et descendent sur la carrosserie. */
+      const brushSpeed = carInWash ? 11 : 2.5;
+      brushes.forEach((b, i) => {
         const on = b.kind === "roller" ? ctl.rollers : ctl.brushes;
-        if (!on) return;
-        b.spin.rotation.y += dt * brushSpeed * b.dir;
+        if (on) b.spin.rotation.y += dt * brushSpeed * b.dir;
+        const engage = carInWash ? 1 : 0;
+        const wobble = carInWash ? Math.sin(t * 6 + i) * 0.06 : 0;
+        if (b.kind === "roller") {
+          const side = Math.sign(b.pivot.position.z) || 1;
+          const target = side * (1.45 - engage * 0.32 + wobble);
+          b.pivot.position.z += (target - b.pivot.position.z) * Math.min(dt * 4, 1);
+        } else {
+          const target = ROAD_Y + 2.1 - engage * 0.42 + wobble;
+          b.pivot.position.y += (target - b.pivot.position.y) * Math.min(dt * 4, 1);
+        }
       });
 
       // Tapis roulant : les lattes défilent en boucle
