@@ -153,7 +153,7 @@ export default function CarWashScene() {
 
   /* ----- Économie : chaque lavage terminé rapporte de l'argent.
      Les routes restent gratuites (aucun coût de construction). ----- */
-  const [economy, setEconomy] = useState({ money: 0, washes: 0 });
+  const [economy, setEconomy] = useState({ money: 150, washes: 0 });
   const economyRef = useRef(economy);
   const [gain, setGain] = useState<{ id: number; amount: number } | null>(null);
   /* Historique des lavages : date, montant gagné, solde après transaction. */
@@ -2883,7 +2883,8 @@ export default function CarWashScene() {
                       </div>
                       <button
                         type="button"
-                        disabled={maxed || !affordable}
+                        disabled={maxed}
+
                         onClick={() => buyUpgrade(u.key)}
                         className={`ml-auto shrink-0 rounded-full px-3 py-2 text-[12px] font-bold transition-transform active:translate-y-0.5 ${
                           maxed
