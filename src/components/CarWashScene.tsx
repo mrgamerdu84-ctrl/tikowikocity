@@ -786,6 +786,13 @@ export default function CarWashScene() {
     const brushCoreGeo = new THREE.CylinderGeometry(0.09, 0.09, 1.9, 12);
     const brushPadGeo = new THREE.CylinderGeometry(0.3, 0.3, 1.62, 16, 1);
     const brushRibGeo = new THREE.TorusGeometry(0.31, 0.035, 8, 20);
+    /* Lanières souples accrochées au rouleau : fines lamelles qui pendent
+       et viennent frotter la carrosserie. */
+    const flapGeo = new THREE.BoxGeometry(0.045, 0.5, 0.16);
+    flapGeo.translate(0, -0.25, 0);
+    const flapMats = [0x2f7fb4, 0x67c3ea, 0xe8eef2].map(
+      (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.9 }),
+    );
 
     const makeBrush = () => {
       const g = new THREE.Group();
@@ -804,6 +811,23 @@ export default function CarWashScene() {
         rib.position.y = -0.62 + i * 0.31;
         g.add(rib);
       }
+
+      /* Couronnes de lanières réparties sur la hauteur du rouleau. */
+      const flaps = new THREE.Group();
+      for (let row = 0; row < 4; row++) {
+        for (let k = 0; k < 10; k++) {
+          const a = (k / 10) * Math.PI * 2 + row * 0.31;
+          const f = new THREE.Mesh(flapGeo, flapMats[(row + k) % flapMats.length]!);
+          f.position.set(Math.cos(a) * 0.3, 0.62 - row * 0.4, Math.sin(a) * 0.3);
+          f.rotation.y = -a;
+          f.rotation.z = 0.35;
+          f.userData['a0'] = a;
+          f.userData['row'] = row;
+          flaps.add(f);
+        }
+      }
+      g.add(flaps);
+      g.userData['flaps'] = flaps;
       return g;
     };
 
@@ -829,6 +853,79 @@ export default function CarWashScene() {
       }
       return group;
     };
+
+    /* Rampe de gicleurs : buse + nappe d'eau translucide + gouttelettes
+       animées qui retombent sur la carrosserie. */
+    const nozzleMat = new THREE.MeshStandardMaterial({
+      color: 0x8f9aa6,
+      roughness: 0.4,
+      metalness: 0.6,
+    });
+    const waterMat = new THREE.MeshStandardMaterial({
+      color: 0x9fd8f5,
+      transparent: true,
+      opacity: 0.32,
+      roughness: 0.1,
+      depthWrite: false,
+    });
+    const dropMat = new THREE.MeshStandardMaterial({
+      color: 0xcdeeff,
+      transparent: true,
+      opacity: 0.8,
+      roughness: 0.15,
+    });
+    const nozzleGeo = new THREE.CylinderGeometry(0.07, 0.09, 0.22, 8);
+    const jetGeo = new THREE.ConeGeometry(0.42, 1.5, 10, 1, true);
+    const dropGeo = new THREE.SphereGeometry(0.05, 5, 4);
+
+    type WaterJet = { group: THREE.Group; drops: THREE.Mesh[]; cone: THREE.Mesh };
+    const makeWaterJet = () => {
+      const group = new THREE.Group();
+      const nozzle = new THREE.Mesh(nozzleGeo, nozzleMat);
+      group.add(nozzle);
+      const cone = new THREE.Mesh(jetGeo, waterMat);
+      cone.position.y = -0.85;
+      cone.rotation.x = Math.PI; // pointe vers le bas
+      group.add(cone);
+      const drops: THREE.Mesh[] = [];
+      for (let i = 0; i < 12; i++) {
+        const d = new THREE.Mesh(dropGeo, dropMat);
+        d.userData['t'] = Math.random();
+        d.userData['ox'] = (Math.random() - 0.5) * 0.5;
+        d.userData['oz'] = (Math.random() - 0.5) * 0.5;
+        drops.push(d);
+        group.add(d);
+      }
+      return { group, drops, cone } as WaterJet;
+    };
+
+    /* Nappe de mousse qui vient recouvrir la carrosserie pendant le lavage. */
+    const soapMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.9,
+      roughness: 0.45,
+    });
+    const soapGeo = new THREE.IcosahedronGeometry(0.22, 0);
+    const makeSoapCoat = () => {
+      const g = new THREE.Group();
+      for (let i = 0; i < 26; i++) {
+        const b = new THREE.Mesh(soapGeo, soapMat);
+        const a = Math.random() * Math.PI * 2;
+        b.position.set(
+          (Math.random() - 0.5) * 3.4,
+          0.25 + Math.random() * 0.95,
+          Math.cos(a) * (0.55 + Math.random() * 0.35),
+        );
+        b.userData['s'] = 0.5 + Math.random() * 0.8;
+        b.scale.setScalar(0.001);
+        g.add(b);
+      }
+      g.visible = false;
+      return g;
+    };
+
+
 
     const makeTree = () => {
       const g = new THREE.Group();
