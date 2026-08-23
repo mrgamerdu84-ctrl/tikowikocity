@@ -2064,7 +2064,7 @@ export default function CarWashScene() {
         type="button"
         onClick={() => setShopOpen((v) => !v)}
         aria-expanded={shopOpen}
-        className="fixed left-2 top-[132px] z-40 rounded-full bg-sunny px-3 py-2 text-[12.5px] font-bold text-sunny-foreground shadow-[0_3px_0_var(--sunny-shadow)] transition-transform active:translate-y-0.5 sm:left-4 sm:top-[168px]"
+        className="fixed left-2 top-[178px] z-40 rounded-full bg-sunny px-3 py-2 text-[12.5px] font-bold text-sunny-foreground shadow-[0_3px_0_var(--sunny-shadow)] transition-transform active:translate-y-0.5 sm:left-4 sm:top-[214px]"
       >
         🛠️ Améliorations
       </button>
