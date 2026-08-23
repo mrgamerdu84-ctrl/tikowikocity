@@ -337,6 +337,126 @@ export default function CarWashScene() {
       return g;
     };
 
+    /* ---------- Décor naturel : collines, montagnes, lac ---------- */
+    const rand = (() => {
+      let seed = 1337;
+      return () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
+    })();
+
+    const buildLandscape = () => {
+      const rockMat = new THREE.MeshStandardMaterial({ color: 0x8b8f96, roughness: 1, flatShading: true });
+      const rockDark = new THREE.MeshStandardMaterial({ color: 0x6f747c, roughness: 1, flatShading: true });
+      const snowMat = new THREE.MeshStandardMaterial({ color: 0xf3f8ff, roughness: 0.9, flatShading: true });
+      const hillMat = new THREE.MeshStandardMaterial({ color: 0x6bb85c, roughness: 1, flatShading: true });
+      const hillMat2 = new THREE.MeshStandardMaterial({ color: 0x58a552, roughness: 1, flatShading: true });
+
+      // Chaîne de montagnes lointaine, sur tout l'horizon
+      for (let i = 0; i < 54; i++) {
+        const a = (i / 54) * Math.PI * 2 + rand() * 0.05;
+        const r = 250 + rand() * 130;
+        const h = 42 + rand() * 78;
+        const rad = h * (0.55 + rand() * 0.3);
+        const m = new THREE.Mesh(
+          new THREE.ConeGeometry(rad, h, 5 + Math.floor(rand() * 3), 1),
+          rand() > 0.5 ? rockMat : rockDark,
+        );
+        m.position.set(Math.cos(a) * r, h / 2 - 3, Math.sin(a) * r);
+        m.rotation.y = rand() * Math.PI;
+        scene.add(m);
+        if (h > 80) {
+          const cap = new THREE.Mesh(new THREE.ConeGeometry(rad * 0.34, h * 0.24, 6, 1), snowMat);
+          cap.position.set(m.position.x, h - h * 0.12 - 3, m.position.z);
+          cap.rotation.y = m.rotation.y;
+          scene.add(cap);
+        }
+      }
+
+      // Collines verdoyantes en avant-plan des montagnes
+      for (let i = 0; i < 40; i++) {
+        const a = (i / 40) * Math.PI * 2 + rand() * 0.12;
+        const r = 120 + rand() * 90;
+        const h = 8 + rand() * 20;
+        const m = new THREE.Mesh(
+          new THREE.SphereGeometry(h * 1.9, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2),
+          rand() > 0.5 ? hillMat : hillMat2,
+        );
+        m.scale.y = 0.42 + rand() * 0.3;
+        m.position.set(Math.cos(a) * r, -1, Math.sin(a) * r);
+        scene.add(m);
+      }
+
+      // Lac au nord-ouest + plage et arbres
+      const lake = new THREE.Group();
+      const sand = new THREE.Mesh(
+        new THREE.CircleGeometry(22, 40),
+        new THREE.MeshStandardMaterial({ color: 0xe4d6a8, roughness: 1 }),
+      );
+      sand.rotation.x = -Math.PI / 2;
+      sand.position.y = 0.02;
+      lake.add(sand);
+      const water = new THREE.Mesh(
+        new THREE.CircleGeometry(18.5, 48),
+        new THREE.MeshStandardMaterial({
+          color: 0x3fa9d8,
+          roughness: 0.15,
+          metalness: 0.35,
+          transparent: true,
+          opacity: 0.92,
+        }),
+      );
+      water.rotation.x = -Math.PI / 2;
+      water.position.y = 0.05;
+      lake.add(water);
+      lake.position.set(-62, 0, 34);
+      lake.scale.set(1.25, 1, 0.85);
+      scene.add(lake);
+      waterSurface = water;
+
+      for (let i = 0; i < 16; i++) {
+        const a = (i / 16) * Math.PI * 2;
+        const tr = makeTree();
+        tr.position.set(
+          -62 + Math.cos(a) * (28 + rand() * 6) * 1.25,
+          0,
+          34 + Math.sin(a) * (24 + rand() * 6) * 0.85,
+        );
+        tr.scale.setScalar(0.9 + rand() * 0.5);
+        setShadow(tr);
+        scene.add(tr);
+      }
+
+      // Bosquets épars entre la ville et les collines
+      for (let i = 0; i < 46; i++) {
+        const a = rand() * Math.PI * 2;
+        const r = 58 + rand() * 55;
+        const x = Math.cos(a) * r;
+        const z = Math.sin(a) * r;
+        if (Math.abs(x) < 40 && Math.abs(z) < 52) continue;
+        const tr = makeTree();
+        tr.position.set(x, 0, z);
+        tr.scale.setScalar(0.8 + rand() * 0.7);
+        setShadow(tr);
+        scene.add(tr);
+      }
+
+      /* Promenade en diagonale : casse la rigidité du quadrillage,
+         relie l'angle nord-ouest de la ville au lac. */
+      const from = new THREE.Vector2(-32, 24);
+      const to = new THREE.Vector2(-50, 34);
+      const dir = to.clone().sub(from);
+      const promenade = new THREE.Mesh(
+        new THREE.PlaneGeometry(dir.length() + 14, 4.4),
+        new THREE.MeshStandardMaterial({ color: 0xd8cfae, roughness: 1 }),
+      );
+      promenade.rotation.x = -Math.PI / 2;
+      promenade.rotation.z = -Math.atan2(dir.y, dir.x);
+      promenade.position.set((from.x + to.x) / 2, 0.03, (from.y + to.y) / 2);
+      promenade.receiveShadow = true;
+      scene.add(promenade);
+    };
+
+
+
     /* ---------- Mobilier urbain : modèles Kenney ---------- */
 
 
