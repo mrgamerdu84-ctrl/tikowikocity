@@ -67,6 +67,20 @@ import {
 import { HOUSE_LEVELS, MAX_HOUSE_LEVEL, houseDef, totalCapacity } from "@/game/houses";
 
 
+/* Catégories de la barre de construction : un seul onglet visible à la fois
+   pour garder la vue 3D dégagée. */
+type BuildCategory = "routes" | "espaces" | "batiments" | "mobilier" | "station" | "outils";
+
+const BUILD_CATEGORIES: Array<{ id: BuildCategory; icon: string; label: string; tools: BuildTool[] }> = [
+  { id: "routes", icon: "🛣️", label: "Routes", tools: ["straight", "bend", "intersection", "crossroad"] },
+  { id: "batiments", icon: "🏠", label: "Maisons", tools: ["house"] },
+  { id: "espaces", icon: "🌳", label: "Espaces", tools: ["park", "parking"] },
+  { id: "mobilier", icon: "💡", label: "Mobilier", tools: ["light", "lamp"] },
+  { id: "station", icon: "🫧", label: "Station", tools: ["wash"] },
+  { id: "outils", icon: "🧹", label: "Outils", tools: ["bulldoze", "erase"] },
+];
+
+
 /* Modèles issus des kits Kenney (car-kit, city-kit-roads, building-kit),
    regroupés dans un seul GLB optimisé. */
 const KIT_CARS = [
