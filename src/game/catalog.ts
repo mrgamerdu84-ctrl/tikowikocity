@@ -5,7 +5,16 @@ import type { Dir } from "./grid";
    bit 0 = Nord, 1 = Est, 2 = Sud, 3 = Ouest. */
 export type RoadHint = "straight" | "bend" | "intersection" | "crossroad";
 
-export type BuildTool = RoadHint | "light" | "lamp" | "house" | "bulldoze" | "erase";
+export type BuildTool =
+  | RoadHint
+  | "light"
+  | "lamp"
+  | "house"
+  | "park"
+  | "parking"
+  | "wash"
+  | "bulldoze"
+  | "erase";
 
 /* Orientation réelle des modèles Kenney (vérifiée en vue de dessus) :
    la droite relie Est/Ouest, le virage relie Ouest/Sud, l'impasse ouvre à l'Est
