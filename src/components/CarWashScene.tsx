@@ -2108,7 +2108,67 @@ export default function CarWashScene() {
 
       </div>
 
+      {historyOpen && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 p-3 backdrop-blur-sm sm:items-center">
+          <div className="flex max-h-[80vh] w-full max-w-[440px] flex-col rounded-3xl bg-white p-4 text-ink shadow-[0_12px_40px_rgba(6,58,94,0.35)]">
+            <div className="flex items-center gap-2">
+              <h2 className="text-[18px] font-extrabold">🧾 Historique des lavages</h2>
+              <span className="ml-auto rounded-full bg-sunny/30 px-2 py-1 text-[13px] font-extrabold tabular-nums">
+                {economy.money.toLocaleString("fr-FR")} €
+              </span>
+              <button
+                type="button"
+                onClick={() => setHistoryOpen(false)}
+                aria-label="Fermer l'historique"
+                className="rounded-full bg-ink/10 px-2 py-1 text-[13px] font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            {history.length === 0 ? (
+              <p className="mt-4 text-[13px] opacity-75">
+                Aucun lavage pour l'instant. Les clients arrivent tout seuls : chaque lavage terminé
+                s'ajoutera ici avec la date, le gain et le solde.
+              </p>
+            ) : (
+              <>
+                <div className="mt-2 flex items-center gap-2 px-1 text-[11px] font-bold uppercase tracking-wide opacity-60">
+                  <span className="w-[86px]">Date</span>
+                  <span className="ml-auto w-[64px] text-right">Gain</span>
+                  <span className="w-[74px] text-right">Solde</span>
+                </div>
+                <ul className="mt-1 flex-1 overflow-y-auto pr-1">
+                  {history.map((e) => (
+                    <li
+                      key={e.id}
+                      className="flex items-center gap-2 rounded-xl px-1 py-2 text-[13px] odd:bg-ink/[0.04]"
+                    >
+                      <span className="w-[86px] tabular-nums opacity-80">
+                        {formatWashDate(e.at)}
+                      </span>
+                      <span className="text-[11px] font-semibold opacity-60">#{e.wash}</span>
+                      <span className="ml-auto w-[64px] text-right font-extrabold tabular-nums text-splash">
+                        +{e.amount} €
+                      </span>
+                      <span className="w-[74px] text-right font-bold tabular-nums">
+                        {e.balance.toLocaleString("fr-FR")} €
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-2 text-[11px] opacity-60">
+                  {history.length} dernier{history.length > 1 ? "s" : ""} lavage
+                  {history.length > 1 ? "s" : ""} (max {MAX_HISTORY}).
+                </p>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {shopOpen && (
+
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 p-3 backdrop-blur-sm sm:items-center">
           <div className="w-full max-w-[420px] rounded-3xl bg-white p-4 text-ink shadow-[0_12px_40px_rgba(6,58,94,0.35)]">
             <div className="flex items-center gap-2">
