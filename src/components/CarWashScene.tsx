@@ -582,22 +582,29 @@ export default function CarWashScene() {
       // Rouleaux : ils tournent en continu, plus vite quand une voiture passe
       const brushSpeed = carInWash ? 9 : 2;
       brushes.forEach((b) => {
+        const on = b.kind === "roller" ? ctl.rollers : ctl.brushes;
+        if (!on) return;
         b.spin.rotation.y += dt * brushSpeed * b.dir;
       });
 
       // Tapis roulant : les lattes défilent en boucle
       const beltLen = zoneEnd - zoneStart;
-      conveyorSlats.forEach((s) => {
-        s.position.x += dt * BELT_SPEED;
-        if (s.position.x > zoneEnd) s.position.x -= beltLen;
-      });
+      if (ctl.belt) {
+        conveyorSlats.forEach((s) => {
+          s.position.x += dt * BELT_SPEED;
+          if (s.position.x > zoneEnd) s.position.x -= beltLen;
+        });
+      }
 
       // Circulation en ville
-      trafficCars.forEach(({ car, dir, speed }) => {
-        car.position.x += dt * speed * dir;
-        if (car.position.x > 14) car.position.x = -14;
-        if (car.position.x < -14) car.position.x = 14;
-      });
+      if (ctl.traffic) {
+        trafficCars.forEach(({ car, dir, speed }) => {
+          car.position.x += dt * speed * dir;
+          if (car.position.x > 14) car.position.x = -14;
+          if (car.position.x < -14) car.position.x = 14;
+        });
+      }
+
 
       foamSprites.forEach((f) => {
         f.children.forEach((s, j) => {
