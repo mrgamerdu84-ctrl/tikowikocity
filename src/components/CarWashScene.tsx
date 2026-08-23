@@ -2793,10 +2793,18 @@ export default function CarWashScene() {
           meshyTunnel.position.set(2, 0, 0);
           setShadow(meshyTunnel);
           washSite.add(meshyTunnel);
-          if (tunnelPlaceholder) {
-            washSite.remove(tunnelPlaceholder);
-            tunnelPlaceholder = null;
-          }
+          /* Purge défensive : tout reste d'un ancien portique éventuellement
+             présent dans la station est retiré et libéré. */
+          [...washSite.children].forEach((c) => {
+            if (c === meshyTunnel) return;
+            if (!c.userData['legacyTunnel']) return;
+            washSite.remove(c);
+            c.traverse((n) => {
+              const m = n as THREE.Mesh;
+              if (m.isMesh) m.geometry.dispose();
+            });
+          });
+
         })
         .catch((err: unknown) => console.error("tunnel Meshy", err));
 
