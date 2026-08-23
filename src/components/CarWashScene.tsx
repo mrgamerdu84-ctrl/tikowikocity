@@ -54,6 +54,20 @@ export default function CarWashScene() {
   const spawnRef = useRef<() => void>(() => {});
   const cinemaRef = useRef<() => void>(() => {});
   const [cinema, setCinema] = useState(false);
+  const [machines, setMachines] = useState({
+    belt: true,
+    rollers: true,
+    brushes: true,
+    traffic: true,
+  });
+  const machinesRef = useRef(machines);
+  const toggleMachine = (key: keyof typeof machines) => {
+    setMachines((prev) => {
+      const next = { ...prev, [key]: !prev[key] };
+      machinesRef.current = next;
+      return next;
+    });
+  };
 
   useEffect(() => {
     let mi = 0;
