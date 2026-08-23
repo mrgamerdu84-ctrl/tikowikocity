@@ -14,6 +14,11 @@ import yellowPickupAsset from "@/assets/yellow_pickup.glb.asset.json";
 
 const MESHY_CARS = [blueSuvAsset, graySedanAsset, greenSportsAsset, yellowPickupAsset];
 
+/* Les voitures Meshy sont normalisées face à +X : décalage pour aligner
+   l'avant sur le sens de circulation (convention modèle Kenney = +Z). */
+const MESHY_YAW = -Math.PI / 2;
+
+
 
 const MESSAGES = [
   "Préparation du savon...",
@@ -176,8 +181,10 @@ export default function CarWashScene() {
       inner.add(source);
       root.add(inner);
 
-      let box = new THREE.Box3().setFromObject(inner);
+      const box0 = new THREE.Box3().setFromObject(inner);
+      let box = box0;
       const size = box.getSize(new THREE.Vector3());
+
 
       // la plus grande dimension au sol suit l'axe X (sens de circulation)
       if (size.z > size.x) {
@@ -185,6 +192,7 @@ export default function CarWashScene() {
         inner.updateMatrixWorld(true);
         box = new THREE.Box3().setFromObject(inner);
       }
+
 
       const finalSize = box.getSize(new THREE.Vector3());
       const center = box.getCenter(new THREE.Vector3());
@@ -336,7 +344,19 @@ export default function CarWashScene() {
     }> = [];
     const foamSprites: THREE.Object3D[] = [];
     const conveyorSlats: THREE.Mesh[] = [];
-    const trafficCars: Array<{ car: THREE.Object3D; dir: number; speed: number }> = [];
+    type TrafficCar = {
+      car: THREE.Object3D;
+      dir: number;
+      u: number;
+      speed: number;
+      lane: number;
+      yaw: number;
+      baseY: number;
+    };
+    const trafficCars: TrafficCar[] = [];
+    let cityCurve: THREE.CatmullRomCurve3 | null = null;
+    let cityLen = 1;
+
 
     const spawnSedan = () => {
       const template =
@@ -433,12 +453,79 @@ export default function CarWashScene() {
 
       spawnSedan();
 
-      // ----- Ville : avenues, immeubles et circulation -----
-      [-9, 9].forEach((zRow) => {
-        for (let x = -13; x <= 13; x += 1) {
-          place(models["roadStraight"]!, x, ROAD_Y, zRow, 0);
+      // ----- Ville : boulevard en boucle avec virages, immeubles alignés -----
+      const halfX = 17;
+      const halfZ = 11.5;
+      const r = 5;
+      const pts: THREE.Vector3[] = [];
+      const corners: Array<[number, number, number]> = [
+        [halfX - r, halfZ - r, 0],
+        [-(halfX - r), halfZ - r, Math.PI / 2],
+        [-(halfX - r), -(halfZ - r), Math.PI],
+        [halfX - r, -(halfZ - r), -Math.PI / 2],
+      ];
+      // segments droits + quarts de virage (sens horaire vu de dessus)
+      corners.forEach(([cx, cz, a0]) => {
+        for (let s = 0; s <= 6; s++) {
+          const a = a0 + (s / 6) * (Math.PI / 2);
+          pts.push(new THREE.Vector3(cx + Math.cos(a) * r, 0, cz + Math.sin(a) * r));
         }
       });
+      const cityCurveLocal = new THREE.CatmullRomCurve3(pts, true, "centripetal", 0.5);
+      cityCurve = cityCurveLocal;
+      cityLen = cityCurveLocal.getLength();
+
+      const normalAt = (u: number) => {
+        const tan = cityCurveLocal.getTangentAt(u);
+        return new THREE.Vector3(-tan.z, 0, tan.x).normalize();
+      };
+
+      // Chaussée
+      const ROAD_W = 7;
+      const N = 420;
+      const posArr: number[] = [];
+      const idxArr: number[] = [];
+      for (let i = 0; i <= N; i++) {
+        const u = (i % N) / N;
+        const p = cityCurveLocal.getPointAt(u);
+        const n = normalAt(u);
+        const a = p.clone().addScaledVector(n, ROAD_W / 2);
+        const b = p.clone().addScaledVector(n, -ROAD_W / 2);
+        posArr.push(a.x, 0.02, a.z, b.x, 0.02, b.z);
+      }
+      for (let i = 0; i < N; i++) {
+        const o = i * 2;
+        idxArr.push(o, o + 1, o + 2, o + 1, o + 3, o + 2);
+      }
+      const roadGeo = new THREE.BufferGeometry();
+      roadGeo.setAttribute("position", new THREE.Float32BufferAttribute(posArr, 3));
+      roadGeo.setIndex(idxArr);
+      roadGeo.computeVertexNormals();
+      const roadMesh = new THREE.Mesh(
+        roadGeo,
+        new THREE.MeshStandardMaterial({
+          color: 0x4a4f57,
+          roughness: 0.95,
+          side: THREE.DoubleSide,
+        }),
+
+      );
+      roadMesh.receiveShadow = true;
+      scene.add(roadMesh);
+
+      // Ligne centrale discontinue
+      const dashMat = new THREE.MeshStandardMaterial({ color: 0xf5f0d8, roughness: 0.7 });
+      const dashGeo = new THREE.BoxGeometry(1.1, 0.02, 0.16);
+      const dashes = Math.round(cityLen / 3);
+      for (let i = 0; i < dashes; i++) {
+        const u = i / dashes;
+        const p = cityCurveLocal.getPointAt(u);
+        const tan = cityCurveLocal.getTangentAt(u);
+        const d = new THREE.Mesh(dashGeo, dashMat);
+        d.position.set(p.x, 0.04, p.z);
+        d.rotation.y = Math.atan2(tan.x, tan.z) + Math.PI / 2;
+        scene.add(d);
+      }
 
       const buildingMats = [0xdfe6ee, 0xf3d6a8, 0xcfe3d0, 0xefc4c4, 0xd8d2ef].map(
         (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.85 }),
@@ -448,7 +535,15 @@ export default function CarWashScene() {
         roughness: 0.25,
         metalness: 0.1,
       });
-      const makeBuilding = (x: number, z: number, w: number, h: number, d: number, mi: number) => {
+      const makeBuilding = (
+        x: number,
+        z: number,
+        w: number,
+        h: number,
+        d: number,
+        mi: number,
+        rotY: number,
+      ) => {
         const g = new THREE.Group();
         const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), buildingMats[mi]!);
         body.position.y = h / 2;
@@ -464,43 +559,64 @@ export default function CarWashScene() {
           }
         }
         g.position.set(x, 0, z);
+        g.rotation.y = rotY;
         setShadow(g);
         scene.add(g);
       };
 
-      for (let i = 0; i < 9; i++) {
-        const x = -13 + i * 3.2;
-        makeBuilding(x, 13 + (i % 2) * 1.6, 2.6, 3 + ((i * 7) % 5) * 1.3, 2.6, i % 5);
-        makeBuilding(x + 1.2, -13 - (i % 2) * 1.6, 2.4, 3.5 + ((i * 3) % 4) * 1.5, 2.4, (i + 2) % 5);
+      // Immeubles alignés le long du boulevard (extérieur de la boucle)
+      const BLOCKS = 26;
+      for (let i = 0; i < BLOCKS; i++) {
+        const u = (i + 0.5) / BLOCKS;
+        const p = cityCurveLocal.getPointAt(u);
+        const tan = cityCurveLocal.getTangentAt(u);
+        const n = normalAt(u);
+        const w = 3.2 + (i % 3) * 0.8;
+        const d = 3 + (i % 2) * 0.9;
+        const h = 2.6 + ((i * 7) % 4) * 1.1;
+        const out = p.clone().addScaledVector(n, ROAD_W / 2 + d / 2 + 2.2);
+
+        makeBuilding(out.x, out.z, w, h, d, i % 5, Math.atan2(tan.x, tan.z) + Math.PI / 2);
       }
 
-      // Voitures qui circulent en ville
+      // Arbres sur le trottoir intérieur du boulevard
+      for (let i = 0; i < 22; i++) {
+        const u = (i + 0.25) / 22;
+        const p = cityCurveLocal.getPointAt(u);
+        const n = normalAt(u);
+        const q = p.clone().addScaledVector(n, -(ROAD_W / 2 + 1.1));
+        const tr = makeTree();
+        tr.position.set(q.x, 0, q.z);
+        scene.add(tr);
+      }
+
+      // Voitures qui circulent sur le boulevard (deux sens séparés)
       const cityTemplates = [models["taxi"]!, models["sedan"]!];
-      for (let i = 0; i < 8; i++) {
+      for (let i = 0; i < 10; i++) {
         const dir = i % 2 === 0 ? 1 : -1;
-        const zRow = i % 2 === 0 ? -9.35 : 9.35;
         const car = cityTemplates[i % cityTemplates.length]!.clone(true);
-        car.rotation.y = dir > 0 ? Math.PI / 2 : -Math.PI / 2;
-        car.position.set(-13 + (i * 3.7) % 26, CAR_Y, zRow);
         setShadow(car);
         scene.add(car);
         trafficCars.push({
           car,
           dir,
-          speed: 2.6 + Math.random() * 1.8,
+          u: (i / 10) % 1,
+          speed: 3 + Math.random() * 2,
+          lane: dir > 0 ? -1.7 : 1.7,
+          yaw: 0,
+          baseY: CAR_Y,
         });
       }
 
-
       const houseSpots: Array<[number, number]> = [
-        [-11, 4],
-        [-8, 4.5],
-        [8, 4.5],
-        [11, 4],
-        [-11, -4],
-        [-8, -4.5],
-        [8, -4.5],
-        [11, -4],
+        [-11, 4.5],
+        [-8, 5],
+        [8, 5],
+        [11, 4.5],
+        [-11, -4.5],
+        [-8, -5],
+        [8, -5],
+        [11, -4.5],
       ];
       houseSpots.forEach(([x, z]) => buildHouse(x, z));
 
@@ -511,6 +627,7 @@ export default function CarWashScene() {
         scene.add(t);
       }
     };
+
 
     const clock = new THREE.Clock();
     const animate = () => {
@@ -593,14 +710,21 @@ export default function CarWashScene() {
         });
       }
 
-      // Circulation en ville
-      if (ctl.traffic) {
-        trafficCars.forEach(({ car, dir, speed }) => {
-          car.position.x += dt * speed * dir;
-          if (car.position.x > 14) car.position.x = -14;
-          if (car.position.x < -14) car.position.x = 14;
+      // Circulation en ville : suivi du boulevard, virages inclus
+      if (cityCurve) {
+        const curve = cityCurve;
+        trafficCars.forEach((e) => {
+          if (ctl.traffic) {
+            e.u = (e.u + (dt * e.speed * e.dir) / cityLen + 1) % 1;
+          }
+          const p = curve.getPointAt(e.u);
+          const tan = curve.getTangentAt(e.u);
+          const n = new THREE.Vector3(-tan.z, 0, tan.x).normalize();
+          e.car.position.set(p.x + n.x * e.lane, e.baseY, p.z + n.z * e.lane);
+          e.car.rotation.y = Math.atan2(tan.x * e.dir, tan.z * e.dir) + e.yaw;
         });
       }
+
 
 
       foamSprites.forEach((f) => {
@@ -673,30 +797,35 @@ export default function CarWashScene() {
 
 
       // Véhicules : ajoutés au pool de spawn au fur et à mesure
+      const slots: Array<THREE.Group | null> = MESHY_CARS.map(() => null);
       await Promise.all(
-        MESHY_CARS.map((asset) =>
+        MESHY_CARS.map((asset, i) =>
           load(asset.url)
             .then((raw) => {
               if (disposed) return;
-              meshyCars.push(normalizeModel(raw, 2.4));
+              slots[i] = normalizeModel(raw, 2.4);
             })
             .catch((err: unknown) => console.error("voiture Meshy", err)),
         ),
       );
+      slots.forEach((m) => {
+        if (m) meshyCars.push(m);
+      });
       if (disposed || meshyCars.length === 0) return;
 
-      // Le trafic Kenney est remplacé par les voitures Meshy, bien orientées
+      // Le trafic Kenney est remplacé par les voitures Meshy, variées et bien orientées
       trafficCars.forEach((entry, i) => {
-        const template = meshyCars[i % meshyCars.length]!;
-        const next = template.clone(true);
+        const idx = (i * 3 + 1) % meshyCars.length;
+        const next = meshyCars[idx]!.clone(true);
         setShadow(next);
-        next.position.set(entry.car.position.x, 0.06, entry.car.position.z);
-        next.rotation.y = entry.dir > 0 ? 0 : Math.PI;
         scene.add(next);
         scene.remove(entry.car);
         entry.car = next;
+        entry.baseY = 0.02;
+        entry.yaw = MESHY_YAW;
       });
     };
+
 
     // File d'attente : de nouvelles voitures arrivent régulièrement
     let queueTimer = 0;
