@@ -477,13 +477,15 @@ export default function CarWashScene() {
       scene.add(conveyor.group);
       conveyorSlats.push(...conveyor.slats);
 
-      // Brosses verticales de chaque côté
+      /* Rouleaux verticaux : deux paires à l'entrée (bien visibles depuis
+         l'extérieur) et deux paires à l'intérieur du portique. */
       [-1, 1].forEach((zSide, si) => {
-        [0, 2.5].forEach((offset, oi) => {
+        [-1.1, 1.2, 3.4].forEach((offset, oi) => {
           const pivot = new THREE.Group();
           const spin = makeBrush();
+          spin.scale.set(1.25, 1.15, 1.25);
           pivot.add(spin);
-          pivot.position.set(WASH_ZONE[0] + 1.2 + offset, ROAD_Y + 1.05, zSide * 1.5);
+          pivot.position.set(WASH_ZONE[0] + offset, ROAD_Y + 1.1, zSide * 1.45);
           scene.add(pivot);
           brushes.push({
             pivot,
@@ -494,16 +496,18 @@ export default function CarWashScene() {
         });
       });
 
-      // Brosse horizontale au-dessus du tapis
-      [1.2, 3.8].forEach((x, i) => {
+      // Brosses horizontales au-dessus du tapis (elles descendent sur la voiture)
+      [-0.4, 2.2, 4.6].forEach((x, i) => {
         const pivot = new THREE.Group();
         pivot.rotation.x = Math.PI / 2;
         const spin = makeBrush();
+        spin.scale.set(1.1, 1.5, 1.1);
         pivot.add(spin);
         pivot.position.set(x, ROAD_Y + 2.1, 0);
         scene.add(pivot);
         brushes.push({ pivot, spin, dir: i % 2 === 0 ? -1 : 1, kind: "brush" });
       });
+
 
       for (let i = 0; i < 2; i++) {
         const foam = makeFoamVeil();
