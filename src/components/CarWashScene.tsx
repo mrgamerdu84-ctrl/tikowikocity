@@ -1631,19 +1631,24 @@ export default function CarWashScene() {
       const existing = plan.get(c.cx, c.cz);
       const tool = toolRef.current;
       const ok =
-        tool === "erase"
-          ? !!existing && !existing.locked
-          : tool === "light" || tool === "lamp"
-            ? !!existing
-            : tool === "house"
-              ? plan.canPlaceHouse(c.cx, c.cz) || !!plan.house(c.cx, c.cz)
-              : canBuild(c.cx, c.cz);
-      (ghost.material as THREE.MeshBasicMaterial).color.set(ok ? 0x2bd07c : 0xe05252);
-      if (downAt?.id === ev.pointerId && isRoadTool(toolRef.current)) {
+        tool === "bulldoze"
+          ? !!existing
+          : tool === "erase"
+            ? !!existing && !existing.locked
+            : tool === "light" || tool === "lamp"
+              ? !!existing
+              : tool === "house"
+                ? plan.canPlaceHouse(c.cx, c.cz) || !!plan.house(c.cx, c.cz)
+                : canBuild(c.cx, c.cz);
+      (ghost.material as THREE.MeshBasicMaterial).color.set(
+        tool === "bulldoze" ? (ok ? 0xe05252 : 0x9aa5ad) : ok ? 0x2bd07c : 0xe05252,
+      );
+      if (downAt?.id === ev.pointerId && isDragTool(toolRef.current)) {
         ev.preventDefault();
         traceRoadTo(c);
       }
     };
+
     const releasePointer = (ev: PointerEvent) => {
       try {
         if (renderer.domElement.hasPointerCapture(ev.pointerId)) {
