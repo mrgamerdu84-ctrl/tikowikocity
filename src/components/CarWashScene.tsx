@@ -979,19 +979,20 @@ export default function CarWashScene() {
         scene.add(d);
       }
 
-      // Terrain de la station : pelouse + dalle béton
-      addSlab(lawnMat, 46, 26, 0, WASH_SITE_Z + 2, 0.008);
-      addSlab(concreteMat, 40, 20, 0, WASH_SITE_Z + 3, 0.012);
+      // Terrain de la station : pelouse + dalle béton (parcelle resserrée)
+      addSlab(lawnMat, 38, 21, 0, WASH_SITE_Z + 2, 0.008);
+      addSlab(concreteMat, 32, 16, 0, WASH_SITE_Z + 2.5, 0.012);
 
       // Voie de lavage (traversée est-ouest de la parcelle)
-      addSlab(asphalt, 34, STREET_W, 0, WASH_SITE_Z, 0.02);
-      for (let x = -16; x <= 16; x += 3) {
+      addSlab(asphalt, 30, STREET_W, 0, WASH_SITE_Z, 0.02);
+      for (let x = -14; x <= 14; x += 3) {
         if (x > PATH_START + 2 && x < PATH_END - 2) continue;
         const d = new THREE.Mesh(dashGeoX, dashMat);
         d.rotation.x = -Math.PI / 2;
         d.position.set(x, 0.03, WASH_SITE_Z);
         scene.add(d);
       }
+
 
       /* Rue de desserte est-ouest de la parcelle + raccords vers la voie de
          lavage : les voitures suivent la route de bout en bout. */
