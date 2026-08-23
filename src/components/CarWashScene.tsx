@@ -238,6 +238,7 @@ export default function CarWashScene() {
         machines?: Partial<typeof machines>;
         cinema?: unknown;
         city?: SerializedPlan;
+        economy?: { money?: unknown; washes?: unknown };
       };
       if (state.machines && typeof state.machines === "object") {
         setMachines((prev) => {
