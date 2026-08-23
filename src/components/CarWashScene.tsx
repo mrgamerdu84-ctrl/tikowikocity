@@ -42,6 +42,12 @@ import {
   type UpgradeKey,
   type UpgradeLevels,
 } from "@/game/upgrades";
+import {
+  MAX_HISTORY,
+  formatWashDate,
+  sanitizeHistory,
+  type WashEntry,
+} from "@/game/history";
 import { HOUSE_LEVELS, MAX_HOUSE_LEVEL, houseDef, totalCapacity } from "@/game/houses";
 
 
@@ -119,15 +125,30 @@ export default function CarWashScene() {
   const [economy, setEconomy] = useState({ money: 0, washes: 0 });
   const economyRef = useRef(economy);
   const [gain, setGain] = useState<{ id: number; amount: number } | null>(null);
+  /* Historique des lavages : date, montant gagné, solde après transaction. */
+  const [history, setHistory] = useState<WashEntry[]>([]);
+  const historyRef = useRef(history);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const registerWashRef = useRef<(amount: number) => void>(() => {});
   registerWashRef.current = (amount: number) => {
     setEconomy((prev) => {
       const next = { money: prev.money + amount, washes: prev.washes + 1 };
       economyRef.current = next;
+      const entry: WashEntry = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        at: new Date().toISOString(),
+        amount,
+        balance: next.money,
+        wash: next.washes,
+      };
+      const nextHistory = [entry, ...historyRef.current].slice(0, MAX_HISTORY);
+      historyRef.current = nextHistory;
+      setHistory(nextHistory);
       return next;
     });
     setGain({ id: Date.now() + Math.random(), amount });
   };
+
   useEffect(() => {
     if (!gain) return;
     const id = window.setTimeout(() => setGain(null), 1600);
@@ -295,6 +316,7 @@ export default function CarWashScene() {
               houses: planIoRef.current.saveHouses(),
               residents: residentsRef.current,
               economy: economyRef.current,
+              history: historyRef.current,
               upgrades: upgradesRef.current,
 
 
@@ -334,6 +356,7 @@ export default function CarWashScene() {
         houses?: SerializedHouses;
         residents?: unknown;
         economy?: { money?: unknown; washes?: unknown };
+        history?: unknown;
         upgrades?: unknown;
 
       };
@@ -364,6 +387,11 @@ export default function CarWashScene() {
         };
         economyRef.current = next;
         setEconomy(next);
+      }
+      if (state.history !== undefined) {
+        const h = sanitizeHistory(state.history);
+        historyRef.current = h;
+        setHistory(h);
       }
       if (state.upgrades) {
         const up = sanitizeUpgrades(state.upgrades);
@@ -2044,15 +2072,26 @@ export default function CarWashScene() {
           </span>
         </div>
 
-        {/* Boutique d'améliorations */}
-        <button
-          type="button"
-          onClick={() => setShopOpen((v) => !v)}
-          aria-expanded={shopOpen}
-          className="mt-2 w-full rounded-full bg-sunny px-3 py-2 text-[12.5px] font-bold text-sunny-foreground shadow-[0_3px_0_var(--sunny-shadow)] transition-transform active:translate-y-0.5"
-        >
-          🛠️ Améliorations
-        </button>
+        {/* Boutique d'améliorations + historique */}
+        <div className="mt-2 flex gap-1.5">
+          <button
+            type="button"
+            onClick={() => setShopOpen((v) => !v)}
+            aria-expanded={shopOpen}
+            className="flex-1 rounded-full bg-sunny px-3 py-2 text-[12.5px] font-bold text-sunny-foreground shadow-[0_3px_0_var(--sunny-shadow)] transition-transform active:translate-y-0.5"
+          >
+            🛠️ Améliorations
+          </button>
+          <button
+            type="button"
+            onClick={() => setHistoryOpen((v) => !v)}
+            aria-expanded={historyOpen}
+            className="rounded-full bg-splash/20 px-3 py-2 text-[12.5px] font-bold text-ink ring-1 ring-ink/10 transition-transform active:translate-y-0.5"
+          >
+            🧾 Historique
+          </button>
+        </div>
+
 
         <p className="mt-1 hidden text-[12.5px] leading-relaxed opacity-80 sm:block">
           Construit avec les kits Kenney (voitures, routes, bâtiments). Glisse pour tourner la
@@ -2069,7 +2108,67 @@ export default function CarWashScene() {
 
       </div>
 
+      {historyOpen && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 p-3 backdrop-blur-sm sm:items-center">
+          <div className="flex max-h-[80vh] w-full max-w-[440px] flex-col rounded-3xl bg-white p-4 text-ink shadow-[0_12px_40px_rgba(6,58,94,0.35)]">
+            <div className="flex items-center gap-2">
+              <h2 className="text-[18px] font-extrabold">🧾 Historique des lavages</h2>
+              <span className="ml-auto rounded-full bg-sunny/30 px-2 py-1 text-[13px] font-extrabold tabular-nums">
+                {economy.money.toLocaleString("fr-FR")} €
+              </span>
+              <button
+                type="button"
+                onClick={() => setHistoryOpen(false)}
+                aria-label="Fermer l'historique"
+                className="rounded-full bg-ink/10 px-2 py-1 text-[13px] font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            {history.length === 0 ? (
+              <p className="mt-4 text-[13px] opacity-75">
+                Aucun lavage pour l'instant. Les clients arrivent tout seuls : chaque lavage terminé
+                s'ajoutera ici avec la date, le gain et le solde.
+              </p>
+            ) : (
+              <>
+                <div className="mt-2 flex items-center gap-2 px-1 text-[11px] font-bold uppercase tracking-wide opacity-60">
+                  <span className="w-[86px]">Date</span>
+                  <span className="ml-auto w-[64px] text-right">Gain</span>
+                  <span className="w-[74px] text-right">Solde</span>
+                </div>
+                <ul className="mt-1 flex-1 overflow-y-auto pr-1">
+                  {history.map((e) => (
+                    <li
+                      key={e.id}
+                      className="flex items-center gap-2 rounded-xl px-1 py-2 text-[13px] odd:bg-ink/[0.04]"
+                    >
+                      <span className="w-[86px] tabular-nums opacity-80">
+                        {formatWashDate(e.at)}
+                      </span>
+                      <span className="text-[11px] font-semibold opacity-60">#{e.wash}</span>
+                      <span className="ml-auto w-[64px] text-right font-extrabold tabular-nums text-splash">
+                        +{e.amount} €
+                      </span>
+                      <span className="w-[74px] text-right font-bold tabular-nums">
+                        {e.balance.toLocaleString("fr-FR")} €
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-2 text-[11px] opacity-60">
+                  {history.length} dernier{history.length > 1 ? "s" : ""} lavage
+                  {history.length > 1 ? "s" : ""} (max {MAX_HISTORY}).
+                </p>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {shopOpen && (
+
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 p-3 backdrop-blur-sm sm:items-center">
           <div className="w-full max-w-[420px] rounded-3xl bg-white p-4 text-ink shadow-[0_12px_40px_rgba(6,58,94,0.35)]">
             <div className="flex items-center gap-2">
