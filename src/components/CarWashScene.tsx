@@ -637,11 +637,118 @@ export default function CarWashScene() {
     const buildScene = () => {
 
 
+      /* ----- Grand portique de lavage (structure bien visible) ----- */
+      const hallMat = new THREE.MeshStandardMaterial({ color: 0xe9eef3, roughness: 0.75 });
+      const trimMat = new THREE.MeshStandardMaterial({ color: 0x1f6fb2, roughness: 0.6 });
+      const glassMat = new THREE.MeshStandardMaterial({
+        color: 0x9ad4ee,
+        roughness: 0.2,
+        metalness: 0.1,
+        transparent: true,
+        opacity: 0.55,
+      });
+      const HALL_LEN = 15; // le long de x (sens de circulation)
+      const HALL_W = 9.5; // le long de z
+      const HALL_H = 5.2;
+      const HALL_CX = 2;
+      const hall = new THREE.Group();
+
+      // Murs latéraux + bandeaux vitrés
+      [-1, 1].forEach((s) => {
+        const wall = new THREE.Mesh(
+          new THREE.BoxGeometry(HALL_LEN, HALL_H, 0.4),
+          hallMat,
+        );
+        wall.position.set(HALL_CX, HALL_H / 2, (s * HALL_W) / 2);
+        wall.castShadow = true;
+        wall.receiveShadow = true;
+        hall.add(wall);
+
+        const glass = new THREE.Mesh(
+          new THREE.BoxGeometry(HALL_LEN - 2, 1.6, 0.12),
+          glassMat,
+        );
+        glass.position.set(HALL_CX, 3.2, (s * (HALL_W + 0.5)) / 2);
+        hall.add(glass);
+      });
+
+      // Toiture + acrotère coloré
+      const roof = new THREE.Mesh(
+        new THREE.BoxGeometry(HALL_LEN + 1.4, 0.5, HALL_W + 1.4),
+        hallMat,
+      );
+      roof.position.set(HALL_CX, HALL_H + 0.25, 0);
+      roof.castShadow = true;
+      hall.add(roof);
+      const band = new THREE.Mesh(
+        new THREE.BoxGeometry(HALL_LEN + 1.6, 0.55, HALL_W + 1.6),
+        trimMat,
+      );
+      band.position.set(HALL_CX, HALL_H + 0.75, 0);
+      hall.add(band);
+
+      // Portiques d'entrée et de sortie (arches marquées)
+      [-1, 1].forEach((s) => {
+        const arch = new THREE.Mesh(
+          new THREE.BoxGeometry(0.6, 1.5, HALL_W + 1.8),
+          trimMat,
+        );
+        arch.position.set(HALL_CX + (s * HALL_LEN) / 2, HALL_H - 0.4, 0);
+        hall.add(arch);
+        [-1, 1].forEach((z) => {
+          const post = new THREE.Mesh(
+            new THREE.BoxGeometry(0.6, HALL_H, 0.8),
+            trimMat,
+          );
+          post.position.set(
+            HALL_CX + (s * HALL_LEN) / 2,
+            HALL_H / 2,
+            (z * (HALL_W + 1.8)) / 2,
+          );
+          post.castShadow = true;
+          hall.add(post);
+        });
+      });
+
+      // Totem d'enseigne "CAR WASH"
+      const totemPost = new THREE.Mesh(
+        new THREE.BoxGeometry(0.4, 6, 0.4),
+        trimMat,
+      );
+      totemPost.position.set(HALL_CX - HALL_LEN / 2 - 3, 3, HALL_W / 2 + 2.5);
+      totemPost.castShadow = true;
+      hall.add(totemPost);
+      const signCanvas = document.createElement("canvas");
+      signCanvas.width = 512;
+      signCanvas.height = 160;
+      const sctx = signCanvas.getContext("2d")!;
+      sctx.fillStyle = "#1f6fb2";
+      sctx.fillRect(0, 0, 512, 160);
+      sctx.fillStyle = "#ffffff";
+      sctx.font = "bold 90px sans-serif";
+      sctx.textAlign = "center";
+      sctx.textBaseline = "middle";
+      sctx.fillText("CAR WASH", 256, 84);
+      const signTex = new THREE.CanvasTexture(signCanvas);
+      const signMat = new THREE.MeshStandardMaterial({ map: signTex, roughness: 0.7 });
+      const sign = new THREE.Mesh(new THREE.BoxGeometry(6, 1.9, 0.25), signMat);
+      sign.position.set(HALL_CX - HALL_LEN / 2 - 3, 6.4, HALL_W / 2 + 2.5);
+      sign.castShadow = true;
+      hall.add(sign);
+      // Enseigne murale identique sur le long pan
+      const wallSign = new THREE.Mesh(new THREE.BoxGeometry(8, 2.4, 0.2), signMat);
+      wallSign.position.set(HALL_CX, HALL_H - 1.2, HALL_W / 2 + 0.3);
+      hall.add(wallSign);
+
+      washSite.add(hall);
+
       const tunnel = models["tunnel"]!.clone(true);
       tunnel.rotation.y = Math.PI / 2;
+      tunnel.scale.setScalar(1.5);
       tunnel.position.set(2, 0, 0);
       setShadow(tunnel);
       washSite.add(tunnel);
+
 
 
       // Tapis roulant
@@ -655,10 +762,11 @@ export default function CarWashScene() {
         [-1.1, 1.2, 3.4].forEach((offset, oi) => {
           const pivot = new THREE.Group();
           const spin = makeBrush();
-          spin.scale.set(1.25, 1.15, 1.25);
+          spin.scale.set(1.7, 1.7, 1.7);
           pivot.add(spin);
-          pivot.position.set(WASH_ZONE[0] + offset, ROAD_Y + 1.1, zSide * 1.45);
+          pivot.position.set(WASH_ZONE[0] + offset, ROAD_Y + 1.4, zSide * 1.9);
           washSite.add(pivot);
+
           brushes.push({
             pivot,
             spin,
@@ -673,12 +781,13 @@ export default function CarWashScene() {
         const pivot = new THREE.Group();
         pivot.rotation.x = Math.PI / 2;
         const spin = makeBrush();
-        spin.scale.set(1.1, 1.5, 1.1);
+        spin.scale.set(1.5, 2.1, 1.5);
         pivot.add(spin);
-        pivot.position.set(x, ROAD_Y + 2.1, 0);
+        pivot.position.set(x, ROAD_Y + 2.4, 0);
         washSite.add(pivot);
         brushes.push({ pivot, spin, dir: i % 2 === 0 ? -1 : 1, kind: "brush" });
       });
+
 
 
       for (let i = 0; i < 2; i++) {
@@ -870,19 +979,20 @@ export default function CarWashScene() {
         scene.add(d);
       }
 
-      // Terrain de la station : pelouse + dalle béton
-      addSlab(lawnMat, 46, 26, 0, WASH_SITE_Z + 2, 0.008);
-      addSlab(concreteMat, 40, 20, 0, WASH_SITE_Z + 3, 0.012);
+      // Terrain de la station : pelouse + dalle béton (parcelle resserrée)
+      addSlab(lawnMat, 38, 21, 0, WASH_SITE_Z + 2, 0.008);
+      addSlab(concreteMat, 32, 16, 0, WASH_SITE_Z + 2.5, 0.012);
 
       // Voie de lavage (traversée est-ouest de la parcelle)
-      addSlab(asphalt, 34, STREET_W, 0, WASH_SITE_Z, 0.02);
-      for (let x = -16; x <= 16; x += 3) {
+      addSlab(asphalt, 30, STREET_W, 0, WASH_SITE_Z, 0.02);
+      for (let x = -14; x <= 14; x += 3) {
         if (x > PATH_START + 2 && x < PATH_END - 2) continue;
         const d = new THREE.Mesh(dashGeoX, dashMat);
         d.rotation.x = -Math.PI / 2;
         d.position.set(x, 0.03, WASH_SITE_Z);
         scene.add(d);
       }
+
 
       /* Rue de desserte est-ouest de la parcelle + raccords vers la voie de
          lavage : les voitures suivent la route de bout en bout. */
@@ -897,28 +1007,33 @@ export default function CarWashScene() {
       });
 
 
-      // Parking : 5 places marquées derrière la station
-      const parkZ = WASH_SITE_Z + 8.5;
-      addSlab(concreteMat, 26, 8, -2, parkZ, 0.016);
+      // Parking : places marquées, voitures bien rangées dans les cases
+      const parkZ = WASH_SITE_Z + 8;
+      addSlab(concreteMat, 24, 7.5, -2, parkZ, 0.016);
       const lineMat = new THREE.MeshStandardMaterial({ color: 0xf2f2ec, roughness: 0.8 });
       for (let i = 0; i <= 5; i++) {
         const line = new THREE.Mesh(new THREE.PlaneGeometry(0.16, 6), lineMat);
         line.rotation.x = -Math.PI / 2;
-        line.position.set(-13 + i * 4.4, 0.024, parkZ);
+        line.position.set(-12 + i * 4.4, 0.024, parkZ);
         scene.add(line);
       }
-      // Une voiture garée en attente
-      const parked = models["taxi"]!.clone(true);
-      setShadow(parked);
-      parked.position.set(-10.8, CAR_Y, parkZ);
-      scene.add(parked);
+      // Voitures en attente, alignées au centre de leur place
+      const parkTemplates = [models["taxi"]!, models["sedan"]!, models["taxi"]!];
+      parkTemplates.forEach((tpl, i) => {
+        const parked = tpl.clone(true);
+        setShadow(parked);
+        parked.rotation.y = Math.PI / 2;
+        parked.position.set(-12 + 2.2 + i * 4.4, CAR_Y, parkZ);
+        scene.add(parked);
+      });
 
       // Arbres en bordure de parcelle, pour séparer la station de la ville
-      for (let x = -20; x <= 20; x += 5) {
+      for (let x = -17; x <= 17; x += 5) {
         const tr = makeTree();
-        tr.position.set(x, 0, WASH_SITE_Z + 14);
+        tr.position.set(x, 0, WASH_SITE_Z + 12);
         tr.scale.setScalar(0.9);
         scene.add(tr);
+
       }
 
       // ----- Circulation : deux voies par rue, sens opposés, bien centrées -----
