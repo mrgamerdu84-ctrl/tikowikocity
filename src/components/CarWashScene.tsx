@@ -1124,6 +1124,173 @@ export default function CarWashScene() {
       cityStatsRef.current(plan.houseLevels());
     };
 
+    /* ---------- Décor du joueur : parcs et parkings ---------- */
+    const decorGroup = new THREE.Group();
+    scene.add(decorGroup);
+
+    const grassMat = new THREE.MeshStandardMaterial({ color: 0x74c46a, roughness: 1 });
+    const sandMat = new THREE.MeshStandardMaterial({ color: 0xe3cf9c, roughness: 1 });
+    const tarmacMat = new THREE.MeshStandardMaterial({ color: 0x6d747c, roughness: 1 });
+    const paintMat = new THREE.MeshStandardMaterial({ color: 0xf3f2ea, roughness: 0.8 });
+    const woodMat = new THREE.MeshStandardMaterial({ color: 0x8a5a34, roughness: 0.9 });
+
+    const groundTile = (mat: THREE.Material, size = TILE * 0.96, y = 0.02) => {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(size, size), mat);
+      m.rotation.x = -Math.PI / 2;
+      m.position.y = y;
+      m.receiveShadow = true;
+      return m;
+    };
+
+    const makeBench = () => {
+      const g = new THREE.Group();
+      const seat = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.12, 0.5), woodMat);
+      seat.position.y = 0.45;
+      const back = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.5, 0.12), woodMat);
+      back.position.set(0, 0.72, -0.2);
+      g.add(seat, back);
+      return g;
+    };
+
+    const makeDecor = (kind: DecorKind, seed: number) => {
+      const g = new THREE.Group();
+      const rnd = (i: number) => ((Math.sin(seed * 12.9898 + i * 78.233) + 1) % 1);
+      if (kind === "park" || kind === "garden" || kind === "fountain" || kind === "playground") {
+        g.add(groundTile(grassMat));
+      }
+      if (kind === "park") {
+        for (let i = 0; i < 4; i++) {
+          const t = makeTree();
+          t.position.set((rnd(i) - 0.5) * 4.4, 0, (rnd(i + 9) - 0.5) * 4.4);
+          t.scale.setScalar(0.8 + rnd(i + 3) * 0.4);
+          g.add(t);
+        }
+        const b = makeBench();
+        b.position.set(1.4, 0, 1.9);
+        b.rotation.y = Math.PI;
+        g.add(b);
+      } else if (kind === "garden") {
+        const flowerMats = [0xe4657a, 0xf0c246, 0xa46ee0, 0xffffff].map(
+          (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.8 }),
+        );
+        const bed = new THREE.Mesh(
+          new THREE.BoxGeometry(TILE * 0.72, 0.22, TILE * 0.72),
+          new THREE.MeshStandardMaterial({ color: 0x6b4a2f, roughness: 1 }),
+        );
+        bed.position.y = 0.11;
+        g.add(bed);
+        for (let i = 0; i < 16; i++) {
+          const f = new THREE.Mesh(
+            new THREE.SphereGeometry(0.16, 8, 8),
+            flowerMats[i % flowerMats.length]!,
+          );
+          f.position.set((rnd(i) - 0.5) * 3.8, 0.3, (rnd(i + 5) - 0.5) * 3.8);
+          g.add(f);
+        }
+        const b = makeBench();
+        b.position.set(0, 0, 2.3);
+        g.add(b);
+      } else if (kind === "fountain") {
+        const basin = new THREE.Mesh(
+          new THREE.CylinderGeometry(2, 2.2, 0.5, 20),
+          new THREE.MeshStandardMaterial({ color: 0xd8d3c6, roughness: 0.9 }),
+        );
+        basin.position.y = 0.25;
+        const water = new THREE.Mesh(
+          new THREE.CylinderGeometry(1.75, 1.75, 0.1, 20),
+          new THREE.MeshStandardMaterial({
+            color: 0x4fb3e8,
+            roughness: 0.15,
+            metalness: 0.1,
+          }),
+        );
+        water.position.y = 0.52;
+        const jet = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.16, 0.24, 1.5, 10),
+          new THREE.MeshStandardMaterial({ color: 0xbfe6f7, roughness: 0.3 }),
+        );
+        jet.position.y = 1.2;
+        g.add(basin, water, jet);
+      } else if (kind === "playground") {
+        g.add(groundTile(sandMat, TILE * 0.7, 0.025));
+        const frameMat = new THREE.MeshStandardMaterial({ color: 0xe0574c, roughness: 0.7 });
+        const slide = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.12, 3.2), frameMat);
+        slide.position.set(-1.2, 0.9, 0);
+        slide.rotation.x = 0.5;
+        const tower = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.6, 1.4), woodMat);
+        tower.position.set(-1.2, 0.8, -1.9);
+        const barMat = new THREE.MeshStandardMaterial({ color: 0x3f7fae, roughness: 0.6 });
+        const bar = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.16, 3), barMat);
+        bar.position.set(1.6, 1.6, 0);
+        for (const sz of [-1.4, 1.4]) {
+          const leg = new THREE.Mesh(new THREE.BoxGeometry(0.16, 1.7, 0.16), barMat);
+          leg.position.set(1.6, 0.85, sz);
+          g.add(leg);
+        }
+        for (const sz of [-0.6, 0.6]) {
+          const swing = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.1, 0.3), frameMat);
+          swing.position.set(1.6, 0.55, sz);
+          g.add(swing);
+        }
+        g.add(slide, tower, bar);
+      } else if (kind === "parking" || kind === "truckstop") {
+        g.add(groundTile(tarmacMat));
+        const slots = kind === "truckstop" ? 3 : 4;
+        const step = (TILE * 0.9) / slots;
+        for (let i = 0; i <= slots; i++) {
+          const line = new THREE.Mesh(
+            new THREE.PlaneGeometry(0.14, TILE * 0.72),
+            paintMat,
+          );
+          line.rotation.x = -Math.PI / 2;
+          line.position.set(-TILE * 0.45 + i * step, 0.03, 0);
+          g.add(line);
+        }
+        const parkedCount = kind === "truckstop" ? 1 : 2;
+        for (let i = 0; i < parkedCount; i++) {
+          const c = kitCar(Math.floor(rnd(i) * 8) + i).clone(true);
+          c.rotation.y = Math.PI / 2;
+          if (kind === "truckstop") c.scale.setScalar(1.4);
+          c.position.set(-TILE * 0.45 + step * (i + 0.5) + step * i, 0.02, 0);
+          g.add(c);
+        }
+      } else if (kind === "carport") {
+        g.add(groundTile(tarmacMat));
+        const roof = new THREE.Mesh(
+          new THREE.BoxGeometry(TILE * 0.9, 0.22, TILE * 0.7),
+          new THREE.MeshStandardMaterial({ color: 0xcfd6de, roughness: 0.6 }),
+        );
+        roof.position.y = 2.7;
+        g.add(roof);
+        const pillarMat = new THREE.MeshStandardMaterial({ color: 0x8a929b, roughness: 0.8 });
+        for (const sx of [-TILE * 0.4, TILE * 0.4]) {
+          for (const sz of [-TILE * 0.3, TILE * 0.3]) {
+            const p = new THREE.Mesh(new THREE.BoxGeometry(0.24, 2.7, 0.24), pillarMat);
+            p.position.set(sx, 1.35, sz);
+            g.add(p);
+          }
+        }
+        const c = kitCar(Math.floor(rnd(2) * 8)).clone(true);
+        c.rotation.y = Math.PI / 2;
+        c.position.set(0, 0.02, 0);
+        g.add(c);
+      }
+      setShadow(g);
+      return g;
+    };
+
+    const renderDecor = () => {
+      [...decorGroup.children].forEach((c) => decorGroup.remove(c));
+      plan.decor.forEach((d, k) => {
+        const [cx, cz] = parseKey(k);
+        const obj = makeDecor(d.kind, cx * 31 + cz * 17);
+        obj.position.set(cx * TILE, 0, cz * TILE);
+        obj.rotation.y = (d.rot * Math.PI) / 2;
+        decorGroup.add(obj);
+      });
+    };
+
+
     const renderPlan = () => {
       [...roadsGroup.children].forEach((c) => roadsGroup.remove(c));
       [...propsGroup.children].forEach((c) => propsGroup.remove(c));
