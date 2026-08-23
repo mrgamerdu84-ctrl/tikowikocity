@@ -1,3 +1,4 @@
+# retry-after-strict-types-fix
 name: Brancher locations TikowikoCity
 on:
   push:
