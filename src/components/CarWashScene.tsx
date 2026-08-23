@@ -638,19 +638,20 @@ export default function CarWashScene() {
           );
         });
 
-      // Bâtiment de lavage : il remplace le tunnel sur la route
-      load(washCartoonAsset.url)
+      // Tunnel de lavage Meshy détaillé : posé sur la voie, aligné sur la route
+      load(tunnelAsset.url)
         .then((raw) => {
           if (disposed) return;
-          const building = normalizeModel(raw, 7.5);
-          building.position.set(2, 0, 0);
-          scene.add(building);
+          const tunnel = normalizeModel(raw, WASH_ZONE[1] - WASH_ZONE[0] + 1.5);
+          tunnel.position.set((WASH_ZONE[0] + WASH_ZONE[1]) / 2, 0, 0);
+          scene.add(tunnel);
           if (kenneyTunnel) {
             scene.remove(kenneyTunnel);
             kenneyTunnel = null;
           }
         })
-        .catch((err: unknown) => console.error("bâtiment Meshy", err));
+        .catch((err: unknown) => console.error("tunnel Meshy", err));
+
 
       // Véhicules : ajoutés au pool de spawn au fur et à mesure
       MESHY_CARS.forEach((asset) => {
