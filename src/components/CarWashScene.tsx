@@ -1476,13 +1476,14 @@ export default function CarWashScene() {
 
       const ctl = machinesRef.current;
       const SPEED = 2.6;
-      const BELT_SPEED = ctl.belt ? 1.1 : 0;
+      /* même tapis à l'arrêt, la voiture avance lentement pour ne jamais
+         rester bloquée dans le portique */
+      const BELT_SPEED = ctl.belt ? 1.1 : 0.45;
       const GAP = 3.2;
       const [zoneStart, zoneEnd] = WASH_ZONE;
 
       // Les voitures suivent l'itinéraire routier ; la première est en tête
       let aheadD = Number.POSITIVE_INFINITY;
-      const occupied = washCars.some((c) => c.d > WASH_D0 - 0.2 && c.d < WASH_D1);
 
       for (let i = 0; i < washCars.length; i++) {
         const e = washCars[i]!;
@@ -1491,10 +1492,12 @@ export default function CarWashScene() {
 
         // Limite : garder une distance de sécurité avec la voiture devant
         let limit = aheadD - GAP;
-        // Portail d'entrée : on attend que le tunnel se libère
-        if (!onBelt && e.d < WASH_D0 && occupied) {
+        /* Portail d'entrée : on n'attend que si une AUTRE voiture (devant)
+           occupe encore le tunnel. */
+        if (!onBelt && e.d < WASH_D0 && aheadD < WASH_D1) {
           limit = Math.min(limit, WASH_D0 - 0.6);
         }
+
 
         const target = Math.min(e.d + dt * wantSpeed, limit);
         const moved = Math.max(target - e.d, 0);
