@@ -210,7 +210,7 @@ export default function CarWashScene() {
     (window as unknown as { createImageBitmap?: unknown }).createImageBitmap = undefined;
 
     const scene = new THREE.Scene();
-    scene.fog = new THREE.Fog(0xd9eefb, 220, 700);
+    scene.fog = new THREE.Fog(0xd9eefb, 260, 1100);
 
     /* Ciel dégradé (canvas) pour sortir du fond plat */
     const skyCanvas = document.createElement("canvas");
@@ -454,44 +454,64 @@ export default function CarWashScene() {
       const hillMat = new THREE.MeshStandardMaterial({ color: 0x6bb85c, roughness: 1, flatShading: true });
       const hillMat2 = new THREE.MeshStandardMaterial({ color: 0x58a552, roughness: 1, flatShading: true });
 
-      // Chaîne de montagnes lointaine, sur tout l'horizon
-      for (let i = 0; i < 54; i++) {
-        const a = (i / 54) * Math.PI * 2 + rand() * 0.05;
-        const r = 250 + rand() * 130;
-        const h = 42 + rand() * 78;
-        const rad = h * (0.55 + rand() * 0.3);
+      // Chaîne de montagnes lointaine, sur tout l'horizon (bien au-delà de la ville)
+      for (let i = 0; i < 64; i++) {
+        const a = (i / 64) * Math.PI * 2 + rand() * 0.06;
+        const r = 340 + rand() * 150;
+        const h = 70 + rand() * 110;
+        const rad = h * (0.6 + rand() * 0.35);
         const m = new THREE.Mesh(
           new THREE.ConeGeometry(rad, h, 5 + Math.floor(rand() * 3), 1),
           rand() > 0.5 ? rockMat : rockDark,
         );
-        m.position.set(Math.cos(a) * r, h / 2 - 3, Math.sin(a) * r);
+        m.position.set(Math.cos(a) * r, h / 2 - 4, Math.sin(a) * r);
         m.rotation.y = rand() * Math.PI;
         scene.add(m);
-        if (h > 80) {
+        if (h > 110) {
           const cap = new THREE.Mesh(new THREE.ConeGeometry(rad * 0.34, h * 0.24, 6, 1), snowMat);
-          cap.position.set(m.position.x, h - h * 0.12 - 3, m.position.z);
+          cap.position.set(m.position.x, h - h * 0.12 - 4, m.position.z);
           cap.rotation.y = m.rotation.y;
           scene.add(cap);
         }
       }
 
-      // Collines verdoyantes en avant-plan des montagnes
-      for (let i = 0; i < 44; i++) {
-        const a = (i / 44) * Math.PI * 2 + rand() * 0.12;
-        const r = 175 + rand() * 70;
-        const h = 8 + rand() * 22;
+      // Collines verdoyantes, basses, en avant-plan des montagnes
+      for (let i = 0; i < 60; i++) {
+        const a = (i / 60) * Math.PI * 2 + rand() * 0.14;
+        const r = 245 + rand() * 80;
+        const h = 7 + rand() * 13;
         const x = Math.cos(a) * r;
         const z = Math.sin(a) * r;
         // on dégage la vallée du lac
         if (Math.hypot(x + 62, z - 34) < 110) continue;
         const m = new THREE.Mesh(
-          new THREE.SphereGeometry(h * 1.9, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2),
+          new THREE.SphereGeometry(h * 2.4, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2),
           rand() > 0.5 ? hillMat : hillMat2,
         );
-        m.scale.y = 0.42 + rand() * 0.3;
+        m.scale.y = 0.3 + rand() * 0.2;
         m.position.set(x, -1, z);
         scene.add(m);
       }
+
+
+      // Buttes douces éparses : casse la platitude entre ville et collines
+      for (let i = 0; i < 22; i++) {
+        const a = rand() * Math.PI * 2;
+        const r = 120 + rand() * 70;
+        const x = Math.cos(a) * r;
+        const z = Math.sin(a) * r;
+        if (Math.hypot(x, z + 42) < 60) continue; // dégage le terrain du car wash
+        if (Math.hypot(x + 62, z - 34) < 60) continue; // dégage le lac
+        const h = 4 + rand() * 9;
+        const m = new THREE.Mesh(
+          new THREE.SphereGeometry(h * 2.1, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2),
+          rand() > 0.5 ? hillMat : hillMat2,
+        );
+        m.scale.y = 0.3 + rand() * 0.22;
+        m.position.set(x, -0.6, z);
+        scene.add(m);
+      }
+
 
 
       // Lac au nord-ouest + plage et arbres
@@ -1754,25 +1774,26 @@ export default function CarWashScene() {
         </div>
       )}
 
-      <div className="pointer-events-none fixed left-4 top-4 max-w-[280px] text-ink drop-shadow-[0_1px_0_rgba(255,255,255,.6)]">
+      <div className="pointer-events-none fixed left-4 top-4 z-30 max-w-[300px] rounded-2xl bg-white/80 px-4 py-3 text-ink shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur">
         <p className="flex items-center gap-2 text-[22px] font-bold tracking-wide">
           <span aria-hidden>🫧</span> TikowikoCarWash
         </p>
 
-        <p className="mt-1 text-[12.5px] leading-relaxed opacity-85">
+        <p className="mt-1 text-[12.5px] leading-relaxed opacity-80">
           Construit avec les kits Kenney (voitures, routes, bâtiments). Glisse pour tourner la
           caméra, molette pour zoomer.
         </p>
       </div>
 
-      <div className="pointer-events-none fixed bottom-4 left-4 text-[11.5px] text-ink opacity-75 drop-shadow-[0_1px_0_rgba(255,255,255,.6)]">
+      <div className="pointer-events-none fixed bottom-4 left-4 z-30 rounded-2xl bg-white/70 px-3 py-2 text-[11.5px] text-ink shadow-[0_6px_20px_rgba(6,58,94,0.14)] backdrop-blur">
         <p>🖱️ Glisser = tourner • Molette = zoomer • Clic droit = déplacer</p>
         <p className="mt-1 opacity-80">Modèles Kenney (kenney.nl) — licence CC0</p>
         <p className="mt-1 font-semibold opacity-90">© {new Date().getFullYear()} tikowikoFamily</p>
 
       </div>
 
-      <div className="fixed right-4 top-4 w-[190px] rounded-2xl bg-white/80 p-3 shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur">
+
+      <div className="fixed right-4 top-4 z-30 w-[190px] rounded-2xl bg-white/80 p-3 shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur">
         <p className="mb-2 text-[12px] font-bold uppercase tracking-wide text-ink opacity-80">
           Panneau de contrôle
         </p>
@@ -1804,7 +1825,7 @@ export default function CarWashScene() {
       </div>
 
 
-      <div className="fixed bottom-4 right-4 flex items-center gap-2 rounded-2xl bg-white/80 p-2.5 shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur">
+      <div className="fixed bottom-4 right-4 z-30 flex items-center gap-2 rounded-2xl bg-white/80 p-2.5 shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur">
         <button
           type="button"
           onClick={() => spawnRef.current()}
