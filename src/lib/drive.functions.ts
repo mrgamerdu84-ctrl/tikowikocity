@@ -82,3 +82,78 @@ export const saveToDrive = createServerFn({ method: "POST" })
     }
     return (await res.json()) as { id: string; name: string; webViewLink?: string };
   });
+
+export type SaveEnvelope = {
+  version: number;
+  app: "TikowikoCarWash";
+  savedAt: string;
+  state: Record<string, unknown>;
+};
+
+export const loadFromDrive = createServerFn({ method: "POST" }).handler(async () => {
+  const h = headers();
+  const folderQ = encodeURIComponent(
+    `name='${FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+  );
+  const folderRes = await fetch(`${GATEWAY}/drive/v3/files?q=${folderQ}&fields=files(id)`, {
+    headers: h,
+  });
+  if (!folderRes.ok) {
+    const body = await folderRes.text();
+    console.error(`Drive folder lookup failed [${folderRes.status}]: ${body}`);
+    throw new Error(`Échec de la lecture Drive [${folderRes.status}]`);
+  }
+  const folderId = ((await folderRes.json()) as { files?: Array<{ id: string }> }).files?.[0]?.id;
+  if (!folderId) return { found: false as const };
+
+  const listQ = encodeURIComponent(
+    `'${folderId}' in parents and name contains 'tikowikocarwash-' and trashed=false`,
+  );
+  const listRes = await fetch(
+    `${GATEWAY}/drive/v3/files?q=${listQ}&orderBy=createdTime desc&pageSize=10&fields=files(id,name,createdTime)`,
+    { headers: h },
+  );
+  if (!listRes.ok) {
+    const body = await listRes.text();
+    console.error(`Drive list failed [${listRes.status}]: ${body}`);
+    throw new Error(`Échec de la lecture Drive [${listRes.status}]`);
+  }
+  const files = ((await listRes.json()) as {
+    files?: Array<{ id: string; name: string }>;
+  }).files?.filter((f) => f.name.endsWith(".json"));
+  const latest = files?.[0];
+  if (!latest) return { found: false as const };
+
+  const contentRes = await fetch(`${GATEWAY}/drive/v3/files/${latest.id}?alt=media`, {
+    headers: h,
+  });
+  if (!contentRes.ok) {
+    const body = await contentRes.text();
+    console.error(`Drive download failed [${contentRes.status}]: ${body}`);
+    throw new Error(`Échec de la lecture Drive [${contentRes.status}]`);
+  }
+  const raw = await contentRes.text();
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error("Sauvegarde illisible (JSON invalide).");
+  }
+  const obj = parsed as Partial<SaveEnvelope> & { machines?: unknown; cinema?: unknown };
+  if (obj?.app !== "TikowikoCarWash") {
+    throw new Error("Ce fichier n'est pas une sauvegarde TikowikoCarWash.");
+  }
+  // v0 saves stored fields at the root; normalize to the versioned envelope.
+  const state =
+    obj.state && typeof obj.state === "object"
+      ? (obj.state as Record<string, unknown>)
+      : { machines: obj.machines, cinema: obj.cinema };
+
+  return {
+    found: true as const,
+    fileName: latest.name,
+    version: typeof obj.version === "number" ? obj.version : 0,
+    savedAt: typeof obj.savedAt === "string" ? obj.savedAt : null,
+    state,
+  };
+});
