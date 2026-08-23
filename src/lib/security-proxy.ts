@@ -88,16 +88,22 @@ export async function handleSecurityRequest(request: Request): Promise<Response 
       });
     }
 
-    const contentType = upstream.headers.get("content-type") ?? "";
-    if (!contentType.includes("application/json")) {
+    // Apps Script can return valid JSON with a text/plain content type.
+    // Read the body as text first and parse it ourselves instead of rejecting
+    // the response only because the Content-Type header is not application/json.
+    const raw = (await upstream.text()).trim();
+    let payload: { valid?: unknown; retryLater?: unknown };
+
+    try {
+      payload = JSON.parse(raw) as { valid?: unknown; retryLater?: unknown };
+    } catch {
       return json(502, {
         valid: false,
         unavailable: true,
-        reason: "google-non-json",
+        reason: "google-invalid-response",
       });
     }
 
-    const payload = (await upstream.json()) as { valid?: unknown; retryLater?: unknown };
     const valid = payload.valid === true;
 
     if (valid) {
