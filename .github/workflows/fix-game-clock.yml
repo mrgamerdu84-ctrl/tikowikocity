@@ -1,0 +1,34 @@
+name: Corriger horloge jour nuit
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/fix-game-clock.yml]
+permissions:
+  contents: write
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Corriger les références HUD
+        shell: python
+        run: |
+          from pathlib import Path
+          p=Path('src/components/CarWashScene.tsx')
+          s=p.read_text(encoding='utf-8')
+          s=s.replace('  const gameTimeRef = useRef<HTMLSpanElement>(null);\n', '  const gameTimeRef = useRef<HTMLSpanElement>(null);\n  const gameTimeBuildRef = useRef<HTMLSpanElement>(null);\n', 1)
+          s=s.replace('if (gameTimeRef.current) {\n        gameTimeRef.current.textContent = `${night > 0.55 ? "🌙" : "☀️"} ${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;\n      }', 'const clockText = `${night > 0.55 ? "🌙" : "☀️"} ${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;\n      if (gameTimeRef.current) gameTimeRef.current.textContent = clockText;\n      if (gameTimeBuildRef.current) gameTimeBuildRef.current.textContent = clockText;', 1)
+          s=s.replace('<span ref={gameTimeRef} className="ml-auto whitespace-nowrap text-[12px] font-extrabold opacity-80">\n            ☀️ 08:00\n          </span>', '<span ref={gameTimeBuildRef} className="ml-auto whitespace-nowrap text-[12px] font-extrabold opacity-80">\n            ☀️ 08:00\n          </span>', 1)
+          p.write_text(s, encoding='utf-8')
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile && bunx tsc --noEmit
+      - name: Enregistrer
+        run: |
+          rm -f .github/workflows/fix-game-clock.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/CarWashScene.tsx .github/workflows/fix-game-clock.yml
+          git commit -m "Corrigé affichage horloge jour nuit"
+          git push origin HEAD:main
