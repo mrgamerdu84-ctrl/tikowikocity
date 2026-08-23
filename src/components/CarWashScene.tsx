@@ -256,6 +256,9 @@ export default function CarWashScene() {
   const [buildMode, setBuildMode] = useState(false);
   const [tool, setTool] = useState<BuildTool>("straight");
   const [rot, setRot] = useState(0);
+  const [buildCat, setBuildCat] = useState<BuildCategory>("routes");
+  /** panneau machines replié par défaut sur petit écran */
+  const [controlOpen, setControlOpen] = useState(false);
   const buildRef = useRef(false);
   const toolRef = useRef<BuildTool>("straight");
   const rotRef = useRef(0);
