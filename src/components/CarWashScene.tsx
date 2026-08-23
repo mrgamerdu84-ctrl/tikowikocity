@@ -99,7 +99,7 @@ export default function CarWashScene() {
     (window as unknown as { createImageBitmap?: unknown }).createImageBitmap = undefined;
 
     const scene = new THREE.Scene();
-    scene.fog = new THREE.Fog(0xbfe8ff, 40, 95);
+    scene.fog = new THREE.Fog(0xdff2ff, 160, 420);
 
     const camera = new THREE.PerspectiveCamera(
       45,
@@ -597,11 +597,13 @@ export default function CarWashScene() {
         }
       }
 
-      // Légère variation de teinte pour éviter des immeubles tous identiques
-      const tint = new THREE.Color().setHSL(
-        (Math.abs(x * 7 + z * 13) % 100) / 100,
-        0.18,
-        0.62,
+      // Palette pastel variée pour éviter des immeubles tous identiques
+      const PASTELS = [
+        0xffc2d1, 0xffe0b2, 0xd7c3f2, 0xc8e6c9, 0xffe9a8, 0xbfe3f0,
+        0xf6d5c0, 0xe3d5ff, 0xd5f0dc, 0xffd6a5,
+      ];
+      const tint = new THREE.Color(
+        PASTELS[Math.abs(Math.round(x * 7 + z * 13)) % PASTELS.length],
       );
       const tinted = new Map<THREE.Material, THREE.MeshStandardMaterial>();
       g.traverse((n) => {
@@ -612,7 +614,7 @@ export default function CarWashScene() {
         let cloned = tinted.get(mat);
         if (!cloned) {
           cloned = mat.clone();
-          cloned.color.multiply(tint).multiplyScalar(1.5);
+          cloned.color.lerp(tint, 0.75).multiplyScalar(1.15);
           tinted.set(mat, cloned);
         }
         mesh.material = cloned;
@@ -803,11 +805,11 @@ export default function CarWashScene() {
         }
       });
 
-      /* Mobilier urbain identique à CHAQUE carrefour : 4 feux, 2 lampadaires,
-         un banc et une poubelle sur les coins. */
+      /* Mobilier urbain : UN seul poteau de feu par angle de carrefour (4 max),
+         et un peu de mobilier bas sur quelques carrefours seulement. */
       const CORNER = STREET_W / 2 + 1.1;
-      X_STREETS.forEach((cx) => {
-        Z_STREETS.forEach((cz) => {
+      X_STREETS.forEach((cx, xi) => {
+        Z_STREETS.forEach((cz, zi) => {
           const corners: Array<[number, number]> = [
             [cx - CORNER, cz - CORNER],
             [cx + CORNER, cz - CORNER],
@@ -821,22 +823,32 @@ export default function CarWashScene() {
             light.rotation.y = Math.atan2(cx - px, cz - pz);
             setShadow(light);
             scene.add(light);
-
-            let item: THREE.Group | null = null;
-            if (k === 0 || k === 2) item = makeLamp();
-            else if (k === 1) item = makeBench();
-            else item = makeBin();
-            item.position.set(
-              px + (px > cx ? 1.1 : -1.1),
-              0,
-              pz + (pz > cz ? 1.1 : -1.1),
-            );
-            item.rotation.y = Math.atan2(cx - px, cz - pz);
-            setShadow(item);
-            scene.add(item);
           });
+
+          // mobilier bas (pas de poteaux) sur un carrefour sur deux
+          if ((xi + zi) % 2 === 0) {
+            const bench = makeBench();
+            bench.position.set(cx + CORNER + 1.4, 0, cz - CORNER - 1.4);
+            bench.rotation.y = Math.PI / 2;
+            setShadow(bench);
+            scene.add(bench);
+
+            const bin = makeBin();
+            bin.position.set(cx - CORNER - 1.4, 0, cz + CORNER + 1.4);
+            setShadow(bin);
+            scene.add(bin);
+          }
+
+          // un lampadaire discret, un carrefour sur deux (l'autre parité)
+          if ((xi + zi) % 2 === 1) {
+            const lamp = makeLamp();
+            lamp.position.set(cx + CORNER + 1.2, 0, cz + CORNER + 1.2);
+            setShadow(lamp);
+            scene.add(lamp);
+          }
         });
       });
+
 
 
       /* ----- Parcelle dédiée du car wash (périphérie sud) ----- */
