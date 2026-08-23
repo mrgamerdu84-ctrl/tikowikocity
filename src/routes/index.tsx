@@ -1,6 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import CarWashScene from "@/components/CarWashScene";
+import PlayerSetup from "@/components/PlayerSetup";
+import { usePlayer } from "@/lib/player";
+
 
 const TITLE = "TikowikoCarWash — station de lavage 3D interactive";
 const DESCRIPTION =
@@ -21,10 +24,13 @@ export const Route = createFileRoute("/")({
 });
 
 function Index() {
+  const { player, ready } = usePlayer();
+
   return (
     <main className="min-h-screen">
       <h1 className="sr-only">TikowikoCarWash</h1>
-      <CarWashScene />
+      {ready && !player ? <PlayerSetup /> : null}
+      {ready && player ? <CarWashScene /> : null}
     </main>
   );
 }
