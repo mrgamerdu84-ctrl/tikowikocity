@@ -9,14 +9,17 @@ import avatar6 from "@/assets/avatar-6.png";
 
 export type Avatar = { id: string; label: string; src: string };
 
-export const AVATARS: Avatar[] = [
+const AVATAR_LIST = [
   { id: "leo", label: "Léo", src: avatar1 },
   { id: "mila", label: "Mila", src: avatar2 },
   { id: "gaston", label: "Gaston", src: avatar3 },
   { id: "nina", label: "Nina", src: avatar4 },
   { id: "sami", label: "Sami", src: avatar5 },
   { id: "bulbo", label: "Bulbo", src: avatar6 },
-];
+] as const satisfies readonly Avatar[];
+
+export const AVATARS: readonly Avatar[] = AVATAR_LIST;
+const DEFAULT_AVATAR: Avatar = AVATAR_LIST[0];
 
 export type Player = { name: string; avatarId: string };
 
@@ -24,7 +27,7 @@ const KEY = "tikowiko.player.v1";
 const EVENT = "tikowiko:player";
 
 export function avatarSrc(avatarId: string): string {
-  return (AVATARS.find((a) => a.id === avatarId) ?? AVATARS[0]).src;
+  return (AVATARS.find((a) => a.id === avatarId) ?? DEFAULT_AVATAR).src;
 }
 
 export function loadPlayer(): Player | null {
@@ -36,7 +39,7 @@ export function loadPlayer(): Player | null {
     if (typeof parsed?.name !== "string" || !parsed.name.trim()) return null;
     return {
       name: parsed.name.trim().slice(0, 20),
-      avatarId: typeof parsed.avatarId === "string" ? parsed.avatarId : AVATARS[0].id,
+      avatarId: typeof parsed.avatarId === "string" ? parsed.avatarId : DEFAULT_AVATAR.id,
     };
   } catch {
     return null;

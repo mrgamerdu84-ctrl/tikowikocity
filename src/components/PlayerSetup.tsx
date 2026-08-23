@@ -2,9 +2,11 @@ import { useState } from "react";
 
 import { AVATARS, savePlayer } from "@/lib/player";
 
+const DEFAULT_AVATAR_ID = AVATARS[0]?.id ?? "leo";
+
 export default function PlayerSetup({ onDone }: { onDone?: () => void }) {
   const [name, setName] = useState("");
-  const [avatarId, setAvatarId] = useState(AVATARS[0].id);
+  const [avatarId, setAvatarId] = useState(DEFAULT_AVATAR_ID);
   const [error, setError] = useState("");
 
   const start = (e: React.FormEvent) => {
