@@ -6,18 +6,25 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
 import modelsAsset from "@/assets/car-wash-models.json.asset.json";
 
-import blueSuvAsset from "@/assets/blue_suv.glb.asset.json";
-import graySedanAsset from "@/assets/gray_sedan.glb.asset.json";
-import greenSportsAsset from "@/assets/green_sports.glb.asset.json";
-import yellowPickupAsset from "@/assets/yellow_pickup.glb.asset.json";
 import tunnelAsset from "@/assets/tunnel.glb.asset.json";
+import kenneyPackAsset from "@/assets/kenney-pack.glb.asset.json";
 
+/* Modèles issus des kits Kenney (car-kit, city-kit-roads, building-kit),
+   regroupés dans un seul GLB optimisé. */
+const KIT_CARS = [
+  "sedan",
+  "sedan-sports",
+  "suv",
+  "suv-luxury",
+  "taxi",
+  "van",
+  "delivery",
+  "hatchback-sports",
+  "police",
+  "truck",
+  "ambulance",
+] as const;
 
-const MESHY_CARS = [blueSuvAsset, graySedanAsset, greenSportsAsset, yellowPickupAsset];
-
-/* Les voitures Meshy sont normalisées le long de +X ; ce décalage aligne
-   l'avant (capot) sur le sens de marche. */
-const MESHY_YAW = Math.PI / 2;
 
 
 
