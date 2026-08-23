@@ -114,6 +114,7 @@ export class CityPlan {
   /** Une maison ne se pose que sur une case libre bordant une route. */
   canPlaceHouse(cx: number, cz: number) {
     if (this.has(cx, cz) || this.houses.has(key(cx, cz))) return false;
+    if (this.decor.has(key(cx, cz))) return false;
     return this.maskAt(cx, cz) !== 0;
   }
 
