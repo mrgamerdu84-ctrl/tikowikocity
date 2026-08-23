@@ -1007,28 +1007,33 @@ export default function CarWashScene() {
       });
 
 
-      // Parking : 5 places marquées derrière la station
-      const parkZ = WASH_SITE_Z + 8.5;
-      addSlab(concreteMat, 26, 8, -2, parkZ, 0.016);
+      // Parking : places marquées, voitures bien rangées dans les cases
+      const parkZ = WASH_SITE_Z + 8;
+      addSlab(concreteMat, 24, 7.5, -2, parkZ, 0.016);
       const lineMat = new THREE.MeshStandardMaterial({ color: 0xf2f2ec, roughness: 0.8 });
       for (let i = 0; i <= 5; i++) {
         const line = new THREE.Mesh(new THREE.PlaneGeometry(0.16, 6), lineMat);
         line.rotation.x = -Math.PI / 2;
-        line.position.set(-13 + i * 4.4, 0.024, parkZ);
+        line.position.set(-12 + i * 4.4, 0.024, parkZ);
         scene.add(line);
       }
-      // Une voiture garée en attente
-      const parked = models["taxi"]!.clone(true);
-      setShadow(parked);
-      parked.position.set(-10.8, CAR_Y, parkZ);
-      scene.add(parked);
+      // Voitures en attente, alignées au centre de leur place
+      const parkTemplates = [models["taxi"]!, models["sedan"]!, models["taxi"]!];
+      parkTemplates.forEach((tpl, i) => {
+        const parked = tpl.clone(true);
+        setShadow(parked);
+        parked.rotation.y = Math.PI / 2;
+        parked.position.set(-12 + 2.2 + i * 4.4, CAR_Y, parkZ);
+        scene.add(parked);
+      });
 
       // Arbres en bordure de parcelle, pour séparer la station de la ville
-      for (let x = -20; x <= 20; x += 5) {
+      for (let x = -17; x <= 17; x += 5) {
         const tr = makeTree();
-        tr.position.set(x, 0, WASH_SITE_Z + 14);
+        tr.position.set(x, 0, WASH_SITE_Z + 12);
         tr.scale.setScalar(0.9);
         scene.add(tr);
+
       }
 
       // ----- Circulation : deux voies par rue, sens opposés, bien centrées -----
