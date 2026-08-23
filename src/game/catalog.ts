@@ -5,7 +5,7 @@ import type { Dir } from "./grid";
    bit 0 = Nord, 1 = Est, 2 = Sud, 3 = Ouest. */
 export type RoadHint = "straight" | "bend" | "intersection" | "crossroad";
 
-export type BuildTool = RoadHint | "light" | "lamp" | "erase";
+export type BuildTool = RoadHint | "light" | "lamp" | "house" | "erase";
 
 export const BASE_MASK: Record<string, number> = {
   "road-end": 0b0001, // Nord seul
@@ -29,6 +29,7 @@ export const TOOL_LABEL: Record<BuildTool, string> = {
   crossroad: "✚ Carrefour",
   light: "🚦 Feu",
   lamp: "💡 Lampadaire",
+  house: "🏠 Maison",
   erase: "🧹 Gomme",
 };
 

@@ -15,9 +15,15 @@ export type SerializedPlan = Array<
   [number, number, RoadHint, number, boolean, boolean]
 >;
 
+export type SerializedHouses = Array<[number, number, number]>;
+
+export type HouseCell = { level: number };
+
 /** Plan de ville du joueur : uniquement des données, aucun objet Three.js. */
 export class CityPlan {
   cells = new Map<string, PlanCell>();
+  /** maisons du joueur (cases hors route, en bord de rue) */
+  houses = new Map<string, HouseCell>();
 
   get(cx: number, cz: number) {
     return this.cells.get(key(cx, cz));
@@ -87,6 +93,43 @@ export class CityPlan {
     const all = this.exitsAt(cx, cz);
     const usable = all.filter((d) => d !== opposite(dirIn));
     return usable.length ? usable : [opposite(dirIn)];
+  }
+
+  /* ---------- Maisons ---------- */
+  house(cx: number, cz: number) {
+    return this.houses.get(key(cx, cz));
+  }
+
+  /** Une maison ne se pose que sur une case libre bordant une route. */
+  canPlaceHouse(cx: number, cz: number) {
+    if (this.has(cx, cz) || this.houses.has(key(cx, cz))) return false;
+    return this.maskAt(cx, cz) !== 0;
+  }
+
+  placeHouse(cx: number, cz: number, level = 1) {
+    this.houses.set(key(cx, cz), { level });
+  }
+
+  removeHouse(cx: number, cz: number) {
+    return this.houses.delete(key(cx, cz));
+  }
+
+  houseLevels() {
+    return [...this.houses.values()].map((h) => h.level);
+  }
+
+  serializeHouses(): SerializedHouses {
+    const out: SerializedHouses = [];
+    this.houses.forEach((h, k) => {
+      const [cx, cz] = k.split(",").map(Number);
+      out.push([cx!, cz!, h.level]);
+    });
+    return out;
+  }
+
+  loadHouses(data: SerializedHouses) {
+    this.houses.clear();
+    data.forEach(([cx, cz, level]) => this.houses.set(key(cx, cz), { level }));
   }
 
   serialize(): SerializedPlan {
