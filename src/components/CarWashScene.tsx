@@ -452,11 +452,13 @@ export default function CarWashScene() {
       heading: number;
       yaw: number;
       baseY: number;
+      wheels: THREE.Object3D[];
       /* bornes de la chaussée pour cet axe : jamais de sortie sur la pelouse */
       sMin: number;
       sMax: number;
 
     };
+
     const trafficCars: TrafficCar[] = [];
     /* Toute la station de lavage (tunnel, tapis, brosses, voitures à laver)
        vit dans ce groupe : ses coordonnées locales restent inchangées. */
