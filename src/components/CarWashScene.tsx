@@ -1856,13 +1856,10 @@ export default function CarWashScene() {
 
       washSite.add(hall);
 
-      const tunnel = models["tunnel"]!.clone(true);
-      tunnel.rotation.y = Math.PI / 2;
-      tunnel.scale.setScalar(1.5);
-      tunnel.position.set(2, 0, 0);
-      setShadow(tunnel);
-      washSite.add(tunnel);
-      tunnelPlaceholder = tunnel;
+      /* Pas de portique provisoire : seul le tunnel détaillé est ajouté une
+         fois chargé, ce qui évite les résidus de l'ancien modèle. */
+
+
 
 
 
