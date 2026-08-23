@@ -439,15 +439,41 @@ export default function CarWashScene() {
         }
       }
 
+      // Toiture : dalles pleines (pas de trou) + acrotère Kenney en bordure
       const top = floors * FLOOR_H;
       for (let i = 0; i < cols; i++) {
         for (let j = 0; j < rows; j++) {
-          const roof = roofTpl.clone(true);
-          roof.position.set(ox + i * CELL, top, oz + j * CELL);
-          roof.scale.set(CELL / 2.4, 1, CELL / 2.4);
-          g.add(roof);
+          const deck = floorTpl.clone(true);
+          deck.position.set(ox + i * CELL, top, oz + j * CELL);
+          g.add(deck);
+          if (i === 0 || i === cols - 1 || j === 0 || j === rows - 1) {
+            const roof = roofTpl.clone(true);
+            roof.position.set(ox + i * CELL, top + 0.1, oz + j * CELL);
+            roof.scale.set(CELL / 2.4, 0.5, CELL / 2.4);
+            g.add(roof);
+          }
         }
       }
+
+      // Légère variation de teinte pour éviter des immeubles tous identiques
+      const tint = new THREE.Color().setHSL(
+        (Math.abs(x * 7 + z * 13) % 100) / 100,
+        0.18,
+        0.62,
+      );
+      const seen = new Set<THREE.Material>();
+      g.traverse((n) => {
+        const mesh = n as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        const mat = mesh.material as THREE.MeshStandardMaterial;
+        if (mat.transparent || mat.name === "glass") return;
+        if (seen.has(mat)) return;
+        const cloned = mat.clone();
+        cloned.color.multiply(tint).multiplyScalar(1.5);
+        mesh.material = cloned;
+        seen.add(mat);
+      });
+
 
       g.position.set(x, 0, z);
       g.rotation.y = rotY;
