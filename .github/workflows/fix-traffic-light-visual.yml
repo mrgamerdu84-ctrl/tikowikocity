@@ -1,0 +1,62 @@
+name: Corriger visuel feux tricolores
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/fix-traffic-light-visual.yml]
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Redresser et repositionner les feux
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('src/components/CarWashScene.tsx')
+          s = p.read_text(encoding='utf-8')
+          old = '''      if (model) {
+        const inst = model.clone(true);
+        inst.scale.setScalar(6);
+        g.add(inst);
+      }'''
+          new = '''      if (model) {
+        const inst = model.clone(true);
+        /* Le modèle Kenney doit rester parfaitement vertical quelle que soit
+           l'orientation enregistrée dans le GLB. */
+        inst.rotation.x = 0;
+        inst.rotation.z = 0;
+        inst.position.y = 0;
+        inst.scale.setScalar(5.2);
+        g.add(inst);
+      }'''
+          if old not in s:
+            raise SystemExit('bloc modèle feu introuvable')
+          s = s.replace(old, new, 1)
+          old2 = '''            const l = makeTrafficLight(axis);
+            l.position.set(cx * TILE + ox, 0, cz * TILE + oz);
+            l.rotation.y = Math.atan2(-ox, -oz);'''
+          new2 = '''            const l = makeTrafficLight(axis);
+            l.position.set(cx * TILE + ox, 0, cz * TILE + oz);
+            l.rotation.x = 0;
+            l.rotation.z = 0;
+            l.rotation.y = Math.atan2(-ox, -oz);'''
+          if old2 not in s:
+            raise SystemExit('bloc placement feu introuvable')
+          s = s.replace(old2, new2, 1)
+          p.write_text(s, encoding='utf-8')
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bunx tsc --noEmit
+      - name: Enregistrer
+        run: |
+          rm -f .github/workflows/fix-traffic-light-visual.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/CarWashScene.tsx .github/workflows/fix-traffic-light-visual.yml
+          git commit -m "Redresse et replace les feux tricolores"
+          git pull --rebase origin main
+          git push origin HEAD:main
