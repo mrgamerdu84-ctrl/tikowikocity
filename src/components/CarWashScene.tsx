@@ -393,7 +393,12 @@ export default function CarWashScene() {
           pivot.add(spin);
           pivot.position.set(WASH_ZONE[0] + 1.2 + offset, ROAD_Y + 1.05, zSide * 1.5);
           scene.add(pivot);
-          brushes.push({ pivot, spin, dir: (si + oi) % 2 === 0 ? 1 : -1 });
+          brushes.push({
+            pivot,
+            spin,
+            dir: (si + oi) % 2 === 0 ? 1 : -1,
+            kind: "roller",
+          });
         });
       });
 
