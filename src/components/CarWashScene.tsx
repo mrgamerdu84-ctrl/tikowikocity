@@ -1533,7 +1533,7 @@ export default function CarWashScene() {
         e.d += moved;
 
         e.wheels.forEach((w) => {
-          w.rotation.x -= (moved / 0.35) * 2;
+          w.rotation.x -= ((w.userData.spinSign as number) ?? 1) * (moved / 0.35) * 2;
         });
 
         let dirtiness: number;
