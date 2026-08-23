@@ -2044,6 +2044,16 @@ export default function CarWashScene() {
           </span>
         </div>
 
+        {/* Boutique d'améliorations */}
+        <button
+          type="button"
+          onClick={() => setShopOpen((v) => !v)}
+          aria-expanded={shopOpen}
+          className="mt-2 w-full rounded-full bg-sunny px-3 py-2 text-[12.5px] font-bold text-sunny-foreground shadow-[0_3px_0_var(--sunny-shadow)] transition-transform active:translate-y-0.5"
+        >
+          🛠️ Améliorations
+        </button>
+
         <p className="mt-1 hidden text-[12.5px] leading-relaxed opacity-80 sm:block">
           Construit avec les kits Kenney (voitures, routes, bâtiments). Glisse pour tourner la
           caméra, molette pour zoomer.
@@ -2058,16 +2068,6 @@ export default function CarWashScene() {
         <p className="mt-1 font-semibold opacity-90">© {new Date().getFullYear()} tikowikoFamily</p>
 
       </div>
-
-      {/* Boutique d'améliorations */}
-      <button
-        type="button"
-        onClick={() => setShopOpen((v) => !v)}
-        aria-expanded={shopOpen}
-        className="fixed left-2 top-[178px] z-40 rounded-full bg-sunny px-3 py-2 text-[12.5px] font-bold text-sunny-foreground shadow-[0_3px_0_var(--sunny-shadow)] transition-transform active:translate-y-0.5 sm:left-4 sm:top-[214px]"
-      >
-        🛠️ Améliorations
-      </button>
 
       {shopOpen && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 p-3 backdrop-blur-sm sm:items-center">
