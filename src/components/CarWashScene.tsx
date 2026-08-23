@@ -1465,6 +1465,12 @@ export default function CarWashScene() {
         const moved = Math.max(target - e.d, 0);
         e.d += moved;
 
+        /* Lavage terminé : la voiture sort du tunnel et paye la prestation. */
+        if (!e.paid && e.d >= WASH_D1) {
+          e.paid = true;
+          registerWashRef.current(6 + Math.floor(Math.random() * 7));
+        }
+
         e.wheels.forEach((w) => {
           w.rotation.x -= ((w.userData['spinSign'] as number) ?? 1) * (moved / 0.35) * 2;
         });
