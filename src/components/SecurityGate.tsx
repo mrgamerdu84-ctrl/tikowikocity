@@ -54,8 +54,6 @@ export default function SecurityGate({ children }: { children: ReactNode }) {
 
     setChecking(true);
     try {
-      // Lovable preview always knows the existing root route. POST on / is
-      // reserved here for the security check, while normal page loads use GET.
       const response = await fetch("/", {
         method: "POST",
         headers: {
@@ -67,7 +65,7 @@ export default function SecurityGate({ children }: { children: ReactNode }) {
 
       const contentType = response.headers.get("content-type") ?? "";
       if (!contentType.includes("application/json")) {
-        setError("La vérification de sécurité n'est pas encore disponible dans cet aperçu.");
+        setError("Diagnostic : lovable-non-json");
         return;
       }
 
@@ -75,6 +73,7 @@ export default function SecurityGate({ children }: { children: ReactNode }) {
         valid?: boolean;
         retryLater?: boolean;
         unavailable?: boolean;
+        reason?: string;
       };
 
       if (data.valid) {
@@ -89,7 +88,7 @@ export default function SecurityGate({ children }: { children: ReactNode }) {
       }
 
       if (data.unavailable || response.status >= 500) {
-        setError("Le service de sécurité ne répond pas pour le moment.");
+        setError(`Diagnostic : ${data.reason ?? "service-inconnu"}`);
         return;
       }
 
@@ -107,7 +106,7 @@ export default function SecurityGate({ children }: { children: ReactNode }) {
         setError("Code incorrect.");
       }
     } catch {
-      setError("La vérification de sécurité ne répond pas dans cet aperçu.");
+      setError("Diagnostic : lovable-fetch-error");
     } finally {
       setChecking(false);
     }
