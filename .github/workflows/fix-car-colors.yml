@@ -1,0 +1,119 @@
+name: Corriger couleurs voitures Kenney
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/fix-car-colors.yml]
+permissions:
+  contents: write
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Préserver les couleurs originales des voitures
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('src/components/CarWashScene.tsx')
+          s = p.read_text(encoding='utf-8')
+          old = '''    const isolateMaterials = (car: THREE.Object3D) => {
+      const materials: THREE.MeshStandardMaterial[] = [];
+      car.traverse((n) => {
+        const mesh = n as THREE.Mesh;
+        if (mesh.isMesh) {
+          const cloned = (mesh.material as THREE.MeshStandardMaterial).clone();
+          mesh.material = cloned;
+          materials.push(cloned);
+        }
+      });
+      return materials;
+    };
+
+    const tintCar = (car: THREE.Object3D, dirtiness: number) => {
+      const data = car.userData as { materials?: THREE.MeshStandardMaterial[] };
+      const materials = data.materials ?? isolateMaterials(car);
+      data.materials = materials;
+      const clean = 1 - dirtiness;
+      materials.forEach((m) => {
+        m.color.setHex(0xffffff).lerp(DIRT_COLOR, dirtiness);
+        /* Carrosserie fraîchement lavée : vernis brillant + léger éclat. */
+        m.roughness = 0.85 - clean * 0.7;
+        m.metalness = 0.05 + clean * 0.55;
+        m.emissive.setHex(0xffffff);
+        m.emissiveIntensity = clean * 0.12;
+      });
+    };
+'''
+          new = '''    type CarMaterialState = {
+      material: THREE.MeshStandardMaterial;
+      baseColor: THREE.Color;
+      baseRoughness: number;
+      baseMetalness: number;
+      baseEmissive: THREE.Color;
+      baseEmissiveIntensity: number;
+    };
+
+    /* Chaque voiture garde maintenant sa palette Kenney d'origine. La saleté
+       n'est qu'une légère teinte temporaire et le lavage restaure exactement
+       les couleurs, vitres, roues et détails du modèle. */
+    const isolateMaterials = (car: THREE.Object3D) => {
+      const materials: CarMaterialState[] = [];
+      car.traverse((n) => {
+        const mesh = n as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        const source = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        const cloned = source.map((raw) => {
+          const m = (raw as THREE.MeshStandardMaterial).clone();
+          materials.push({
+            material: m,
+            baseColor: m.color.clone(),
+            baseRoughness: m.roughness,
+            baseMetalness: m.metalness,
+            baseEmissive: m.emissive.clone(),
+            baseEmissiveIntensity: m.emissiveIntensity,
+          });
+          return m;
+        });
+        mesh.material = Array.isArray(mesh.material) ? cloned : cloned[0]!;
+      });
+      return materials;
+    };
+
+    const tintCar = (car: THREE.Object3D, dirtiness: number) => {
+      const data = car.userData as { materials?: CarMaterialState[] };
+      const materials = data.materials ?? isolateMaterials(car);
+      data.materials = materials;
+      const dirt = THREE.MathUtils.clamp(dirtiness, 0, 1);
+      const clean = 1 - dirt;
+      materials.forEach((state) => {
+        const m = state.material;
+        /* On ne détruit plus la couleur Kenney : 0 = couleur exacte,
+           1 = seulement 28 % de teinte poussière. */
+        m.color.copy(state.baseColor).lerp(DIRT_COLOR, dirt * 0.28);
+        m.roughness = THREE.MathUtils.clamp(
+          state.baseRoughness + dirt * 0.16 - clean * 0.04,
+          0.08,
+          1,
+        );
+        m.metalness = state.baseMetalness;
+        m.emissive.copy(state.baseEmissive);
+        m.emissiveIntensity = state.baseEmissiveIntensity;
+      });
+    };
+'''
+          if old not in s:
+            raise SystemExit('Bloc tintCar attendu introuvable')
+          s = s.replace(old, new, 1)
+          p.write_text(s, encoding='utf-8')
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile && bunx tsc --noEmit
+      - name: Enregistrer
+        run: |
+          rm -f .github/workflows/fix-car-colors.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/CarWashScene.tsx .github/workflows/fix-car-colors.yml
+          git commit -m "Corrigé couleurs des voitures Kenney"
+          git push origin HEAD:main
