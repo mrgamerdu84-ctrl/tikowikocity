@@ -1573,13 +1573,23 @@ export default function CarWashScene() {
     let roadDragLast: { cx: number; cz: number } | null = null;
     const isRoadTool = (t: BuildTool): t is RoadHint =>
       t === "straight" || t === "bend" || t === "intersection" || t === "crossroad";
+    /** outils qui se manipulent en glissant sur la grille */
+    const isDragTool = (t: BuildTool) => isRoadTool(t) || t === "bulldoze";
+
+    /** Applique l'outil courant sur une case (pose ou démolition). */
+    const applyAt = (cx: number, cz: number) => {
+      if (toolRef.current === "bulldoze") {
+        return plan.removeForce(cx, cz);
+      }
+      if (!canBuild(cx, cz)) return false;
+      plan.place(cx, cz, "straight", rotRef.current);
+      return true;
+    };
+
     const traceRoadTo = (target: { cx: number; cz: number }) => {
       let changed = false;
       if (!roadDragLast) {
-        if (canBuild(target.cx, target.cz)) {
-          plan.place(target.cx, target.cz, "straight", rotRef.current);
-          changed = true;
-        }
+        changed = applyAt(target.cx, target.cz);
         roadDragLast = { ...target };
         if (changed) renderPlan();
         return;
@@ -1595,16 +1605,13 @@ export default function CarWashScene() {
         if (Math.abs(dx) >= Math.abs(dz) && dx !== 0) cx += Math.sign(dx);
         else if (dz !== 0) cz += Math.sign(dz);
 
-        if (!canBuild(cx, cz)) {
-          roadDragLast = { cx, cz };
-          break;
-        }
-        plan.place(cx, cz, "straight", 0);
-        changed = true;
         roadDragLast = { cx, cz };
+        if (toolRef.current !== "bulldoze" && !canBuild(cx, cz)) break;
+        if (applyAt(cx, cz)) changed = true;
       }
       if (changed) renderPlan();
     };
+
     const onPointerMove = (ev: PointerEvent) => {
       if (!buildRef.current) {
         ghost.visible = false;
