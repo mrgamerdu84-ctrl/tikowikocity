@@ -365,13 +365,27 @@ export default function CarWashScene() {
       });
     };
 
+    /* Récupère les roues et mémorise, pour chacune, le sens de rotation
+       correct : certains modèles (4x4/SUV) ont des roues dont l'axe local
+       est inversé, ce qui les faisait tourner à l'envers. */
     const findWheels = (car: THREE.Object3D) => {
       const wheels: THREE.Object3D[] = [];
+      car.updateWorldMatrix(true, true);
+      const carRight = new THREE.Vector3(1, 0, 0).transformDirection(
+        car.matrixWorld,
+      );
       car.traverse((n) => {
-        if (n.name && n.name.toLowerCase().includes("wheel")) wheels.push(n);
+        if (n.name && n.name.toLowerCase().includes("wheel")) {
+          const axis = new THREE.Vector3(1, 0, 0).transformDirection(
+            n.matrixWorld,
+          );
+          n.userData['spinSign'] = axis.dot(carRight) < 0 ? -1 : 1;
+          wheels.push(n);
+        }
       });
       return wheels;
     };
+
 
     /* Rouleau de lavage : axe central + manchon de mousse sombre nervuré.
        On évite les milliers de micro-poils colorés qui produisaient un
@@ -1418,15 +1432,34 @@ export default function CarWashScene() {
         scene.add(parked);
       });
 
-      // Arbres en bordure de parcelle, pour séparer la station de la ville
-      for (let x = -17; x <= 17; x += 5) {
+      /* Arbres de la parcelle : uniquement sur la pelouse, jamais sur la
+         chaussée (voie de lavage, rue de desserte, raccords, accès ville). */
+      const onSiteRoad = (x: number, z: number) => {
+        const halfW = STREET_W / 2 + 1.2;
+        if (Math.abs(z - WASH_SITE_Z) <= halfW) return true; // voie de lavage
+        if (Math.abs(z - SITE_ROAD_Z) <= halfW) return true; // rue de desserte
+        const inLink = z >= WASH_SITE_Z - halfW && z <= SITE_ROAD_Z + halfW;
+        if (inLink && (Math.abs(x - WASH_IN_X) <= halfW || Math.abs(x - WASH_OUT_X) <= halfW))
+          return true;
+        if (z >= WASH_SITE_Z && Math.abs(x - WASH_ACCESS_X) <= halfW) return true;
+        return false;
+      };
+      const plantSiteTree = (x: number, z: number) => {
+        if (onSiteRoad(x, z)) return;
         const tr = makeTree();
-        tr.position.set(x, 0, WASH_SITE_Z + 12);
+        tr.position.set(x, 0, z);
         tr.scale.setScalar(0.9);
         setShadow(tr);
         scene.add(tr);
-
+      };
+      // bande enherbée au nord de la voie de lavage
+      for (let x = -17; x <= 17; x += 4.5) plantSiteTree(x, WASH_SITE_Z - 6.8);
+      // bordures est / ouest de la parcelle
+      for (let z = WASH_SITE_Z - 7; z <= SITE_ROAD_Z + 4; z += 4.5) {
+        plantSiteTree(-18.5, z);
+        plantSiteTree(18.5, z);
       }
+
 
       // ----- Circulation : deux voies par rue, sens opposés, bien centrées -----
       let ti = 0;
@@ -1519,7 +1552,7 @@ export default function CarWashScene() {
         e.d += moved;
 
         e.wheels.forEach((w) => {
-          w.rotation.x -= (moved / 0.35) * 2;
+          w.rotation.x -= ((w.userData['spinSign'] as number) ?? 1) * (moved / 0.35) * 2;
         });
 
         let dirtiness: number;
@@ -1655,7 +1688,7 @@ export default function CarWashScene() {
         if (e.s < e.sMin) e.s = e.sMax;
         // roues qui tournent proportionnellement à la distance parcourue
         e.wheels.forEach((w) => {
-          w.rotation.x -= (step / 0.35) * 2;
+          w.rotation.x -= ((w.userData['spinSign'] as number) ?? 1) * (step / 0.35) * 2;
         });
       });
 
