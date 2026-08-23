@@ -260,16 +260,47 @@ export default function CarWashScene() {
   const toolRef = useRef<BuildTool>("straight");
   const rotRef = useRef(0);
   const buildApplyRef = useRef<(on: boolean) => void>(() => {});
+  /* Décor sélectionné dans chaque catégorie + personnalisation du car wash */
+  const [decorKind, setDecorKind] = useState<Record<DecorCategory, DecorKind>>({
+    park: "park",
+    parking: "parking",
+  });
+  const decorKindRef = useRef<DecorKind>("park");
+  const [washStyle, setWashStyle] = useState<WashStyle>(DEFAULT_WASH_STYLE);
+  const washStyleRef = useRef<WashStyle>(DEFAULT_WASH_STYLE);
+  const washApplyRef = useRef<(s: WashStyle) => void>(() => {});
   const planIoRef = useRef<{
     save: () => SerializedPlan;
     load: (data: SerializedPlan) => void;
     saveHouses: () => SerializedHouses;
     loadHouses: (data: SerializedHouses) => void;
-  }>({ save: () => [], load: () => {}, saveHouses: () => [], loadHouses: () => {} });
+    saveDecor: () => SerializedDecor;
+    loadDecor: (data: SerializedDecor) => void;
+  }>({
+    save: () => [],
+    load: () => {},
+    saveHouses: () => [],
+    loadHouses: () => {},
+    saveDecor: () => [],
+    loadDecor: () => {},
+  });
+
+  const chooseDecor = (kind: DecorKind) => {
+    const def = decorDef(kind);
+    decorKindRef.current = kind;
+    setDecorKind((prev) => ({ ...prev, [def.category]: kind }));
+  };
+  const applyWashStyle = (patch: Partial<WashStyle>) => {
+    const next = { ...washStyleRef.current, ...patch };
+    washStyleRef.current = next;
+    setWashStyle(next);
+    washApplyRef.current(next);
+  };
 
   const chooseTool = (t: BuildTool) => {
     toolRef.current = t;
     setTool(t);
+    if (t === "park" || t === "parking") decorKindRef.current = decorKind[t];
   };
   const toggleBuild = () => {
     setBuildMode((prev) => {
