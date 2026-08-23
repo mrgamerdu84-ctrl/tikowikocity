@@ -451,7 +451,7 @@ export default function CarWashScene() {
       const rockMat = new THREE.MeshStandardMaterial({ color: 0x8b8f96, roughness: 1, flatShading: true });
       const rockDark = new THREE.MeshStandardMaterial({ color: 0x6f747c, roughness: 1, flatShading: true });
       const snowMat = new THREE.MeshStandardMaterial({ color: 0xf3f8ff, roughness: 0.9, flatShading: true });
-      const hillMat = new THREE.MeshStandardMaterial({ color: 0xff0000, roughness: 1, flatShading: true });
+      const hillMat = new THREE.MeshStandardMaterial({ color: 0x6bb85c, roughness: 1, flatShading: true });
       const hillMat2 = new THREE.MeshStandardMaterial({ color: 0x58a552, roughness: 1, flatShading: true });
 
       // Chaîne de montagnes lointaine, sur tout l'horizon (bien au-delà de la ville)
