@@ -772,6 +772,38 @@ export default function CarWashScene() {
 
       </div>
 
+      <div className="fixed right-4 top-4 w-[190px] rounded-2xl bg-white/80 p-3 shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur">
+        <p className="mb-2 text-[12px] font-bold uppercase tracking-wide text-ink opacity-80">
+          Panneau de contrôle
+        </p>
+        <div className="flex flex-col gap-1.5">
+          {(
+            [
+              ["belt", "🛤️ Tapis"],
+              ["rollers", "🌀 Rouleaux"],
+              ["brushes", "🧽 Brosses"],
+              ["traffic", "🚦 Trafic"],
+            ] as Array<[keyof typeof machines, string]>
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => toggleMachine(key)}
+              aria-pressed={machines[key]}
+              className={`flex items-center justify-between rounded-xl px-3 py-2 text-[12.5px] font-semibold transition-colors ${
+                machines[key]
+                  ? "bg-splash text-splash-foreground"
+                  : "bg-ink/10 text-ink opacity-70"
+              }`}
+            >
+              <span>{label}</span>
+              <span className="text-[11px]">{machines[key] ? "ON" : "OFF"}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+
       <div className="fixed bottom-4 right-4 flex items-center gap-2 rounded-2xl bg-white/80 p-2.5 shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur">
         <button
           type="button"
