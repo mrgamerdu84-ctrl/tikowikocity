@@ -1,0 +1,50 @@
+name: Brancher locations TikowikoCity
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/attach-rentals.yml]
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Brancher le gestionnaire de locations
+        shell: python
+        run: |
+          from pathlib import Path
+          p=Path('src/components/CarWashScene.tsx')
+          s=p.read_text(encoding='utf-8')
+          anchor='import { avatarSrc, usePlayer } from "@/lib/player";\n'
+          if 'RentalManager' not in s:
+            s=s.replace(anchor, anchor+'import { RentalManager } from "@/components/RentalManager";\n',1)
+
+          anchor2='''  spendRef.current = (amount: number, kind?: EventKind, label?: string) => {\n    if (economyRef.current.money < amount) {\n      toast.error(`Il manque ${(amount - economyRef.current.money).toLocaleString("fr-FR")} €`);\n      return false;\n    }\n    const next = { ...economyRef.current, money: economyRef.current.money - amount };\n    economyRef.current = next;\n    setEconomy(next);\n    if (label) logRef.current(makeEvent(kind ?? "build", label, -amount, next.money));\n    return true;\n  };'''
+          extra='''\n\n  /** Revenus des logements : le locataire paie le loyer, puis les impôts sont déduits. */\n  const receiveRentalIncome = (gross: number, tax: number, label: string) => {\n    const net = gross - tax;\n    setEconomy((prev) => {\n      const next = { ...prev, money: prev.money + net };\n      economyRef.current = next;\n      logRef.current(makeEvent("house", `Loyer · ${label}`, gross, prev.money + gross));\n      logRef.current(makeEvent("house", `Impôts · ${label}`, -tax, next.money));\n      return next;\n    });\n    setGain({ id: Date.now() + Math.random(), amount: net });\n  };\n\n  const spendRentalNeed = (amount: number, label: string) =>\n    spendRef.current(amount, "house", `Besoin locataire · ${label}`);'''
+          if 'receiveRentalIncome' not in s:
+            if anchor2 not in s: raise SystemExit('bloc spendRef introuvable')
+            s=s.replace(anchor2,anchor2+extra,1)
+
+          ret='''  return (\n    <>\n      <div ref={wrapRef} className="fixed inset-0" />'''
+          repl='''  return (\n    <>\n      <div ref={wrapRef} className="fixed inset-0" />\n      <RentalManager\n        houses={planIoRef.current.saveHouses()}\n        balance={economy.money}\n        onIncome={receiveRentalIncome}\n        onSpend={spendRentalNeed}\n      />'''
+          if '<RentalManager' not in s:
+            if ret not in s: raise SystemExit('retour JSX introuvable')
+            s=s.replace(ret,repl,1)
+
+          s=s.replace('sm:max-w-[300px] sm:px-4 sm:py-3','sm:max-w-[260px] sm:px-3 sm:py-2',1)
+          s=s.replace('sm:text-[22px]','sm:text-[19px]',1)
+          p.write_text(s,encoding='utf-8')
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bunx tsc --noEmit
+      - name: Enregistrer
+        run: |
+          rm -f .github/workflows/attach-rentals.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/CarWashScene.tsx .github/workflows/attach-rentals.yml
+          git commit -m "Branche les locataires loyers impots et besoins"
+          git push origin HEAD:main
