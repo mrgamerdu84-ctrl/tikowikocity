@@ -99,7 +99,7 @@ export default function CarWashScene() {
     (window as unknown as { createImageBitmap?: unknown }).createImageBitmap = undefined;
 
     const scene = new THREE.Scene();
-    scene.fog = new THREE.Fog(0xbfe8ff, 40, 95);
+    scene.fog = new THREE.Fog(0xdff2ff, 160, 420);
 
     const camera = new THREE.PerspectiveCamera(
       45,
@@ -597,11 +597,13 @@ export default function CarWashScene() {
         }
       }
 
-      // Légère variation de teinte pour éviter des immeubles tous identiques
-      const tint = new THREE.Color().setHSL(
-        (Math.abs(x * 7 + z * 13) % 100) / 100,
-        0.18,
-        0.62,
+      // Palette pastel variée pour éviter des immeubles tous identiques
+      const PASTELS = [
+        0xffc2d1, 0xffe0b2, 0xd7c3f2, 0xc8e6c9, 0xffe9a8, 0xbfe3f0,
+        0xf6d5c0, 0xe3d5ff, 0xd5f0dc, 0xffd6a5,
+      ];
+      const tint = new THREE.Color(
+        PASTELS[Math.abs(Math.round(x * 7 + z * 13)) % PASTELS.length],
       );
       const tinted = new Map<THREE.Material, THREE.MeshStandardMaterial>();
       g.traverse((n) => {
