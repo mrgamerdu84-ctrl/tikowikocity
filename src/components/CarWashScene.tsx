@@ -2860,35 +2860,39 @@ export default function CarWashScene() {
           🏗️ {buildMode ? "Quitter la construction" : "Construire"}
         </button>
         {buildMode && (
-          <div className="flex max-h-[min(48vh,360px)] w-full flex-wrap items-center justify-center gap-1.5 overflow-y-auto overscroll-contain rounded-2xl bg-white/90 p-2 shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur">
+          <div className="flex max-h-[min(56vh,420px)] w-full flex-col gap-2 overflow-y-auto overscroll-contain rounded-2xl bg-white/90 p-2 shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur">
             {(
               [
-                "straight",
-                "bend",
-                "intersection",
-                "crossroad",
-                "light",
-                "lamp",
-                "house",
-                "bulldoze",
-                "erase",
-
-              ] as BuildTool[]
-            ).map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => chooseTool(t)}
-                aria-pressed={tool === t}
-                className={`rounded-xl px-2.5 py-1.5 text-[11.5px] font-semibold transition-colors ${
-                  tool === t ? "bg-splash text-splash-foreground" : "bg-ink/10 text-ink"
-                }`}
-              >
-                {TOOL_LABEL[t]}
-              </button>
+                ["Routes", ["straight", "bend", "intersection", "crossroad"]],
+                ["Mobilier", ["light", "lamp"]],
+                ["Bâtiments", ["house"]],
+                ["Espaces", ["park", "parking"]],
+                ["Station", ["wash"]],
+                ["Outils", ["bulldoze", "erase"]],
+              ] as Array<[string, BuildTool[]]>
+            ).map(([group, tools]) => (
+              <div key={group} className="flex w-full flex-wrap items-center gap-1.5">
+                <span className="w-full text-[10px] font-bold uppercase tracking-wide text-ink/50">
+                  {group}
+                </span>
+                {tools.map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => chooseTool(t)}
+                    aria-pressed={tool === t}
+                    className={`rounded-xl px-2.5 py-1.5 text-[11.5px] font-semibold transition-colors ${
+                      tool === t ? "bg-splash text-splash-foreground" : "bg-ink/10 text-ink"
+                    }`}
+                  >
+                    {TOOL_LABEL[t]}
+                  </button>
+                ))}
+              </div>
             ))}
+
             {tool === "house" && (
-              <div className="flex w-full items-center justify-center gap-1.5 border-t border-ink/10 pt-1.5">
+              <div className="flex w-full flex-wrap items-center justify-center gap-1.5 border-t border-ink/10 pt-1.5">
                 {HOUSE_LEVELS.map((h) => (
                   <button
                     key={h.level}
@@ -2909,6 +2913,77 @@ export default function CarWashScene() {
                 </span>
               </div>
             )}
+
+            {(tool === "park" || tool === "parking") && (
+              <div className="flex w-full flex-wrap items-center justify-center gap-1.5 border-t border-ink/10 pt-1.5">
+                {decorOf(tool as DecorCategory).map((d) => (
+                  <button
+                    key={d.kind}
+                    type="button"
+                    onClick={() => chooseDecor(d.kind)}
+                    aria-pressed={decorKind[tool as DecorCategory] === d.kind}
+                    className={`rounded-xl px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${
+                      decorKind[tool as DecorCategory] === d.kind
+                        ? "bg-sunny text-sunny-foreground"
+                        : "bg-ink/10 text-ink"
+                    }`}
+                  >
+                    {d.icon} {d.label} · {d.cost} €
+                  </button>
+                ))}
+                <span className="w-full text-center text-[10.5px] opacity-70">
+                  Pose sur une case libre · reclique pour pivoter · 🧹 Gomme pour retirer
+                </span>
+              </div>
+            )}
+
+            {tool === "wash" && (
+              <div className="flex w-full flex-col items-center gap-1.5 border-t border-ink/10 pt-1.5">
+                <span className="w-full text-[10.5px] font-semibold opacity-70">
+                  Couleur de la station
+                </span>
+                <div className="flex w-full flex-wrap items-center gap-1.5">
+                  {WASH_COLORS.map((c, i) => (
+                    <button
+                      key={c.label}
+                      type="button"
+                      onClick={() => applyWashStyle({ color: i })}
+                      aria-pressed={washStyle.color === i}
+                      aria-label={c.label}
+                      className={`h-7 w-7 rounded-full border-2 transition-transform ${
+                        washStyle.color === i
+                          ? "scale-110 border-ink"
+                          : "border-white/70"
+                      }`}
+                      style={{ backgroundColor: `#${c.hex.toString(16).padStart(6, "0")}` }}
+                    />
+                  ))}
+                </div>
+                <div className="flex w-full flex-wrap items-center gap-1.5">
+                  {(
+                    [
+                      ["sign", "🪧 Enseigne"],
+                      ["neon", "✨ Néon"],
+                      ["plants", "🪴 Plantes"],
+                      ["flags", "🎏 Fanions"],
+                    ] as Array<[keyof WashStyle, string]>
+                  ).map(([k, label]) => (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => applyWashStyle({ [k]: !washStyle[k] } as Partial<WashStyle>)}
+                      aria-pressed={!!washStyle[k]}
+                      className={`rounded-xl px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${
+                        washStyle[k] ? "bg-splash text-splash-foreground" : "bg-ink/10 text-ink"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <button
               type="button"
               onClick={() => {
@@ -2916,7 +2991,7 @@ export default function CarWashScene() {
                 rotRef.current = next;
                 setRot(next);
               }}
-              className="rounded-xl bg-sunny px-2.5 py-1.5 text-[11.5px] font-bold text-sunny-foreground"
+              className="self-center rounded-xl bg-sunny px-2.5 py-1.5 text-[11.5px] font-bold text-sunny-foreground"
             >
               🔄 {rot * 90}°
             </button>
