@@ -1290,6 +1290,126 @@ export default function CarWashScene() {
       });
     };
 
+    /* ---------- Personnalisation du car wash ---------- */
+    const washDecor = new THREE.Group();
+    washDecor.position.z = WASH_SITE_Z;
+    scene.add(washDecor);
+
+    const signTexture = (label: string, hex: number) => {
+      const cv = document.createElement("canvas");
+      cv.width = 512;
+      cv.height = 160;
+      const ctx = cv.getContext("2d")!;
+      ctx.fillStyle = `#${hex.toString(16).padStart(6, "0")}`;
+      ctx.fillRect(0, 0, cv.width, cv.height);
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 76px system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(label.slice(0, 16).toUpperCase(), cv.width / 2, cv.height / 2 + 4);
+      const tex = new THREE.CanvasTexture(cv);
+      tex.anisotropy = 4;
+      return tex;
+    };
+
+    const rebuildWashDecor = (style: WashStyle) => {
+      [...washDecor.children].forEach((c) => washDecor.remove(c));
+      const hex = WASH_COLORS[style.color]?.hex ?? WASH_COLORS[0]!.hex;
+      const themeMat = new THREE.MeshStandardMaterial({ color: hex, roughness: 0.65 });
+
+      // auvent coloré au-dessus de l'entrée : la couleur du car wash
+      const canopy = new THREE.Mesh(new THREE.BoxGeometry(9, 0.4, 4), themeMat);
+      canopy.position.set(0, 4.6, -3.4);
+      washDecor.add(canopy);
+      for (const sx of [-4, 4]) {
+        const post = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.18, 0.18, 4.6, 10),
+          themeMat,
+        );
+        post.position.set(sx, 2.3, -3.4);
+        washDecor.add(post);
+      }
+
+      if (style.sign) {
+        const panel = new THREE.Mesh(
+          new THREE.PlaneGeometry(9, 2.6),
+          new THREE.MeshBasicMaterial({
+            map: signTexture(`${player.name} WASH`, hex),
+            side: THREE.DoubleSide,
+          }),
+        );
+        panel.position.set(0, 6.4, -3.4);
+        washDecor.add(panel);
+        for (const sx of [-4, 4]) {
+          const mast = new THREE.Mesh(
+            new THREE.BoxGeometry(0.2, 1.6, 0.2),
+            themeMat,
+          );
+          mast.position.set(sx, 5.3, -3.4);
+          washDecor.add(mast);
+        }
+      }
+
+      if (style.neon) {
+        const glow = new THREE.Mesh(
+          new THREE.TorusGeometry(2.4, 0.14, 8, 28),
+          new THREE.MeshStandardMaterial({
+            color: hex,
+            emissive: hex,
+            emissiveIntensity: 1.6,
+            roughness: 0.3,
+          }),
+        );
+        glow.position.set(0, 3.2, 3.6);
+        washDecor.add(glow);
+        const lamp = new THREE.PointLight(hex, 18, 22);
+        lamp.position.set(0, 3.4, 3.6);
+        washDecor.add(lamp);
+      }
+
+      if (style.plants) {
+        const potMat = new THREE.MeshStandardMaterial({ color: 0xc96a4e, roughness: 0.9 });
+        for (const [px, pz] of [
+          [-9, -5],
+          [9, -5],
+          [-9, 4],
+          [9, 4],
+        ] as const) {
+          const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.55, 0.9, 12), potMat);
+          pot.position.set(px, 0.45, pz);
+          const bush = new THREE.Mesh(
+            new THREE.IcosahedronGeometry(0.85, 0),
+            new THREE.MeshStandardMaterial({ color: 0x3f9142, roughness: 1 }),
+          );
+          bush.position.set(px, 1.5, pz);
+          washDecor.add(pot, bush);
+        }
+      }
+
+      if (style.flags) {
+        const flagMat = new THREE.MeshStandardMaterial({
+          color: hex,
+          roughness: 0.8,
+          side: THREE.DoubleSide,
+        });
+        for (let i = 0; i < 10; i++) {
+          const x = -13.5 + i * 3;
+          const pole = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.06, 0.06, 3.2, 6),
+            new THREE.MeshStandardMaterial({ color: 0xd7dbe0, roughness: 0.5 }),
+          );
+          pole.position.set(x, 1.6, 6.2);
+          const flag = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.7), flagMat);
+          flag.position.set(x + 0.55, 2.9, 6.2);
+          washDecor.add(pole, flag);
+        }
+      }
+
+      setShadow(washDecor);
+    };
+    washApplyRef.current = rebuildWashDecor;
+    rebuildWashDecor(washStyleRef.current);
+
 
     const renderPlan = () => {
       [...roadsGroup.children].forEach((c) => roadsGroup.remove(c));
