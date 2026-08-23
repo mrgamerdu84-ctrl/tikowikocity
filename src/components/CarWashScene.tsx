@@ -14,6 +14,11 @@ import yellowPickupAsset from "@/assets/yellow_pickup.glb.asset.json";
 
 const MESHY_CARS = [blueSuvAsset, graySedanAsset, greenSportsAsset, yellowPickupAsset];
 
+/* Les voitures Meshy sont normalisées face à +X : décalage pour aligner
+   l'avant sur le sens de circulation (convention modèle Kenney = +Z). */
+const MESHY_YAW = -Math.PI / 2;
+
+
 
 const MESSAGES = [
   "Préparation du savon...",
