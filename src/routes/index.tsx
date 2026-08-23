@@ -6,6 +6,7 @@ import SecurityGate from "@/components/SecurityGate";
 import { usePlayer } from "@/lib/player";
 import { handleSecurityRequest } from "@/lib/security-proxy";
 
+// Rebuild marker: security diagnostics synced with Lovable preview.
 const TITLE = "TikowikoCity — gérez votre ville et son car wash";
 const DESCRIPTION =
   "TikowikoCity : construisez votre ville, gérez le trafic et faites tourner votre station de lavage. Gagnez de l'argent à chaque lavage et améliorez votre car wash.";
