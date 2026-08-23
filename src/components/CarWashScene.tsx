@@ -1860,13 +1860,7 @@ export default function CarWashScene() {
 
       <div className="fixed bottom-4 right-4 z-30 flex items-center gap-2 rounded-2xl bg-white/80 p-2.5 shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur">
         <button
-          type="button"
-          onClick={() => spawnRef.current()}
-          className="rounded-full bg-splash px-3.5 py-2.5 text-[12.5px] font-bold text-splash-foreground shadow-[0_3px_0_var(--splash-shadow)] transition-transform active:translate-y-0.5 active:shadow-[0_1px_0_var(--splash-shadow)]"
-        >
-          🚗 Envoyer une voiture
-        </button>
-        <button
+
           type="button"
           onClick={() => cinemaRef.current()}
           aria-pressed={cinema}
