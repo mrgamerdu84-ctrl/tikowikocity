@@ -2253,9 +2253,17 @@ export default function CarWashScene() {
     let roadDragLast: { cx: number; cz: number } | null = null;
     const isRoadTool = (t: BuildTool): t is RoadHint =>
       t === "straight" || t === "bend" || t === "intersection" || t === "crossroad";
-    /** outils qui se manipulent en glissant sur la grille */
+    /** Tous les outils de pose principaux fonctionnent en maintenant le doigt/souris
+        puis en glissant sur la grille. Le car wash reste un outil spécial. */
     const isDragTool = (t: BuildTool) =>
-      isRoadTool(t) || t === "bulldoze" || t === "erase";
+      isRoadTool(t) ||
+      t === "bulldoze" ||
+      t === "erase" ||
+      t === "house" ||
+      t === "park" ||
+      t === "parking" ||
+      t === "light" ||
+      t === "lamp";
 
     /* Rendus à rafraîchir après une série d'actions. */
     const dirty = { plan: false, houses: false, decor: false };
@@ -2292,22 +2300,44 @@ export default function CarWashScene() {
       return false;
     };
 
-    /** Applique l'outil courant sur une case (pose ou démolition). */
+    /** Applique l'outil courant sur une case. Utilisé aussi pendant le glissement. */
     const applyAt = (cx: number, cz: number) => {
       const tool = toolRef.current;
       if (tool === "erase") return eraseAt(cx, cz);
       if (tool === "bulldoze") {
-        const done = plan.removeForce(cx, cz);
-        if (done) plan.removeHouse(cx, cz);
-        if (done) {
-          dirty.plan = true;
-          dirty.houses = true;
-        }
+        let done = false;
+        if (plan.removeDecor(cx, cz)) { dirty.decor = true; done = true; }
+        if (plan.removeHouse(cx, cz)) { dirty.houses = true; done = true; }
+        if (plan.removeForce(cx, cz)) { dirty.plan = true; done = true; }
         return done;
       }
-      if (!canBuild(cx, cz)) return false;
+      if (tool === "house") {
+        if (!plan.canPlaceHouse(cx, cz)) return false;
+        const lvl = houseLevelRef.current;
+        if (!spendRef.current(houseDef(lvl).cost, "house", `Maison niveau ${lvl} construite`)) return false;
+        plan.placeHouse(cx, cz, lvl, rotRef.current);
+        dirty.houses = true;
+        return true;
+      }
+      if (tool === "park" || tool === "parking") {
+        if (!canBuild(cx, cz) || !plan.canPlaceDecor(cx, cz)) return false;
+        const kind = decorKindRef.current;
+        const def = decorDef(kind);
+        if (!spendRef.current(def.cost, "decor", def.label)) return false;
+        plan.placeDecor(cx, cz, kind, rotRef.current);
+        dirty.decor = true;
+        return true;
+      }
+      if (tool === "light" || tool === "lamp") {
+        const cell = plan.get(cx, cz);
+        if (!cell || cell[tool]) return false;
+        plan.setProp(cx, cz, tool, true);
+        dirty.plan = true;
+        return true;
+      }
+      if (!isRoadTool(tool) || !canBuild(cx, cz)) return false;
       if (plan.decorAt(cx, cz) || plan.house(cx, cz)) return false;
-      plan.place(cx, cz, isRoadTool(tool) ? tool : "straight", rotRef.current);
+      plan.place(cx, cz, tool, rotRef.current);
       dirty.plan = true;
       return true;
     };
@@ -2333,7 +2363,7 @@ export default function CarWashScene() {
         else if (dz !== 0) cz += Math.sign(dz);
 
         roadDragLast = { cx, cz };
-        if (!destructive && !canBuild(cx, cz)) break;
+        if (!destructive && isRoadTool(toolRef.current) && !canBuild(cx, cz)) break;
         applyAt(cx, cz);
       }
       flushRender();
