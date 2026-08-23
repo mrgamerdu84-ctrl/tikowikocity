@@ -1048,7 +1048,6 @@ export default function CarWashScene() {
         foamSprites.push(foam);
       }
 
-      spawnSedan();
 
       // ----- Ville : grille de rues régulière -----
       const asphalt = new THREE.MeshStandardMaterial({
