@@ -54,6 +54,20 @@ export default function CarWashScene() {
   const spawnRef = useRef<() => void>(() => {});
   const cinemaRef = useRef<() => void>(() => {});
   const [cinema, setCinema] = useState(false);
+  const [machines, setMachines] = useState({
+    belt: true,
+    rollers: true,
+    brushes: true,
+    traffic: true,
+  });
+  const machinesRef = useRef(machines);
+  const toggleMachine = (key: keyof typeof machines) => {
+    setMachines((prev) => {
+      const next = { ...prev, [key]: !prev[key] };
+      machinesRef.current = next;
+      return next;
+    });
+  };
 
   useEffect(() => {
     let mi = 0;
@@ -314,7 +328,12 @@ export default function CarWashScene() {
     const models: Record<string, THREE.Group> = {};
     const meshyCars: THREE.Object3D[] = [];
     const sedanCars: THREE.Object3D[] = [];
-    const brushes: Array<{ pivot: THREE.Object3D; spin: THREE.Object3D; dir: number }> = [];
+    const brushes: Array<{
+      pivot: THREE.Object3D;
+      spin: THREE.Object3D;
+      dir: number;
+      kind: "roller" | "brush";
+    }> = [];
     const foamSprites: THREE.Object3D[] = [];
     const conveyorSlats: THREE.Mesh[] = [];
     const trafficCars: Array<{ car: THREE.Object3D; dir: number; speed: number }> = [];
@@ -388,7 +407,12 @@ export default function CarWashScene() {
           pivot.add(spin);
           pivot.position.set(WASH_ZONE[0] + 1.2 + offset, ROAD_Y + 1.05, zSide * 1.5);
           scene.add(pivot);
-          brushes.push({ pivot, spin, dir: (si + oi) % 2 === 0 ? 1 : -1 });
+          brushes.push({
+            pivot,
+            spin,
+            dir: (si + oi) % 2 === 0 ? 1 : -1,
+            kind: "roller",
+          });
         });
       });
 
@@ -400,7 +424,7 @@ export default function CarWashScene() {
         pivot.add(spin);
         pivot.position.set(x, ROAD_Y + 2.1, 0);
         scene.add(pivot);
-        brushes.push({ pivot, spin, dir: i % 2 === 0 ? -1 : 1 });
+        brushes.push({ pivot, spin, dir: i % 2 === 0 ? -1 : 1, kind: "brush" });
       });
 
       for (let i = 0; i < 2; i++) {
@@ -497,8 +521,9 @@ export default function CarWashScene() {
       const dt = Math.min(clock.getDelta(), 0.05);
       const t = clock.elapsedTime;
 
+      const ctl = machinesRef.current;
       const SPEED = 2.6;
-      const BELT_SPEED = 1.1;
+      const BELT_SPEED = ctl.belt ? 1.1 : 0;
       const GAP = 3.2;
       const [zoneStart, zoneEnd] = WASH_ZONE;
 
@@ -557,22 +582,29 @@ export default function CarWashScene() {
       // Rouleaux : ils tournent en continu, plus vite quand une voiture passe
       const brushSpeed = carInWash ? 9 : 2;
       brushes.forEach((b) => {
+        const on = b.kind === "roller" ? ctl.rollers : ctl.brushes;
+        if (!on) return;
         b.spin.rotation.y += dt * brushSpeed * b.dir;
       });
 
       // Tapis roulant : les lattes défilent en boucle
       const beltLen = zoneEnd - zoneStart;
-      conveyorSlats.forEach((s) => {
-        s.position.x += dt * BELT_SPEED;
-        if (s.position.x > zoneEnd) s.position.x -= beltLen;
-      });
+      if (ctl.belt) {
+        conveyorSlats.forEach((s) => {
+          s.position.x += dt * BELT_SPEED;
+          if (s.position.x > zoneEnd) s.position.x -= beltLen;
+        });
+      }
 
       // Circulation en ville
-      trafficCars.forEach(({ car, dir, speed }) => {
-        car.position.x += dt * speed * dir;
-        if (car.position.x > 14) car.position.x = -14;
-        if (car.position.x < -14) car.position.x = 14;
-      });
+      if (ctl.traffic) {
+        trafficCars.forEach(({ car, dir, speed }) => {
+          car.position.x += dt * speed * dir;
+          if (car.position.x > 14) car.position.x = -14;
+          if (car.position.x < -14) car.position.x = 14;
+        });
+      }
+
 
       foamSprites.forEach((f) => {
         f.children.forEach((s, j) => {
@@ -654,13 +686,28 @@ export default function CarWashScene() {
 
 
       // Véhicules : ajoutés au pool de spawn au fur et à mesure
-      MESHY_CARS.forEach((asset) => {
-        load(asset.url)
-          .then((raw) => {
-            if (disposed) return;
-            meshyCars.push(normalizeModel(raw, 2.4));
-          })
-          .catch((err: unknown) => console.error("voiture Meshy", err));
+      await Promise.all(
+        MESHY_CARS.map((asset) =>
+          load(asset.url)
+            .then((raw) => {
+              if (disposed) return;
+              meshyCars.push(normalizeModel(raw, 2.4));
+            })
+            .catch((err: unknown) => console.error("voiture Meshy", err)),
+        ),
+      );
+      if (disposed || meshyCars.length === 0) return;
+
+      // Le trafic Kenney est remplacé par les voitures Meshy, bien orientées
+      trafficCars.forEach((entry, i) => {
+        const template = meshyCars[i % meshyCars.length]!;
+        const next = template.clone(true);
+        setShadow(next);
+        next.position.set(entry.car.position.x, 0.06, entry.car.position.z);
+        next.rotation.y = entry.dir > 0 ? 0 : Math.PI;
+        scene.add(next);
+        scene.remove(entry.car);
+        entry.car = next;
       });
     };
 
@@ -724,6 +771,38 @@ export default function CarWashScene() {
         <p className="mt-1 font-semibold opacity-90">© {new Date().getFullYear()} tikowikoFamily</p>
 
       </div>
+
+      <div className="fixed right-4 top-4 w-[190px] rounded-2xl bg-white/80 p-3 shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur">
+        <p className="mb-2 text-[12px] font-bold uppercase tracking-wide text-ink opacity-80">
+          Panneau de contrôle
+        </p>
+        <div className="flex flex-col gap-1.5">
+          {(
+            [
+              ["belt", "🛤️ Tapis"],
+              ["rollers", "🌀 Rouleaux"],
+              ["brushes", "🧽 Brosses"],
+              ["traffic", "🚦 Trafic"],
+            ] as Array<[keyof typeof machines, string]>
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => toggleMachine(key)}
+              aria-pressed={machines[key]}
+              className={`flex items-center justify-between rounded-xl px-3 py-2 text-[12.5px] font-semibold transition-colors ${
+                machines[key]
+                  ? "bg-splash text-splash-foreground"
+                  : "bg-ink/10 text-ink opacity-70"
+              }`}
+            >
+              <span>{label}</span>
+              <span className="text-[11px]">{machines[key] ? "ON" : "OFF"}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
 
       <div className="fixed bottom-4 right-4 flex items-center gap-2 rounded-2xl bg-white/80 p-2.5 shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur">
         <button
