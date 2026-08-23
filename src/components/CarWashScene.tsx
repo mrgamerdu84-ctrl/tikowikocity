@@ -1029,18 +1029,12 @@ export default function CarWashScene() {
         roughness: 1,
       });
 
-      // Voie d'accès depuis la rue z = zMin jusqu'à la station
+      /* Voie d'accès : déjà pavée en tuiles Kenney ci-dessus, on ajoute
+         seulement la bande enherbée de bord. */
       const accessLen = zMin - WASH_SITE_Z;
       const accessCz = (zMin + WASH_SITE_Z) / 2;
-      addSlab(sidewalkMat, STREET_W + 1.2, accessLen, WASH_ACCESS_X, accessCz, 0.005);
-      addSlab(asphalt, STREET_W, accessLen, WASH_ACCESS_X, accessCz, 0.02);
-      for (let z = zMin - 4; z > WASH_SITE_Z + 3; z -= 3) {
-        const d = new THREE.Mesh(dashGeoX, dashMat);
-        d.rotation.x = -Math.PI / 2;
-        d.rotation.z = Math.PI / 2;
-        d.position.set(WASH_ACCESS_X, 0.03, z);
-        scene.add(d);
-      }
+      addSlab(sidewalkMat, STREET_W + 2.4, accessLen, WASH_ACCESS_X, accessCz, 0.004);
+
 
       // Terrain de la station : pelouse + dalle béton (parcelle resserrée)
       addSlab(lawnMat, 38, 21, 0, WASH_SITE_Z + 2, 0.008);
