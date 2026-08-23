@@ -2683,6 +2683,29 @@ export default function CarWashScene() {
         f.visible = carInWash;
       });
 
+      /* Gicleurs : nappe d'eau + gouttelettes qui retombent sur la voiture. */
+      const jetsOn = carInWash && ctl.belt;
+      waterJets.forEach((j, ji) => {
+        j.group.visible = jetsOn;
+        if (!jetsOn) return;
+        const pulse = 0.8 + Math.sin(t * 8 + ji) * 0.2;
+        j.cone.scale.set(pulse, 1, pulse);
+        (j.cone.material as THREE.MeshStandardMaterial).opacity = 0.22 + pulse * 0.14;
+        j.drops.forEach((d) => {
+          let dt0 = ((d.userData['t'] as number) ?? 0) + dt * 1.5;
+          if (dt0 > 1) dt0 -= 1;
+          d.userData['t'] = dt0;
+          const fall = dt0 * 2.7;
+          d.position.set(
+            (d.userData['ox'] as number) * (1 + dt0),
+            -0.2 - fall,
+            (d.userData['oz'] as number) * (1 + dt0),
+          );
+          d.scale.setScalar(1 - dt0 * 0.5);
+        });
+      });
+
+
 
       if (cinemaMode) {
         const angle = t * 0.18;
