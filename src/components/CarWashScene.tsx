@@ -376,12 +376,12 @@ export default function CarWashScene() {
       // Collines verdoyantes en avant-plan des montagnes
       for (let i = 0; i < 44; i++) {
         const a = (i / 44) * Math.PI * 2 + rand() * 0.12;
-        const r = 155 + rand() * 80;
+        const r = 175 + rand() * 70;
         const h = 8 + rand() * 22;
         const x = Math.cos(a) * r;
         const z = Math.sin(a) * r;
         // on dégage la vallée du lac
-        if (Math.hypot(x + 62, z - 34) < 75) continue;
+        if (Math.hypot(x + 62, z - 34) < 110) continue;
         const m = new THREE.Mesh(
           new THREE.SphereGeometry(h * 1.9, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2),
           rand() > 0.5 ? hillMat : hillMat2,
