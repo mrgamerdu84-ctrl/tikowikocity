@@ -10,6 +10,7 @@ export default function SecurityGate({ children }: { children: ReactNode }) {
   const [error, setError] = useState("");
   const [attempts, setAttempts] = useState(0);
   const [blockedUntil, setBlockedUntil] = useState(0);
+  const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
     try {
@@ -19,15 +20,29 @@ export default function SecurityGate({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  useEffect(() => {
+    if (!blockedUntil) return;
+    const timer = window.setInterval(() => {
+      const current = Date.now();
+      setNow(current);
+      if (current >= blockedUntil) {
+        setBlockedUntil(0);
+        setError("");
+      }
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [blockedUntil]);
+
   if (unlocked) return <>{children}</>;
 
-  const remainingSeconds = Math.max(0, Math.ceil((blockedUntil - Date.now()) / 1000));
+  const blocked = blockedUntil > now;
+  const remainingSeconds = Math.max(0, Math.ceil((blockedUntil - now) / 1000));
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     setError("");
 
-    if (blockedUntil > Date.now()) {
+    if (blocked) {
       setError(`Trop d'essais. Réessaie dans ${remainingSeconds} seconde${remainingSeconds > 1 ? "s" : ""}.`);
       return;
     }
@@ -62,11 +77,13 @@ export default function SecurityGate({ children }: { children: ReactNode }) {
       setCode("");
 
       if (response.status === 429 || data.retryLater || nextAttempts >= 5) {
-        setBlockedUntil(Date.now() + 60_000);
+        const until = Date.now() + 60_000;
+        setNow(Date.now());
+        setBlockedUntil(until);
         setAttempts(0);
         setError("Trop d'essais. Le cadenas est bloqué pendant 60 secondes.");
       } else {
-        setError("Code incorrect ou expiré.");
+        setError("Code incorrect.");
       }
     } catch {
       setError("Impossible de vérifier le code. Vérifie ta connexion Internet.");
@@ -85,7 +102,7 @@ export default function SecurityGate({ children }: { children: ReactNode }) {
         <div className="mt-5 text-center">
           <h1 className="text-2xl font-bold tracking-tight">TikoWiko Security</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Entre le code temporaire à 6 chiffres pour ouvrir TikowikoCity.
+            Entre ton code fixe à 6 chiffres pour ouvrir TikowikoCity.
           </p>
         </div>
 
@@ -99,7 +116,7 @@ export default function SecurityGate({ children }: { children: ReactNode }) {
                 setError("");
               }}
               inputMode="numeric"
-              autoComplete="one-time-code"
+              autoComplete="off"
               pattern="[0-9]{6}"
               maxLength={6}
               placeholder="000000"
@@ -116,7 +133,7 @@ export default function SecurityGate({ children }: { children: ReactNode }) {
 
           <button
             type="submit"
-            disabled={checking || code.length !== 6 || blockedUntil > Date.now()}
+            disabled={checking || code.length !== 6 || blocked}
             className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <ShieldCheck className="h-5 w-5" aria-hidden="true" />
@@ -125,7 +142,7 @@ export default function SecurityGate({ children }: { children: ReactNode }) {
         </form>
 
         <p className="mt-5 text-center text-xs text-muted-foreground">
-          Le code change automatiquement. Aucun secret maître n'est stocké dans l'application.
+          Ton code est fixe et n'est pas enregistré dans l'application.
         </p>
       </section>
     </main>
