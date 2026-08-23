@@ -2843,7 +2843,11 @@ export default function CarWashScene() {
       </div>
 
 
-      <div className="fixed bottom-4 right-4 z-30 flex items-center gap-2 rounded-2xl bg-white/80 p-2.5 shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur">
+      <div
+        className={`fixed bottom-4 right-4 z-30 flex items-center gap-2 rounded-2xl bg-white/80 p-2.5 shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur ${
+          buildMode ? "hidden" : ""
+        }`}
+      >
         <button
 
           type="button"
