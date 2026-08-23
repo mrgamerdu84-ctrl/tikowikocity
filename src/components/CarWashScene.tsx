@@ -667,8 +667,11 @@ export default function CarWashScene() {
       yaw: number;
       baseY: number;
       wheels: THREE.Object3D[];
+      /* voiture de ville empruntée : elle retourne circuler après le lavage */
+      origin: TrafficCar;
     };
     const washCars: WashCar[] = [];
+
 
     const brushes: Array<{
       pivot: THREE.Object3D;
