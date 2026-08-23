@@ -85,6 +85,40 @@ export default function CarWashScene() {
     });
   };
 
+  const [driveState, setDriveState] = useState<"idle" | "saving" | "done" | "error">("idle");
+  const saveFn = useServerFn(saveToDrive);
+  const handleSaveToDrive = async () => {
+    setDriveState("saving");
+    try {
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+      const res = await saveFn({
+        data: {
+          fileName: `tikowikocarwash-${stamp}.json`,
+          payload: {
+            app: "TikowikoCarWash",
+            savedAt: new Date().toISOString(),
+            machines: machinesRef.current,
+            cinema,
+          },
+        },
+      });
+      setDriveState("done");
+      toast.success("Sauvegardé sur Google Drive", {
+        description: res.name,
+        ...(res.webViewLink
+          ? { action: { label: "Ouvrir", onClick: () => window.open(res.webViewLink, "_blank") } }
+          : {}),
+      });
+      window.setTimeout(() => setDriveState("idle"), 4000);
+    } catch (err) {
+      console.error(err);
+      setDriveState("error");
+      toast.error("Échec de la sauvegarde sur Drive");
+    }
+  };
+
+
+
   useEffect(() => {
     let mi = 0;
     const timer = window.setInterval(() => {
