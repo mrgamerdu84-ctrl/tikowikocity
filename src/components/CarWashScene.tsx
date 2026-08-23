@@ -1573,13 +1573,27 @@ export default function CarWashScene() {
     let roadDragLast: { cx: number; cz: number } | null = null;
     const isRoadTool = (t: BuildTool): t is RoadHint =>
       t === "straight" || t === "bend" || t === "intersection" || t === "crossroad";
+    /** outils qui se manipulent en glissant sur la grille */
+    const isDragTool = (t: BuildTool) => isRoadTool(t) || t === "bulldoze";
+
+    /** Applique l'outil courant sur une case (pose ou démolition). */
+    const applyAt = (cx: number, cz: number) => {
+      const tool = toolRef.current;
+      if (tool === "bulldoze") {
+        const done = plan.removeForce(cx, cz);
+        if (done) plan.removeHouse(cx, cz);
+        return done;
+      }
+      if (!canBuild(cx, cz)) return false;
+      plan.place(cx, cz, isRoadTool(tool) ? tool : "straight", rotRef.current);
+      return true;
+    };
+
+
     const traceRoadTo = (target: { cx: number; cz: number }) => {
       let changed = false;
       if (!roadDragLast) {
-        if (canBuild(target.cx, target.cz)) {
-          plan.place(target.cx, target.cz, "straight", rotRef.current);
-          changed = true;
-        }
+        changed = applyAt(target.cx, target.cz);
         roadDragLast = { ...target };
         if (changed) renderPlan();
         return;
@@ -1595,16 +1609,13 @@ export default function CarWashScene() {
         if (Math.abs(dx) >= Math.abs(dz) && dx !== 0) cx += Math.sign(dx);
         else if (dz !== 0) cz += Math.sign(dz);
 
-        if (!canBuild(cx, cz)) {
-          roadDragLast = { cx, cz };
-          break;
-        }
-        plan.place(cx, cz, "straight", 0);
-        changed = true;
         roadDragLast = { cx, cz };
+        if (toolRef.current !== "bulldoze" && !canBuild(cx, cz)) break;
+        if (applyAt(cx, cz)) changed = true;
       }
       if (changed) renderPlan();
     };
+
     const onPointerMove = (ev: PointerEvent) => {
       if (!buildRef.current) {
         ghost.visible = false;
@@ -1620,19 +1631,24 @@ export default function CarWashScene() {
       const existing = plan.get(c.cx, c.cz);
       const tool = toolRef.current;
       const ok =
-        tool === "erase"
-          ? !!existing && !existing.locked
-          : tool === "light" || tool === "lamp"
-            ? !!existing
-            : tool === "house"
-              ? plan.canPlaceHouse(c.cx, c.cz) || !!plan.house(c.cx, c.cz)
-              : canBuild(c.cx, c.cz);
-      (ghost.material as THREE.MeshBasicMaterial).color.set(ok ? 0x2bd07c : 0xe05252);
-      if (downAt?.id === ev.pointerId && isRoadTool(toolRef.current)) {
+        tool === "bulldoze"
+          ? !!existing
+          : tool === "erase"
+            ? !!existing && !existing.locked
+            : tool === "light" || tool === "lamp"
+              ? !!existing
+              : tool === "house"
+                ? plan.canPlaceHouse(c.cx, c.cz) || !!plan.house(c.cx, c.cz)
+                : canBuild(c.cx, c.cz);
+      (ghost.material as THREE.MeshBasicMaterial).color.set(
+        tool === "bulldoze" ? (ok ? 0xe05252 : 0x9aa5ad) : ok ? 0x2bd07c : 0xe05252,
+      );
+      if (downAt?.id === ev.pointerId && isDragTool(toolRef.current)) {
         ev.preventDefault();
         traceRoadTo(c);
       }
     };
+
     const releasePointer = (ev: PointerEvent) => {
       try {
         if (renderer.domElement.hasPointerCapture(ev.pointerId)) {
@@ -1669,11 +1685,13 @@ export default function CarWashScene() {
       if (ev.pointerType === "mouse" && ev.button !== 0) return;
       const tool = toolRef.current;
       const c = cellUnderPointer(ev);
-      if (isRoadTool(tool)) {
+      if (isDragTool(tool)) {
         if (c) traceRoadTo(c);
         roadDragLast = null;
+        renderHouses();
         return;
       }
+
       const tapTolerance = start.type === "touch" || start.type === "pen" ? 24 : 8;
       if (Math.hypot(ev.clientX - start.x, ev.clientY - start.y) > tapTolerance) return;
       if (!c) return;
@@ -2442,7 +2460,9 @@ export default function CarWashScene() {
                 "light",
                 "lamp",
                 "house",
+                "bulldoze",
                 "erase",
+
               ] as BuildTool[]
             ).map((t) => (
               <button

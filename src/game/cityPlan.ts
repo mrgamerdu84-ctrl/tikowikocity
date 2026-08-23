@@ -50,6 +50,12 @@ export class CityPlan {
     return this.cells.delete(key(cx, cz));
   }
 
+  /** Démolition : efface la case même si elle a été posée par le jeu. */
+  removeForce(cx: number, cz: number) {
+    return this.cells.delete(key(cx, cz));
+  }
+
+
   setProp(cx: number, cz: number, prop: "light" | "lamp", value: boolean) {
     const cell = this.get(cx, cz);
     if (!cell) return false;
