@@ -860,43 +860,51 @@ export default function CarWashScene() {
         return m;
       };
 
-      // Trottoirs (légèrement plus larges que la chaussée) puis chaussée
-      Z_STREETS.forEach((z) => {
-        addSlab(sidewalkMat, spanX, STREET_W + 1.2, 0, z, 0.005);
-      });
-      X_STREETS.forEach((x) => {
-        addSlab(sidewalkMat, STREET_W + 1.2, spanZ, x, 0, 0.005);
-      });
-      Z_STREETS.forEach((z) => {
-        addSlab(asphalt, spanX, STREET_W, 0, z, 0.02);
-      });
-      X_STREETS.forEach((x) => {
-        addSlab(asphalt, STREET_W, spanZ, x, 0, 0.02);
-      });
-
-      // Ligne axiale discontinue (interrompue aux carrefours)
+      /* ----- Chaussées : vraies tuiles du kit Kenney city-kit-roads -----
+         Une tuile = 1 unité de kit, mise à l'échelle sur la largeur de rue. */
       const dashGeoX = new THREE.PlaneGeometry(1.4, 0.16);
       const nearCross = (v: number, list: number[]) =>
         list.some((c) => Math.abs(v - c) < STREET_W / 2 + 1);
+
+      const roadTile = (name: string, x: number, z: number, rotY: number) => {
+        const tpl = kit[name];
+        if (!tpl) return;
+        const t = tpl.clone(true);
+        t.scale.setScalar(TILE);
+        t.position.set(x, 0.012, z);
+        t.rotation.y = rotY;
+        t.traverse((n) => {
+          const m = n as THREE.Mesh;
+          if (m.isMesh) m.receiveShadow = true;
+        });
+        scene.add(t);
+      };
+      const onStreetX = (x: number) => X_STREETS.some((c) => Math.abs(c - x) < 0.01);
+      const onStreetZ = (z: number) => Z_STREETS.some((c) => Math.abs(c - z) < 0.01);
+
       Z_STREETS.forEach((z) => {
-        for (let x = xMin - STREET_W / 2 + 1; x < xMax + STREET_W / 2; x += 3) {
-          if (nearCross(x, X_STREETS)) continue;
-          const d = new THREE.Mesh(dashGeoX, dashMat);
-          d.rotation.x = -Math.PI / 2;
-          d.position.set(x, 0.03, z);
-          scene.add(d);
+        for (let x = xMin; x <= xMax; x += TILE) {
+          if (onStreetX(x)) continue;
+          roadTile("road-straight", x, z, Math.PI / 2);
         }
       });
       X_STREETS.forEach((x) => {
-        for (let z = zMin - STREET_W / 2 + 1; z < zMax + STREET_W / 2; z += 3) {
-          if (nearCross(z, Z_STREETS)) continue;
-          const d = new THREE.Mesh(dashGeoX, dashMat);
-          d.rotation.x = -Math.PI / 2;
-          d.rotation.z = Math.PI / 2;
-          d.position.set(x, 0.03, z);
-          scene.add(d);
+        for (let z = zMin; z <= zMax; z += TILE) {
+          if (onStreetZ(z)) continue;
+          roadTile("road-straight", x, z, 0);
         }
       });
+      // Carrefours du quadrillage
+      X_STREETS.forEach((x) => {
+        Z_STREETS.forEach((z) => {
+          roadTile("road-crossroad", x, z, 0);
+        });
+      });
+      // Voie d'accès au car wash, dans le même style
+      for (let z = zMin - TILE; z >= WASH_SITE_Z; z -= TILE) {
+        roadTile("road-straight", WASH_ACCESS_X, z, 0);
+      }
+
 
       // ----- Bâtiments Kenney : un par parcelle, hauteurs cohérentes -----
       const blockCentersX: number[] = [];
