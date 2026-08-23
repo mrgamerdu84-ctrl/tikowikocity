@@ -612,7 +612,7 @@ export default function CarWashScene() {
       const top = floors * FLOOR_H;
       for (let i = 0; i < cols; i++) {
         for (let j = 0; j < rows; j++) {
-          const deck = floorTpl.clone(true);
+          const deck = roofTpl.clone(true);
           deck.position.set(ox + i * CELL, top, oz + j * CELL);
           g.add(deck);
         }
