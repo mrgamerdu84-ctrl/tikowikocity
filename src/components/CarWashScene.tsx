@@ -29,6 +29,19 @@ import {
   type Dir,
 } from "@/game/grid";
 import { TOOL_LABEL, type BuildTool, type RoadHint } from "@/game/catalog";
+import {
+  UPGRADES,
+  DEFAULT_UPGRADES,
+  MAX_LEVEL,
+  capacityOf,
+  beltFactor,
+  washInterval,
+  rollReward,
+  upgradeCost,
+  sanitizeUpgrades,
+  type UpgradeKey,
+  type UpgradeLevels,
+} from "@/game/upgrades";
 
 
 /* Modèles issus des kits Kenney (car-kit, city-kit-roads, building-kit),
