@@ -429,7 +429,13 @@ export default function CarWashScene() {
     };
 
     const models: Record<string, THREE.Group> = {};
-    const meshyCars: THREE.Object3D[] = [];
+    /* Modèles Kenney extraits du pack : routes, voitures, bâtiments, mobilier */
+    const kit: Record<string, THREE.Object3D> = {};
+    const kitCar = (i: number) => {
+      const name = KIT_CARS[i % KIT_CARS.length]!;
+      return kit[name] ?? kit["sedan"] ?? models["sedan"]!;
+    };
+
     type WashCar = {
       car: THREE.Object3D;
       d: number;
