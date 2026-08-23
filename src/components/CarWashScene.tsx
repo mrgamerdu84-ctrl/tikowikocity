@@ -1309,7 +1309,22 @@ export default function CarWashScene() {
             }),
         ),
       );
+
+      // Pack Kenney (routes, voitures, bâtiments, mobilier) en un seul GLB
+      const pack = await new Promise<THREE.Group>((resolve, reject) => {
+        loader.load(
+          kenneyPackAsset.url,
+          (gltf) => resolve(gltf.scene),
+          undefined,
+          (err) => reject(err instanceof Error ? err : new Error(String(err))),
+        );
+      });
+      [...pack.children].forEach((child) => {
+        child.removeFromParent();
+        kit[child.name] = child;
+      });
     };
+
 
     const loadMeshy = async () => {
       const load = (url: string) =>
