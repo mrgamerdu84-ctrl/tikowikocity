@@ -142,6 +142,7 @@ function b64ToArrayBuffer(b64: string) {
 export default function CarWashScene() {
   const wrapRef = useRef<HTMLDivElement>(null);
   const gameTimeRef = useRef<HTMLSpanElement>(null);
+  const gameTimeBuildRef = useRef<HTMLSpanElement>(null);
   const { player } = usePlayer();
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState(MESSAGES[0]!);
@@ -2554,9 +2555,9 @@ export default function CarWashScene() {
       const hourFloat = dayPhase * 24;
       const hour = Math.floor(hourFloat);
       const minute = Math.floor((hourFloat - hour) * 60);
-      if (gameTimeRef.current) {
-        gameTimeRef.current.textContent = `${night > 0.55 ? "🌙" : "☀️"} ${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
-      }
+      const clockText = `${night > 0.55 ? "🌙" : "☀️"} ${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+      if (gameTimeRef.current) gameTimeRef.current.textContent = clockText;
+      if (gameTimeBuildRef.current) gameTimeBuildRef.current.textContent = clockText;
 
       // aperçu 3D de l'objet à poser : suit la case visée et la rotation choisie
       if (buildRef.current) {
@@ -3000,7 +3001,7 @@ export default function CarWashScene() {
           <span className="text-[12.5px] font-semibold opacity-80">
             👥 {residents} · 🏠 {city.houses}
           </span>
-          <span ref={gameTimeRef} className="ml-auto whitespace-nowrap text-[12px] font-extrabold opacity-80">
+          <span ref={gameTimeBuildRef} className="ml-auto whitespace-nowrap text-[12px] font-extrabold opacity-80">
             ☀️ 08:00
           </span>
           <span className="hidden truncate text-[12px] font-semibold opacity-70 sm:inline">
