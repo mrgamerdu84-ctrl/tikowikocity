@@ -29,6 +29,43 @@ export class CityPlan {
   cells = new Map<string, PlanCell>();
   /** maisons du joueur (cases hors route, en bord de rue) */
   houses = new Map<string, HouseCell>();
+  /** décor du joueur : parcs, parkings… (cases libres) */
+  decor = new Map<string, DecorCell>();
+
+  /* ---------- Décor ---------- */
+  decorAt(cx: number, cz: number) {
+    return this.decor.get(key(cx, cz));
+  }
+
+  canPlaceDecor(cx: number, cz: number) {
+    const k = key(cx, cz);
+    return !this.cells.has(k) && !this.houses.has(k) && !this.decor.has(k);
+  }
+
+  placeDecor(cx: number, cz: number, kind: DecorKind, rot = 0) {
+    this.decor.set(key(cx, cz), { kind, rot });
+  }
+
+  removeDecor(cx: number, cz: number) {
+    return this.decor.delete(key(cx, cz));
+  }
+
+  serializeDecor(): SerializedDecor {
+    const out: SerializedDecor = [];
+    this.decor.forEach((d, k) => {
+      const [cx, cz] = k.split(",").map(Number);
+      out.push([cx!, cz!, d.kind, d.rot]);
+    });
+    return out;
+  }
+
+  loadDecor(data: SerializedDecor) {
+    this.decor.clear();
+    data.forEach(([cx, cz, kind, rot]) => {
+      if (!isDecorKind(kind)) return;
+      this.decor.set(key(cx, cz), { kind, rot: typeof rot === "number" ? rot : 0 });
+    });
+  }
 
   get(cx: number, cz: number) {
     return this.cells.get(key(cx, cz));
