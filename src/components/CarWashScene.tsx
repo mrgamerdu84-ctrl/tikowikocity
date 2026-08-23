@@ -49,10 +49,10 @@ import {
   UPGRADES,
   DEFAULT_UPGRADES,
   MAX_LEVEL,
-  capacityOf,
+  queueCapacity,
   beltFactor,
   washInterval,
-  rollReward,
+  computeReward,
   upgradeCost,
   sanitizeUpgrades,
   type UpgradeKey,
@@ -60,9 +60,12 @@ import {
 } from "@/game/upgrades";
 import {
   MAX_HISTORY,
+  EVENT_META,
   formatWashDate,
+  makeEvent,
   sanitizeHistory,
-  type WashEntry,
+  type EventKind,
+  type GameEvent,
 } from "@/game/history";
 import { HOUSE_LEVELS, MAX_HOUSE_LEVEL, houseDef, totalCapacity } from "@/game/houses";
 import { readLocalCity, saveLocalCity } from "@/game/save";
@@ -156,25 +159,31 @@ export default function CarWashScene() {
   const [economy, setEconomy] = useState({ money: 150, washes: 0 });
   const economyRef = useRef(economy);
   const [gain, setGain] = useState<{ id: number; amount: number } | null>(null);
-  /* Historique des lavages : date, montant gagné, solde après transaction. */
-  const [history, setHistory] = useState<WashEntry[]>([]);
+  /* Journal de la partie : lavages, achats, constructions (horodatés). */
+  const [history, setHistory] = useState<GameEvent[]>([]);
   const historyRef = useRef(history);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const registerWashRef = useRef<(amount: number) => void>(() => {});
-  registerWashRef.current = (amount: number) => {
+  const [historyFilter, setHistoryFilter] = useState<EventKind | "all">("all");
+  /** Ajoute une entrée au journal (la plus récente en tête). */
+  const logRef = useRef<(e: GameEvent) => void>(() => {});
+  logRef.current = (entry: GameEvent) => {
+    const next = [entry, ...historyRef.current].slice(0, MAX_HISTORY);
+    historyRef.current = next;
+    setHistory(next);
+  };
+  const registerWashRef = useRef<(amount: number, premium: boolean) => void>(() => {});
+  registerWashRef.current = (amount: number, premium: boolean) => {
     setEconomy((prev) => {
       const next = { money: prev.money + amount, washes: prev.washes + 1 };
       economyRef.current = next;
-      const entry: WashEntry = {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-        at: new Date().toISOString(),
-        amount,
-        balance: next.money,
-        wash: next.washes,
-      };
-      const nextHistory = [entry, ...historyRef.current].slice(0, MAX_HISTORY);
-      historyRef.current = nextHistory;
-      setHistory(nextHistory);
+      logRef.current(
+        makeEvent(
+          "wash",
+          `Lavage #${next.washes}${premium ? " ✨ premium" : ""}`,
+          amount,
+          next.money,
+        ),
+      );
       return next;
     });
     setGain({ id: Date.now() + Math.random(), amount });
@@ -206,10 +215,14 @@ export default function CarWashScene() {
     upgradesRef.current = nextUp;
     setUpgrades(nextUp);
     const def = UPGRADES.find((u) => u.key === key)!;
+    logRef.current(
+      makeEvent("upgrade", `${def.label} niveau ${level + 1}`, -cost, nextEco.money),
+    );
     toast.success(`${def.icon} ${def.label} niveau ${level + 1}`, {
       description: def.effect(level + 1),
     });
   };
+
 
 
   const toggleMachine = (key: keyof typeof machines) => {
@@ -234,8 +247,10 @@ export default function CarWashScene() {
     setCity(next);
   };
   /* Dépense d'argent depuis la scène 3D (pose / amélioration de maison). */
-  const spendRef = useRef<(amount: number) => boolean>(() => false);
-  spendRef.current = (amount: number) => {
+  const spendRef = useRef<(amount: number, kind?: EventKind, label?: string) => boolean>(
+    () => false,
+  );
+  spendRef.current = (amount: number, kind?: EventKind, label?: string) => {
     if (economyRef.current.money < amount) {
       toast.error(`Il manque ${(amount - economyRef.current.money).toLocaleString("fr-FR")} €`);
       return false;
@@ -243,6 +258,7 @@ export default function CarWashScene() {
     const next = { ...economyRef.current, money: economyRef.current.money - amount };
     economyRef.current = next;
     setEconomy(next);
+    if (label) logRef.current(makeEvent(kind ?? "build", label, -amount, next.money));
     return true;
   };
 
@@ -2344,7 +2360,7 @@ export default function CarWashScene() {
           return;
         }
         if (!canBuild(c.cx, c.cz) || !plan.canPlaceDecor(c.cx, c.cz)) return;
-        if (!spendRef.current(def.cost)) return;
+        if (!spendRef.current(def.cost, "decor", def.label)) return;
         plan.placeDecor(c.cx, c.cz, kind, rotRef.current);
         renderDecor();
         return;
@@ -2355,14 +2371,14 @@ export default function CarWashScene() {
           // clic sur une maison existante : amélioration de niveau
           const target = Math.min(MAX_HOUSE_LEVEL, existingHouse.level + 1);
           if (target === existingHouse.level) return;
-          if (!spendRef.current(houseDef(target).cost)) return;
+          if (!spendRef.current(houseDef(target).cost, "house", `Maison améliorée niveau ${target}`)) return;
           plan.placeHouse(c.cx, c.cz, target, existingHouse.rot ?? 0);
           renderHouses();
           return;
         }
         if (!plan.canPlaceHouse(c.cx, c.cz)) return;
         const lvl = houseLevelRef.current;
-        if (!spendRef.current(houseDef(lvl).cost)) return;
+        if (!spendRef.current(houseDef(lvl).cost, "house", `Maison niveau ${lvl} construite`)) return;
         plan.placeHouse(c.cx, c.cz, lvl, rotRef.current);
         renderHouses();
         return;
@@ -2479,7 +2495,8 @@ export default function CarWashScene() {
         /* Lavage terminé : la voiture sort du tunnel et paye la prestation. */
         if (!e.paid && e.d >= WASH_D1) {
           e.paid = true;
-          registerWashRef.current(rollReward(up.quality));
+          const r = computeReward(up);
+          registerWashRef.current(r.amount, r.premium);
         }
 
         e.wheels.forEach((w) => {
@@ -2549,11 +2566,11 @@ export default function CarWashScene() {
       /* De temps en temps, une voiture de la ville part au lavage. */
       washCooldown -= dt;
       if (washCooldown <= 0) {
-        const [lo, hi] = washInterval(up.speed);
+        const [lo, hi] = washInterval(up.speed, up.parking);
         // plus la ville compte d'habitants, plus les clients affluent
         const crowd = 1 / (1 + residentsRef.current / 25);
         washCooldown = (lo + Math.random() * (hi - lo + 3)) * crowd;
-        if (ctl.traffic && washCars.length < capacityOf(up.capacity)) sendCityCarToWash();
+        if (ctl.traffic && washCars.length < queueCapacity(up)) sendCityCarToWash();
       }
 
       const carInWash = washCars.some((c) => c.d > WASH_D0 && c.d < WASH_D1);
@@ -2964,55 +2981,133 @@ export default function CarWashScene() {
 
       {historyOpen && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 p-3 backdrop-blur-sm sm:items-center">
-          <div className="flex max-h-[80vh] w-full max-w-[440px] flex-col rounded-3xl bg-white p-4 text-ink shadow-[0_12px_40px_rgba(6,58,94,0.35)]">
+          <div className="flex max-h-[86vh] w-full max-w-[460px] flex-col rounded-3xl bg-white p-4 text-ink shadow-[0_12px_40px_rgba(6,58,94,0.35)]">
             <div className="flex items-center gap-2">
-              <h2 className="text-[18px] font-extrabold">🧾 Historique des lavages</h2>
+              <h2 className="text-[18px] font-extrabold">🧾 Journal de la ville</h2>
               <span className="ml-auto rounded-full bg-sunny/30 px-2 py-1 text-[13px] font-extrabold tabular-nums">
                 {economy.money.toLocaleString("fr-FR")} €
               </span>
               <button
                 type="button"
                 onClick={() => setHistoryOpen(false)}
-                aria-label="Fermer l'historique"
+                aria-label="Fermer le journal"
                 className="rounded-full bg-ink/10 px-2 py-1 text-[13px] font-bold"
               >
                 ✕
               </button>
             </div>
 
+            {/* Bilan global */}
+            <div className="mt-3 grid grid-cols-3 gap-1.5">
+              {[
+                ["Lavages", `${economy.washes}`, "🫧"],
+                [
+                  "Gagné",
+                  `${history
+                    .filter((e) => (e.amount ?? 0) > 0)
+                    .reduce((s, e) => s + (e.amount ?? 0), 0)
+                    .toLocaleString("fr-FR")} €`,
+                  "📈",
+                ],
+                [
+                  "Dépensé",
+                  `${history
+                    .filter((e) => (e.amount ?? 0) < 0)
+                    .reduce((s, e) => s - (e.amount ?? 0), 0)
+                    .toLocaleString("fr-FR")} €`,
+                  "📉",
+                ],
+              ].map(([label, value, icon]) => (
+                <div
+                  key={label}
+                  className="rounded-2xl bg-splash/10 px-2 py-1.5 text-center ring-1 ring-ink/10"
+                >
+                  <p className="text-[11px] font-semibold opacity-70">
+                    {icon} {label}
+                  </p>
+                  <p className="text-[14px] font-extrabold tabular-nums">{value}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Filtres par type d'événement */}
+            <div className="mt-2 flex flex-wrap gap-1">
+              {(
+                [["all", "Tout", "📚"]] as Array<[EventKind | "all", string, string]>
+              )
+                .concat(
+                  (Object.keys(EVENT_META) as EventKind[]).map((k) => [
+                    k,
+                    EVENT_META[k].label,
+                    EVENT_META[k].icon,
+                  ]),
+                )
+                .map(([key, label, icon]) => {
+                  const count =
+                    key === "all"
+                      ? history.length
+                      : history.filter((e) => e.kind === key).length;
+                  if (key !== "all" && count === 0) return null;
+                  const active = historyFilter === key;
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setHistoryFilter(key)}
+                      className={`rounded-full px-2.5 py-1 text-[11.5px] font-bold ring-1 ring-ink/10 ${
+                        active ? "bg-splash text-splash-foreground" : "bg-ink/[0.05]"
+                      }`}
+                    >
+                      {icon} {label} {count > 0 && <span className="opacity-70">{count}</span>}
+                    </button>
+                  );
+                })}
+            </div>
+
             {history.length === 0 ? (
               <p className="mt-4 text-[13px] opacity-75">
-                Aucun lavage pour l'instant. Les clients arrivent tout seuls : chaque lavage terminé
-                s'ajoutera ici avec la date, le gain et le solde.
+                Rien à afficher pour l'instant. Chaque lavage, achat d'amélioration ou
+                construction s'inscrira ici avec l'heure, le montant et le solde.
               </p>
             ) : (
               <>
-                <div className="mt-2 flex items-center gap-2 px-1 text-[11px] font-bold uppercase tracking-wide opacity-60">
-                  <span className="w-[86px]">Date</span>
-                  <span className="ml-auto w-[64px] text-right">Gain</span>
-                  <span className="w-[74px] text-right">Solde</span>
-                </div>
-                <ul className="mt-1 flex-1 overflow-y-auto pr-1">
-                  {history.map((e) => (
-                    <li
-                      key={e.id}
-                      className="flex items-center gap-2 rounded-xl px-1 py-2 text-[13px] odd:bg-ink/[0.04]"
-                    >
-                      <span className="w-[86px] tabular-nums opacity-80">
-                        {formatWashDate(e.at)}
-                      </span>
-                      <span className="text-[11px] font-semibold opacity-60">#{e.wash}</span>
-                      <span className="ml-auto w-[64px] text-right font-extrabold tabular-nums text-splash">
-                        +{e.amount} €
-                      </span>
-                      <span className="w-[74px] text-right font-bold tabular-nums">
-                        {e.balance.toLocaleString("fr-FR")} €
-                      </span>
-                    </li>
-                  ))}
+                <ul className="mt-2 flex-1 overflow-y-auto pr-1">
+                  {history
+                    .filter((e) => historyFilter === "all" || e.kind === historyFilter)
+                    .map((e) => (
+                      <li
+                        key={e.id}
+                        className="flex items-center gap-2 rounded-xl px-1 py-2 text-[13px] odd:bg-ink/[0.04]"
+                      >
+                        <span aria-hidden className="text-[15px]">
+                          {EVENT_META[e.kind].icon}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate font-semibold">{e.label}</span>
+                          <span className="block text-[11px] tabular-nums opacity-60">
+                            {formatWashDate(e.at)}
+                          </span>
+                        </span>
+                        {e.amount !== undefined && (
+                          <span
+                            className={`w-[68px] text-right font-extrabold tabular-nums ${
+                              e.amount >= 0 ? "text-splash" : "opacity-70"
+                            }`}
+                          >
+                            {e.amount >= 0 ? "+" : "−"}
+                            {Math.abs(e.amount).toLocaleString("fr-FR")} €
+                          </span>
+                        )}
+                        {e.balance !== undefined && (
+                          <span className="w-[70px] text-right text-[12px] font-bold tabular-nums opacity-70">
+                            {e.balance.toLocaleString("fr-FR")} €
+                          </span>
+                        )}
+                      </li>
+                    ))}
                 </ul>
                 <p className="mt-2 text-[11px] opacity-60">
-                  {history.length} dernier{history.length > 1 ? "s" : ""} lavage
+                  {history.length} événement{history.length > 1 ? "s" : ""} conservé
                   {history.length > 1 ? "s" : ""} (max {MAX_HISTORY}).
                 </p>
               </>
@@ -3022,9 +3117,8 @@ export default function CarWashScene() {
       )}
 
       {shopOpen && (
-
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 p-3 backdrop-blur-sm sm:items-center">
-          <div className="w-full max-w-[420px] rounded-3xl bg-white p-4 text-ink shadow-[0_12px_40px_rgba(6,58,94,0.35)]">
+          <div className="flex max-h-[86vh] w-full max-w-[440px] flex-col rounded-3xl bg-white p-4 text-ink shadow-[0_12px_40px_rgba(6,58,94,0.35)]">
             <div className="flex items-center gap-2">
               <h2 className="text-[18px] font-extrabold">🛠️ Boutique du car wash</h2>
               <span className="ml-auto rounded-full bg-sunny/30 px-2 py-1 text-[13px] font-extrabold tabular-nums">
@@ -3040,62 +3134,82 @@ export default function CarWashScene() {
               </button>
             </div>
 
-            <ul className="mt-3 flex flex-col gap-2">
-              {UPGRADES.map((u) => {
-                const level = upgrades[u.key];
-                const maxed = level >= MAX_LEVEL;
-                const cost = maxed ? 0 : upgradeCost(u.key, level);
-                const affordable = !maxed && economy.money >= cost;
-                return (
-                  <li
-                    key={u.key}
-                    className="rounded-2xl bg-splash/10 px-3 py-2 ring-1 ring-ink/10"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span aria-hidden className="text-[18px]">
-                        {u.icon}
-                      </span>
-                      <div className="min-w-0">
-                        <p className="text-[14px] font-bold">
-                          {u.label}{" "}
-                          <span className="opacity-60">
-                            niv. {level}/{MAX_LEVEL}
-                          </span>
-                        </p>
-                        <p className="text-[11.5px] opacity-75">{u.desc}</p>
-                      </div>
-                      <button
-                        type="button"
-                        disabled={maxed}
+            <div className="mt-3 flex-1 overflow-y-auto pr-1">
+              {(["Station", "Clientèle", "Équipe"] as const).map((cat) => (
+                <div key={cat} className="mb-3">
+                  <p className="px-1 text-[11px] font-bold uppercase tracking-wide opacity-60">
+                    {cat}
+                  </p>
+                  <ul className="mt-1 flex flex-col gap-2">
+                    {UPGRADES.filter((u) => u.category === cat).map((u) => {
+                      const level = upgrades[u.key];
+                      const maxed = level >= MAX_LEVEL;
+                      const cost = maxed ? 0 : upgradeCost(u.key, level);
+                      const affordable = !maxed && economy.money >= cost;
+                      return (
+                        <li
+                          key={u.key}
+                          className="rounded-2xl bg-splash/10 px-3 py-2 ring-1 ring-ink/10"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span aria-hidden className="text-[18px]">
+                              {u.icon}
+                            </span>
+                            <div className="min-w-0">
+                              <p className="text-[14px] font-bold">
+                                {u.label}{" "}
+                                <span className="opacity-60">
+                                  niv. {level}/{MAX_LEVEL}
+                                </span>
+                              </p>
+                              <p className="text-[11.5px] opacity-75">{u.desc}</p>
+                            </div>
+                            <button
+                              type="button"
+                              disabled={maxed}
+                              onClick={() => buyUpgrade(u.key)}
+                              className={`ml-auto shrink-0 rounded-full px-3 py-2 text-[12px] font-bold transition-transform active:translate-y-0.5 ${
+                                maxed
+                                  ? "bg-ink/10 opacity-60"
+                                  : affordable
+                                    ? "bg-splash text-splash-foreground"
+                                    : "bg-ink/10 opacity-60"
+                              }`}
+                            >
+                              {maxed ? "MAX" : `${cost.toLocaleString("fr-FR")} €`}
+                            </button>
+                          </div>
+                          {/* Jauge de niveau */}
+                          <div className="mt-1.5 flex gap-1">
+                            {Array.from({ length: MAX_LEVEL }, (_, i) => (
+                              <span
+                                key={i}
+                                className={`h-1.5 flex-1 rounded-full ${
+                                  i < level ? "bg-sunny" : "bg-ink/10"
+                                }`}
+                              />
+                            ))}
+                          </div>
+                          <p className="mt-1 text-[11.5px] font-semibold opacity-80">
+                            Actuel : {u.effect(level)}
+                            {!maxed && <> → {u.effect(level + 1)}</>}
+                          </p>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ))}
+            </div>
 
-                        onClick={() => buyUpgrade(u.key)}
-                        className={`ml-auto shrink-0 rounded-full px-3 py-2 text-[12px] font-bold transition-transform active:translate-y-0.5 ${
-                          maxed
-                            ? "bg-ink/10 opacity-60"
-                            : affordable
-                              ? "bg-splash text-splash-foreground"
-                              : "bg-ink/10 opacity-60"
-                        }`}
-                      >
-                        {maxed ? "MAX" : `${cost.toLocaleString("fr-FR")} €`}
-                      </button>
-                    </div>
-                    <p className="mt-1 text-[11.5px] font-semibold opacity-80">
-                      Actuel : {u.effect(level)}
-                      {!maxed && <> → {u.effect(level + 1)}</>}
-                    </p>
-                  </li>
-                );
-              })}
-            </ul>
-
-            <p className="mt-3 text-[11.5px] opacity-70">
-              Les routes et bâtiments restent gratuits : l'argent sert uniquement aux
-              améliorations du lavage.
+            <p className="mt-1 text-[11.5px] opacity-70">
+              Les routes restent gratuites : l'argent sert aux améliorations, aux maisons et
+              aux aménagements.
             </p>
           </div>
         </div>
       )}
+
 
 
       <div

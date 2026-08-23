@@ -1,20 +1,35 @@
-/* Historique des lavages du car wash : chaque entrée garde la date,
-   le montant gagné et le solde juste après la transaction. */
+/* Journal de la partie : lavages, améliorations, constructions…
+   Chaque entrée garde la date, un libellé, le montant (signé) et le solde. */
 
-export type WashEntry = {
+export type EventKind = "wash" | "upgrade" | "build" | "house" | "decor" | "info";
+
+export type GameEvent = {
   id: string;
-  /** Date ISO du lavage terminé. */
+  /** Date ISO de l'événement. */
   at: string;
-  /** Montant gagné pour ce lavage (€). */
-  amount: number;
-  /** Solde du joueur après la transaction (€). */
-  balance: number;
-  /** Numéro du lavage (1 = premier lavage). */
-  wash: number;
+  kind: EventKind;
+  /** Libellé lisible ("Lavage #12", "Maison niveau 2"…). */
+  label: string;
+  /** Montant en € : positif = gain, négatif = dépense, absent = neutre. */
+  amount?: number;
+  /** Solde du joueur juste après l'événement (€). */
+  balance?: number;
 };
 
+/** Ancien format (lavages uniquement) conservé pour la compatibilité. */
+export type WashEntry = GameEvent;
+
 /** Nombre maximum d'entrées conservées (les plus récentes d'abord). */
-export const MAX_HISTORY = 50;
+export const MAX_HISTORY = 80;
+
+export const EVENT_META: Record<EventKind, { icon: string; label: string }> = {
+  wash: { icon: "🫧", label: "Lavages" },
+  upgrade: { icon: "🛠️", label: "Améliorations" },
+  build: { icon: "🚧", label: "Voirie" },
+  house: { icon: "🏠", label: "Maisons" },
+  decor: { icon: "🌳", label: "Aménagements" },
+  info: { icon: "📌", label: "Divers" },
+};
 
 const timeFmt = new Intl.DateTimeFormat("fr-FR", {
   day: "2-digit",
@@ -28,22 +43,51 @@ export function formatWashDate(iso: string): string {
   return Number.isNaN(d.getTime()) ? "—" : timeFmt.format(d);
 }
 
-export function sanitizeHistory(raw: unknown): WashEntry[] {
+export function makeEvent(
+  kind: EventKind,
+  label: string,
+  amount?: number,
+  balance?: number,
+): GameEvent {
+  return {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    at: new Date().toISOString(),
+    kind,
+    label,
+    ...(amount === undefined ? {} : { amount }),
+    ...(balance === undefined ? {} : { balance }),
+  };
+}
+
+const KINDS = Object.keys(EVENT_META) as EventKind[];
+
+export function sanitizeHistory(raw: unknown): GameEvent[] {
   if (!Array.isArray(raw)) return [];
-  const out: WashEntry[] = [];
+  const out: GameEvent[] = [];
   for (const item of raw) {
     if (!item || typeof item !== "object") continue;
-    const e = item as Partial<WashEntry> & Record<string, unknown>;
-    const amount = e['amount'];
-    const balance = e['balance'];
-    if (typeof amount !== "number" || !Number.isFinite(amount)) continue;
-    if (typeof balance !== "number" || !Number.isFinite(balance)) continue;
+    const e = item as Record<string, unknown>;
+    const amount = typeof e['amount'] === "number" && Number.isFinite(e['amount'])
+      ? (e['amount'] as number)
+      : undefined;
+    const balance = typeof e['balance'] === "number" && Number.isFinite(e['balance'])
+      ? (e['balance'] as number)
+      : undefined;
+    const kind = KINDS.includes(e['kind'] as EventKind) ? (e['kind'] as EventKind) : "wash";
+    const wash = typeof e['wash'] === "number" ? (e['wash'] as number) : undefined;
+    const label =
+      typeof e['label'] === "string" && e['label']
+        ? (e['label'] as string)
+        : wash !== undefined
+          ? `Lavage #${wash}`
+          : "Lavage";
     out.push({
-      id: typeof e['id'] === "string" ? e['id'] : `${out.length}-${amount}`,
+      id: typeof e['id'] === "string" ? e['id'] : `${out.length}-${label}`,
       at: typeof e['at'] === "string" ? e['at'] : new Date().toISOString(),
-      amount,
-      balance,
-      wash: typeof e['wash'] === "number" && Number.isFinite(e['wash']) ? e['wash'] : out.length + 1,
+      kind,
+      label,
+      ...(amount === undefined ? {} : { amount }),
+      ...(balance === undefined ? {} : { balance }),
     });
     if (out.length >= MAX_HISTORY) break;
   }
