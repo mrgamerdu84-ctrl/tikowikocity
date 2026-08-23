@@ -1,0 +1,43 @@
+name: Ameliorer construction continue
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/upgrade-build-drag.yml]
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Etendre la pose continue
+        shell: python
+        run: |
+          from pathlib import Path
+          p=Path('src/components/CarWashScene.tsx')
+          s=p.read_text(encoding='utf-8')
+          old='''    /** outils qui se manipulent en glissant sur la grille */\n    const isDragTool = (t: BuildTool) =>\n      isRoadTool(t) || t === "bulldoze" || t === "erase";'''
+          new='''    /** Tous les outils de pose principaux fonctionnent en maintenant le doigt/souris\n        puis en glissant sur la grille. Le car wash reste un outil spécial. */\n    const isDragTool = (t: BuildTool) =>\n      isRoadTool(t) ||\n      t === "bulldoze" ||\n      t === "erase" ||\n      t === "house" ||\n      t === "park" ||\n      t === "parking" ||\n      t === "light" ||\n      t === "lamp";'''
+          if old not in s: raise SystemExit('bloc isDragTool introuvable')
+          s=s.replace(old,new,1)
+
+          old2='''    /** Applique l'outil courant sur une case (pose ou démolition). */\n    const applyAt = (cx: number, cz: number) => {\n      const tool = toolRef.current;\n      if (tool === "erase") return eraseAt(cx, cz);\n      if (tool === "bulldoze") {\n        const done = plan.removeForce(cx, cz);\n        if (done) plan.removeHouse(cx, cz);\n        if (done) {\n          dirty.plan = true;\n          dirty.houses = true;\n        }\n        return done;\n      }\n      if (!canBuild(cx, cz)) return false;\n      if (plan.decorAt(cx, cz) || plan.house(cx, cz)) return false;\n      plan.place(cx, cz, isRoadTool(tool) ? tool : "straight", rotRef.current);\n      dirty.plan = true;\n      return true;\n    };'''
+          new2='''    /** Applique l'outil courant sur une case. Utilisé aussi pendant le glissement. */\n    const applyAt = (cx: number, cz: number) => {\n      const tool = toolRef.current;\n      if (tool === "erase") return eraseAt(cx, cz);\n      if (tool === "bulldoze") {\n        let done = false;\n        if (plan.removeDecor(cx, cz)) { dirty.decor = true; done = true; }\n        if (plan.removeHouse(cx, cz)) { dirty.houses = true; done = true; }\n        if (plan.removeForce(cx, cz)) { dirty.plan = true; done = true; }\n        return done;\n      }\n      if (tool === "house") {\n        if (!plan.canPlaceHouse(cx, cz)) return false;\n        const lvl = houseLevelRef.current;\n        if (!spendRef.current(houseDef(lvl).cost, "house", `Maison niveau ${lvl} construite`)) return false;\n        plan.placeHouse(cx, cz, lvl, rotRef.current);\n        dirty.houses = true;\n        return true;\n      }\n      if (tool === "park" || tool === "parking") {\n        if (!canBuild(cx, cz) || !plan.canPlaceDecor(cx, cz)) return false;\n        const kind = decorKindRef.current;\n        const def = decorDef(kind);\n        if (!spendRef.current(def.cost, "decor", def.label)) return false;\n        plan.placeDecor(cx, cz, kind, rotRef.current);\n        dirty.decor = true;\n        return true;\n      }\n      if (tool === "light" || tool === "lamp") {\n        const cell = plan.get(cx, cz);\n        if (!cell || cell[tool]) return false;\n        plan.setProp(cx, cz, tool, true);\n        dirty.plan = true;\n        return true;\n      }\n      if (!isRoadTool(tool) || !canBuild(cx, cz)) return false;\n      if (plan.decorAt(cx, cz) || plan.house(cx, cz)) return false;\n      plan.place(cx, cz, tool, rotRef.current);\n      dirty.plan = true;\n      return true;\n    };'''
+          if old2 not in s: raise SystemExit('bloc applyAt introuvable')
+          s=s.replace(old2,new2,1)
+
+          s=s.replace('''        if (!destructive && !canBuild(cx, cz)) break;\n        applyAt(cx, cz);''','''        if (!destructive && isRoadTool(toolRef.current) && !canBuild(cx, cz)) break;\n        applyAt(cx, cz);''',1)
+          p.write_text(s,encoding='utf-8')
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bunx tsc --noEmit
+      - name: Enregistrer
+        run: |
+          rm -f .github/workflows/upgrade-build-drag.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/CarWashScene.tsx .github/workflows/upgrade-build-drag.yml
+          git commit -m "Ameliore la construction continue au doigt et a la souris"
+          git push origin HEAD:main
