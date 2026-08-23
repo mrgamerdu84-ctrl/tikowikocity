@@ -1005,10 +1005,104 @@ export default function CarWashScene() {
       }
 
       const lawnMat = new THREE.MeshStandardMaterial({ color: 0x7fc76b, roughness: 1 });
+      const pavingMat = new THREE.MeshStandardMaterial({ color: 0xded7c4, roughness: 1 });
+
+      /* Deux îlots sortent du moule : un parc avec bassin, une place pavée. */
+      const PARK = { x: blockCentersX[1]!, z: blockCentersZ[2]! };
+      const PLAZA = { x: blockCentersX[3]!, z: blockCentersZ[1]! };
+      const isSpecial = (x: number, z: number) =>
+        (x === PARK.x && z === PARK.z) || (x === PLAZA.x && z === PLAZA.z);
+
+      const buildPark = (cx: number, cz: number) => {
+        // allées diagonales en croix sur la pelouse
+        [-1, 1].forEach((s) => {
+          const path = new THREE.Mesh(new THREE.PlaneGeometry(8.4, 1.5), pavingMat);
+          path.rotation.x = -Math.PI / 2;
+          path.rotation.z = (s * Math.PI) / 4;
+          path.position.set(cx, 0.02, cz);
+          path.receiveShadow = true;
+          scene.add(path);
+        });
+        // bassin
+        const pond = new THREE.Mesh(
+          new THREE.CircleGeometry(1.9, 28),
+          new THREE.MeshStandardMaterial({
+            color: 0x3fa9d8,
+            roughness: 0.15,
+            metalness: 0.35,
+          }),
+        );
+        pond.rotation.x = -Math.PI / 2;
+        pond.position.set(cx, 0.06, cz);
+        scene.add(pond);
+        pondSurface = pond;
+        const rim = new THREE.Mesh(
+          new THREE.TorusGeometry(2.0, 0.16, 8, 28),
+          new THREE.MeshStandardMaterial({ color: 0xcfc7ae, roughness: 1 }),
+        );
+        rim.rotation.x = -Math.PI / 2;
+        rim.position.set(cx, 0.16, cz);
+        setShadow(rim);
+        scene.add(rim);
+        // arbres en couronne
+        for (let i = 0; i < 8; i++) {
+          const a = (i / 8) * Math.PI * 2 + 0.3;
+          const tr = makeTree();
+          tr.position.set(cx + Math.cos(a) * 4, 0, cz + Math.sin(a) * 4);
+          tr.scale.setScalar(0.8 + (i % 3) * 0.08);
+          setShadow(tr);
+          scene.add(tr);
+        }
+      };
+
+      const buildPlaza = (cx: number, cz: number) => {
+        addSlab(pavingMat, 11, 11, cx, cz, 0.015);
+        // fontaine centrale
+        const basin = new THREE.Mesh(
+          new THREE.CylinderGeometry(2.1, 2.3, 0.6, 20),
+          new THREE.MeshStandardMaterial({ color: 0xe6e0cd, roughness: 0.9 }),
+        );
+        basin.position.set(cx, 0.3, cz);
+        setShadow(basin);
+        scene.add(basin);
+        const jet = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.16, 0.3, 2.2, 10),
+          new THREE.MeshStandardMaterial({
+            color: 0x9fdcf5,
+            transparent: true,
+            opacity: 0.75,
+          }),
+        );
+        jet.position.set(cx, 1.5, cz);
+        scene.add(jet);
+        // arbres et coins verts
+        [
+          [-1, -1],
+          [1, -1],
+          [-1, 1],
+          [1, 1],
+        ].forEach(([sx, sz]) => {
+          const tr = makeTree();
+          tr.position.set(cx + sx! * 4.2, 0, cz + sz! * 4.2);
+          tr.scale.setScalar(0.85);
+          setShadow(tr);
+          scene.add(tr);
+        });
+      };
+
       blockCentersX.forEach((bx, ix) => {
         blockCentersZ.forEach((bz, iz) => {
           // pelouse du pâté de maisons (entre les trottoirs)
           addSlab(lawnMat, 12 - STREET_W, 12 - STREET_W, bx, bz, 0.01);
+
+          if (bx === PARK.x && bz === PARK.z) {
+            buildPark(bx, bz);
+            return;
+          }
+          if (bx === PLAZA.x && bz === PLAZA.z) {
+            buildPlaza(bx, bz);
+            return;
+          }
 
           // anneau : 0 = centre-ville, 2 = périphérie pavillonnaire
           const ring = Math.max(Math.abs(bx) / 12, Math.abs(bz) / 12);
@@ -1040,6 +1134,7 @@ export default function CarWashScene() {
           if ((xi + zi) % 2 === 0) continue;
           const bx = (X_STREETS[xi]! + X_STREETS[xi + 1]!) / 2;
           const bz = (Z_STREETS[zi]! + Z_STREETS[zi + 1]!) / 2;
+          if (isSpecial(bx, bz)) continue;
           [-1, 1].forEach((s) => {
             const tr = makeTree();
             tr.position.set(bx + s * 2.4, 0, bz + s * 2.4);
@@ -1049,6 +1144,7 @@ export default function CarWashScene() {
           });
         }
       }
+
 
       /* Mobilier urbain 100 % Kenney, posé sur une grille stricte :
          feux aux carrefours majeurs, lampadaires et bennes en bord de bloc. */
