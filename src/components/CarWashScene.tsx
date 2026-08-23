@@ -433,7 +433,6 @@ export default function CarWashScene() {
       };
       economyRef.current = next;
       setEconomy(next);
-      (window as any).__ecoApplied = JSON.stringify(next);
     }
     if (state.history !== undefined) {
       const h = sanitizeHistory(state.history);
@@ -460,7 +459,6 @@ export default function CarWashScene() {
   const restoreLocalRef = useRef<() => void>(() => {});
   restoreLocalRef.current = () => {
     const saved = readLocalCity();
-    (window as any).__restore = saved ? JSON.stringify((saved.state as any).economy) : "none";
     if (!saved) return;
     try {
       applySavedStateRef.current(saved.state as SavedState, false);
@@ -1599,7 +1597,6 @@ export default function CarWashScene() {
        l'itinéraire jusqu'au tunnel, puis repart rouler une fois propre. */
     let washCooldown = 6 + Math.random() * 6;
     const sendCityCarToWash = () => {
-      console.log("DBG send", netCars.length, washCars.length);
       if (netCars.length <= 2) return;
       const start = posAt(0);
       let best = -1;
@@ -2307,10 +2304,8 @@ export default function CarWashScene() {
 
     const clock = new THREE.Clock();
     const animate = () => {
-      (window as any).__frames = ((window as any).__frames ?? 0) + 1;
       frame = requestAnimationFrame(animate);
       const dt = Math.min(clock.getDelta(), 0.05);
-      (window as any).__dbg = { t: clock.elapsedTime, cooldown: washCooldown, net: netCars.length, wash: washCars.length };
       const t = clock.elapsedTime;
 
       // aperçu 3D de l'objet à poser : suit la case visée et la rotation choisie
@@ -2358,7 +2353,6 @@ export default function CarWashScene() {
         }
 
 
-        if (i === 0 && Math.random() < 0.01) console.log("DBG lead d", e.d.toFixed(2), "limit", limit, "ROUTE_LEN", ROUTE_LEN, "WASH", WASH_D0, WASH_D1);
         const target = Math.min(e.d + dt * wantSpeed, limit);
         const moved = Math.max(target - e.d, 0);
         e.d += moved;
@@ -2366,7 +2360,6 @@ export default function CarWashScene() {
         /* Lavage terminé : la voiture sort du tunnel et paye la prestation. */
         if (!e.paid && e.d >= WASH_D1) {
           e.paid = true;
-          console.log("DBG wash done");
           registerWashRef.current(rollReward(up.quality));
         }
 
