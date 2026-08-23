@@ -334,7 +334,11 @@ export default function CarWashScene() {
       2000,
     );
     if (isPortrait()) camera.position.set(-26, 36, WASH_SITE_Z + 54);
-    else camera.position.set(-34, 26, WASH_SITE_Z + 40);
+    // Cadrage desktop/paysage : caméra au nord-ouest de la route principale,
+    // regard vers le sud-est. La ville (route principale + parcelles) occupe le
+    // centre/premier plan, le car wash reste visible en arrière-plan relié par
+    // la route, les montagnes restent lointaines.
+    else camera.position.set(-25, 24, 20);
 
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -346,7 +350,11 @@ export default function CarWashScene() {
     wrap.appendChild(renderer.domElement);
 
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.target.set(isPortrait() ? -4 : 2, 1.5, WASH_SITE_Z + (isPortrait() ? 12 : 6));
+    controls.target.set(
+      isPortrait() ? -4 : 5,
+      1.5,
+      isPortrait() ? WASH_SITE_Z + 12 : -15,
+    );
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
     controls.minDistance = 6;
