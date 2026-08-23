@@ -1,0 +1,117 @@
+name: Corriger circulation voitures routes
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.issue.title == '[TIKOWIKO] Apply road traffic fix'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Corriger trajectoires et demi-tours
+        shell: python
+        run: |
+          from pathlib import Path
+
+          p = Path('src/components/CarWashScene.tsx')
+          s = p.read_text(encoding='utf-8')
+
+          old_close = '''        // distance de sécurité avec la voiture devant, dans la même case
+        const tooClose = netCars.some(
+          (o) =>
+            o !== e && o.cx === e.cx && o.cz === e.cz && o.t > e.t && o.t - e.t < 0.4,
+        );
+        if (tooClose) return;
+'''
+          new_close = '''        // Distance de sécurité uniquement sur la même voie. Une voiture venant
+        // en sens inverse est sur l'autre voie et ne doit pas bloquer celle-ci.
+        const tooClose = netCars.some(
+          (o) =>
+            o !== e &&
+            o.cx === e.cx &&
+            o.cz === e.cz &&
+            o.dirIn === e.dirIn &&
+            o.t > e.t &&
+            o.t - e.t < 0.34,
+        );
+        if (tooClose) return;
+'''
+          if old_close not in s:
+            raise SystemExit('bloc distance sécurité introuvable')
+          s = s.replace(old_close, new_close, 1)
+
+          old_dead = '''          if (!next) {
+            // cul-de-sac : demi-tour sans quitter la chaussée
+            e.dirIn = e.dirOut;
+            e.dirOut = opposite(e.dirIn);
+            e.t = 0;
+          } else {
+'''
+          new_dead = '''          if (!next) {
+            // Route supprimée ou cul-de-sac inattendu : repartir depuis le
+            // bord où la voiture se trouve déjà. L'ancien code remettait t à 0
+            // avec la mauvaise direction d'entrée et téléportait la voiture de
+            // l'autre côté de la tuile.
+            const reverse = opposite(e.dirOut);
+            e.dirIn = reverse;
+            e.dirOut = reverse;
+            e.t = 0;
+          } else {
+'''
+          if old_dead not in s:
+            raise SystemExit('bloc cul-de-sac introuvable')
+          s = s.replace(old_dead, new_dead, 1)
+
+          old_busy = '''            const busy =
+              netCars.filter((o) => o !== e && o.cx === nx && o.cz === nz).length >= 2;
+            const red = next.light && axisOf(e.dirOut) !== greenAxis;
+            if (busy || red) {
+              e.t = 0.97;
+              return;
+            }
+'''
+          new_busy = '''            // Ne pas entrer sur une case si une voiture occupe encore le début
+            // de la même voie. Cela évite les superpositions aux carrefours.
+            const busy = netCars.some(
+              (o) =>
+                o !== e &&
+                o.cx === nx &&
+                o.cz === nz &&
+                o.dirIn === e.dirOut &&
+                o.t < 0.52,
+            );
+            const red = next.light && axisOf(e.dirOut) !== greenAxis;
+            if (busy || red) {
+              // Ligne d'arrêt avant le carrefour : la voiture ne mord plus
+              // sur l'intersection lorsqu'elle attend le feu vert.
+              e.t = Math.min(e.t, 0.88);
+              return;
+            }
+'''
+          if old_busy not in s:
+            raise SystemExit('bloc occupation/feu introuvable')
+          s = s.replace(old_busy, new_busy, 1)
+
+          p.write_text(s, encoding='utf-8')
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bunx tsc --noEmit
+
+      - name: Enregistrer la correction
+        run: |
+          rm -f .github/workflows/fix-road-traffic.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/CarWashScene.tsx .github/workflows/fix-road-traffic.yml
+          git commit -m "Stabilise les voitures sur le réseau routier"
+          git pull --rebase origin main
+          git push origin HEAD:main
