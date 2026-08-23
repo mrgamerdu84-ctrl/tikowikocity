@@ -252,6 +252,16 @@ export default function CarWashScene() {
         });
       }
       if (Array.isArray(state.city)) planIoRef.current.load(state.city);
+      if (state.economy && typeof state.economy === "object") {
+        const money = state.economy.money;
+        const washes = state.economy.washes;
+        const next = {
+          money: typeof money === "number" && Number.isFinite(money) ? money : 0,
+          washes: typeof washes === "number" && Number.isFinite(washes) ? washes : 0,
+        };
+        economyRef.current = next;
+        setEconomy(next);
+      }
       if (typeof state.cinema === "boolean" && state.cinema !== cinemaStateRef.current) {
         cinemaRef.current();
       }
