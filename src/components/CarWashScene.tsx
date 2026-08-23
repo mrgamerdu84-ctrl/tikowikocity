@@ -99,6 +99,27 @@ export default function CarWashScene() {
     traffic: true,
   });
   const machinesRef = useRef(machines);
+
+  /* ----- Économie : chaque lavage terminé rapporte de l'argent.
+     Les routes restent gratuites (aucun coût de construction). ----- */
+  const [economy, setEconomy] = useState({ money: 0, washes: 0 });
+  const economyRef = useRef(economy);
+  const [gain, setGain] = useState<{ id: number; amount: number } | null>(null);
+  const registerWashRef = useRef<(amount: number) => void>(() => {});
+  registerWashRef.current = (amount: number) => {
+    setEconomy((prev) => {
+      const next = { money: prev.money + amount, washes: prev.washes + 1 };
+      economyRef.current = next;
+      return next;
+    });
+    setGain({ id: Date.now() + Math.random(), amount });
+  };
+  useEffect(() => {
+    if (!gain) return;
+    const id = window.setTimeout(() => setGain(null), 1600);
+    return () => window.clearTimeout(id);
+  }, [gain]);
+
   const toggleMachine = (key: keyof typeof machines) => {
     setMachines((prev) => {
       const next = { ...prev, [key]: !prev[key] };
@@ -182,6 +203,7 @@ export default function CarWashScene() {
               machines: machinesRef.current,
               cinema: cinemaStateRef.current,
               city: planIoRef.current.save(),
+              economy: economyRef.current,
 
             },
           },
@@ -216,6 +238,7 @@ export default function CarWashScene() {
         machines?: Partial<typeof machines>;
         cinema?: unknown;
         city?: SerializedPlan;
+        economy?: { money?: unknown; washes?: unknown };
       };
       if (state.machines && typeof state.machines === "object") {
         setMachines((prev) => {
@@ -229,6 +252,16 @@ export default function CarWashScene() {
         });
       }
       if (Array.isArray(state.city)) planIoRef.current.load(state.city);
+      if (state.economy && typeof state.economy === "object") {
+        const money = state.economy.money;
+        const washes = state.economy.washes;
+        const next = {
+          money: typeof money === "number" && Number.isFinite(money) ? money : 0,
+          washes: typeof washes === "number" && Number.isFinite(washes) ? washes : 0,
+        };
+        economyRef.current = next;
+        setEconomy(next);
+      }
       if (typeof state.cinema === "boolean" && state.cinema !== cinemaStateRef.current) {
         cinemaRef.current();
       }
@@ -758,6 +791,8 @@ export default function CarWashScene() {
       wheels: THREE.Object3D[];
       /* voiture du réseau empruntée : elle repart circuler après le lavage */
       origin: NetCar;
+      /* true dès que le lavage a été facturé (évite les doubles paiements) */
+      paid?: boolean;
 
     };
     const washCars: WashCar[] = [];
@@ -1444,6 +1479,12 @@ export default function CarWashScene() {
         const moved = Math.max(target - e.d, 0);
         e.d += moved;
 
+        /* Lavage terminé : la voiture sort du tunnel et paye la prestation. */
+        if (!e.paid && e.d >= WASH_D1) {
+          e.paid = true;
+          registerWashRef.current(6 + Math.floor(Math.random() * 7));
+        }
+
         e.wheels.forEach((w) => {
           w.rotation.x -= ((w.userData['spinSign'] as number) ?? 1) * (moved / 0.35) * 2;
         });
@@ -1768,6 +1809,25 @@ export default function CarWashScene() {
             <span className="truncate text-[13px] font-bold sm:text-[14px]">{player.name}</span>
           </div>
         )}
+
+        <div className="relative mt-2 flex items-center gap-2 rounded-xl bg-sunny/25 px-2 py-1.5 ring-1 ring-ink/10">
+          <span aria-hidden className="text-[15px]">💰</span>
+          <span className="text-[15px] font-extrabold tabular-nums sm:text-[17px]">
+            {economy.money.toLocaleString("fr-FR")} €
+          </span>
+          <span className="ml-auto text-[11px] font-semibold opacity-70">
+            {economy.washes} lavage{economy.washes > 1 ? "s" : ""}
+          </span>
+          {gain && (
+            <span
+              key={gain.id}
+              className="absolute -top-3 right-1 animate-bounce text-[13px] font-extrabold text-splash"
+            >
+              +{gain.amount} €
+            </span>
+          )}
+        </div>
+
 
         <p className="mt-1 hidden text-[12.5px] leading-relaxed opacity-80 sm:block">
           Construit avec les kits Kenney (voitures, routes, bâtiments). Glisse pour tourner la
