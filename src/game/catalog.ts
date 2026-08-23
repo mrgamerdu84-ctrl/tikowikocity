@@ -5,13 +5,16 @@ import type { Dir } from "./grid";
    bit 0 = Nord, 1 = Est, 2 = Sud, 3 = Ouest. */
 export type RoadHint = "straight" | "bend" | "intersection" | "crossroad";
 
-export type BuildTool = RoadHint | "light" | "lamp" | "house" | "erase";
+export type BuildTool = RoadHint | "light" | "lamp" | "house" | "bulldoze" | "erase";
 
+/* Orientation réelle des modèles Kenney (vérifiée en vue de dessus) :
+   la droite relie Est/Ouest, le virage relie Ouest/Sud, l'impasse ouvre à l'Est
+   et le T ferme le Nord. */
 export const BASE_MASK: Record<string, number> = {
-  "road-end": 0b0001, // Nord seul
-  "road-straight": 0b0101, // Nord + Sud
-  "road-bend": 0b0011, // Nord + Est
-  "road-intersection": 0b0111, // Nord + Est + Sud
+  "road-end": 0b0010, // Est seul
+  "road-straight": 0b1010, // Est + Ouest
+  "road-bend": 0b1100, // Sud + Ouest
+  "road-intersection": 0b1110, // Est + Sud + Ouest
   "road-crossroad": 0b1111,
 };
 
@@ -30,8 +33,10 @@ export const TOOL_LABEL: Record<BuildTool, string> = {
   light: "🚦 Feu",
   lamp: "💡 Lampadaire",
   house: "🏠 Maison",
+  bulldoze: "🧨 Détruire route",
   erase: "🧹 Gomme",
 };
+
 
 /** rotation.y = r * 90° envoie la direction d sur (d - r) mod 4. */
 const rotateMask = (mask: number, r: number) => {
