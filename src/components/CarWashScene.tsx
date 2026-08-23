@@ -74,7 +74,6 @@ export default function CarWashScene() {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState(MESSAGES[0]!);
-  const spawnRef = useRef<() => void>(() => {});
   const cinemaRef = useRef<() => void>(() => {});
   const [cinema, setCinema] = useState(false);
   const [machines, setMachines] = useState({
@@ -667,8 +666,11 @@ export default function CarWashScene() {
       yaw: number;
       baseY: number;
       wheels: THREE.Object3D[];
+      /* voiture de ville empruntée : elle retourne circuler après le lavage */
+      origin: TrafficCar;
     };
     const washCars: WashCar[] = [];
+
 
     const brushes: Array<{
       pivot: THREE.Object3D;
@@ -749,28 +751,29 @@ export default function CarWashScene() {
       return { x, z, heading };
     };
 
-    let spawnIndex = 0;
-    const spawnSedan = () => {
-      const template = kitCar(spawnIndex++ * 3 + 1);
-      if (!template) return;
-      const sedan = template.clone(true);
-      setShadow(sedan);
-      const baseY = 0;
+    /* Une voiture de la ville décide spontanément d'aller au lavage : elle
+       quitte la circulation, suit l'itinéraire jusqu'au tunnel, puis revient
+       rouler en ville une fois propre. */
+    let washCooldown = 6 + Math.random() * 6;
+    const sendCityCarToWash = () => {
+      if (trafficCars.length <= 4) return;
+      const idx = Math.floor(Math.random() * trafficCars.length);
+      const origin = trafficCars.splice(idx, 1)[0];
+      if (!origin) return;
       const start = posAt(0);
-      sedan.position.set(start.x, baseY, start.z);
-      tintCar(sedan, 1);
-      scene.add(sedan);
+      origin.car.position.set(start.x, origin.baseY, start.z);
+      tintCar(origin.car, 1);
       washCars.push({
-        car: sedan,
+        car: origin.car,
         d: 0,
         speed: 5.2,
-        yaw: 0,
-        baseY,
-        wheels: findWheels(sedan),
+        yaw: origin.yaw,
+        baseY: origin.baseY,
+        wheels: origin.wheels,
+        origin,
       });
     };
 
-    spawnRef.current = spawnSedan;
 
 
 
@@ -1045,7 +1048,6 @@ export default function CarWashScene() {
         foamSprites.push(foam);
       }
 
-      spawnSedan();
 
       // ----- Ville : grille de rues régulière -----
       const asphalt = new THREE.MeshStandardMaterial({
@@ -1474,13 +1476,14 @@ export default function CarWashScene() {
 
       const ctl = machinesRef.current;
       const SPEED = 2.6;
-      const BELT_SPEED = ctl.belt ? 1.1 : 0;
+      /* même tapis à l'arrêt, la voiture avance lentement pour ne jamais
+         rester bloquée dans le portique */
+      const BELT_SPEED = ctl.belt ? 1.1 : 0.45;
       const GAP = 3.2;
       const [zoneStart, zoneEnd] = WASH_ZONE;
 
       // Les voitures suivent l'itinéraire routier ; la première est en tête
       let aheadD = Number.POSITIVE_INFINITY;
-      const occupied = washCars.some((c) => c.d > WASH_D0 - 0.2 && c.d < WASH_D1);
 
       for (let i = 0; i < washCars.length; i++) {
         const e = washCars[i]!;
@@ -1489,10 +1492,12 @@ export default function CarWashScene() {
 
         // Limite : garder une distance de sécurité avec la voiture devant
         let limit = aheadD - GAP;
-        // Portail d'entrée : on attend que le tunnel se libère
-        if (!onBelt && e.d < WASH_D0 && occupied) {
+        /* Portail d'entrée : on n'attend que si une AUTRE voiture (devant)
+           occupe encore le tunnel. */
+        if (!onBelt && e.d < WASH_D0 && aheadD < WASH_D1) {
           limit = Math.min(limit, WASH_D0 - 0.6);
         }
+
 
         const target = Math.min(e.d + dt * wantSpeed, limit);
         const moved = Math.max(target - e.d, 0);
@@ -1524,12 +1529,36 @@ export default function CarWashScene() {
         aheadD = e.d;
       }
 
+      /* Fin de l'itinéraire : la voiture, propre, reprend sa vie en ville */
       for (let i = washCars.length - 1; i >= 0; i--) {
         const e = washCars[i]!;
         if (e.d >= ROUTE_LEN - 0.05) {
-          scene.remove(e.car);
+          const o = e.origin;
+          tintCar(o.car, 0);
+          /* on la réinjecte sur sa rue, à une place libre */
+          let s = o.sMin + Math.random() * (o.sMax - o.sMin);
+          for (let k = 0; k < 12; k++) {
+            const clash = trafficCars.some(
+              (c) =>
+                c.axis === o.axis &&
+                Math.abs(c.lane - o.lane) < 0.5 &&
+                Math.abs(c.s - s) < 6,
+            );
+            if (!clash) break;
+            s = o.sMin + Math.random() * (o.sMax - o.sMin);
+          }
+          o.s = s;
+          trafficCars.push(o);
           washCars.splice(i, 1);
         }
+      }
+
+
+      /* De temps en temps, une voiture de la ville part au lavage. */
+      washCooldown -= dt;
+      if (washCooldown <= 0) {
+        washCooldown = 9 + Math.random() * 12;
+        if (ctl.traffic && washCars.length < 3) sendCityCarToWash();
       }
 
       const carInWash = washCars.some((c) => c.d > WASH_D0 && c.d < WASH_D1);
@@ -1737,18 +1766,13 @@ export default function CarWashScene() {
 
 
 
-    // File d'attente : de nouvelles voitures arrivent régulièrement
-    let queueTimer = 0;
-
     loadAll()
       .then(() => {
         if (disposed) return;
         buildScene();
         setLoading(false);
         animate();
-        queueTimer = window.setInterval(() => {
-          if (washCars.length < 5) spawnSedan();
-        }, 4000);
+
 
         void loadMeshy();
       })
@@ -1761,7 +1785,7 @@ export default function CarWashScene() {
     return () => {
       disposed = true;
       cancelAnimationFrame(frame);
-      window.clearInterval(queueTimer);
+      
       window.removeEventListener("resize", onResize);
       controls.dispose();
       renderer.dispose();
@@ -1835,13 +1859,7 @@ export default function CarWashScene() {
 
       <div className="fixed bottom-4 right-4 z-30 flex items-center gap-2 rounded-2xl bg-white/80 p-2.5 shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur">
         <button
-          type="button"
-          onClick={() => spawnRef.current()}
-          className="rounded-full bg-splash px-3.5 py-2.5 text-[12.5px] font-bold text-splash-foreground shadow-[0_3px_0_var(--splash-shadow)] transition-transform active:translate-y-0.5 active:shadow-[0_1px_0_var(--splash-shadow)]"
-        >
-          🚗 Envoyer une voiture
-        </button>
-        <button
+
           type="button"
           onClick={() => cinemaRef.current()}
           aria-pressed={cinema}
