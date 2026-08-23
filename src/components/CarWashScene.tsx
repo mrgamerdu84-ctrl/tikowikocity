@@ -709,26 +709,52 @@ export default function CarWashScene() {
     }> = [];
     const foamSprites: THREE.Object3D[] = [];
     const conveyorSlats: THREE.Mesh[] = [];
-    type TrafficCar = {
-      car: THREE.Object3D;
-      axis: "x" | "z";
-      /* coordonnée fixe = centre de la voie */
-      lane: number;
-      /* position le long de la rue */
-      s: number;
-      dir: number;
-      speed: number;
-      heading: number;
-      yaw: number;
-      baseY: number;
-      wheels: THREE.Object3D[];
-      /* bornes de la chaussée pour cet axe : jamais de sortie sur la pelouse */
-      sMin: number;
-      sMax: number;
+    /* ----- Réseau routier du joueur ----- */
+    const plan = new CityPlan();
+    const MAIN_CX = Math.round(WASH_ACCESS_X / TILE);
+    const MAIN_CZ_START = -5; // première case au nord de la parcelle
+    const MAIN_CZ_END = 12; // s'enfonce vers les reliefs du fond
+    const LANE = 1.5;
 
+    /* Voiture circulant de case en case sur le réseau construit. */
+    type NetCar = {
+      car: THREE.Object3D;
+      wheels: THREE.Object3D[];
+      speed: number;
+      baseY: number;
+      yaw: number;
+      cx: number;
+      cz: number;
+      dirIn: Dir;
+      dirOut: Dir;
+      /** progression dans la case courante (0 → 1) */
+      t: number;
+    };
+    const netCars: NetCar[] = [];
+
+    /* Position/cap d'une voiture : courbe quadratique entrée → sortie de case,
+       décalée à droite pour rester sur sa voie, y compris dans les virages. */
+    const netPose = (e: NetCar) => {
+      const cxw = e.cx * TILE;
+      const czw = e.cz * TILE;
+      const vin = DIR_VEC[e.dirIn]!;
+      const vout = DIR_VEC[e.dirOut]!;
+      const rin = rightOf(e.dirIn);
+      const rout = rightOf(e.dirOut);
+      const ax = cxw - (vin[0] * TILE) / 2 + rin[0] * LANE;
+      const az = czw - (vin[1] * TILE) / 2 + rin[1] * LANE;
+      const bx = cxw + (vout[0] * TILE) / 2 + rout[0] * LANE;
+      const bz = czw + (vout[1] * TILE) / 2 + rout[1] * LANE;
+      const ccx = cxw + ((rin[0] + rout[0]) * LANE) / 2;
+      const ccz = czw + ((rin[1] + rout[1]) * LANE) / 2;
+      const u = 1 - e.t;
+      const x = u * u * ax + 2 * u * e.t * ccx + e.t * e.t * bx;
+      const z = u * u * az + 2 * u * e.t * ccz + e.t * e.t * bz;
+      const dx = 2 * u * (ccx - ax) + 2 * e.t * (bx - ccx);
+      const dz = 2 * u * (ccz - az) + 2 * e.t * (bz - ccz);
+      return { x, z, heading: Math.atan2(dx, dz) };
     };
 
-    const trafficCars: TrafficCar[] = [];
     /* Toute la station de lavage (tunnel, tapis, brosses, voitures à laver)
        vit dans ce groupe : ses coordonnées locales restent inchangées. */
     const washSite = new THREE.Group();
@@ -738,10 +764,81 @@ export default function CarWashScene() {
        détaillé dès qu'il est chargé. */
     let tunnelPlaceholder: THREE.Object3D | null = null;
 
+    /* Rendu du plan : tuiles de route auto-raccordées + mobilier posé. */
+    const roadsGroup = new THREE.Group();
+    scene.add(roadsGroup);
+    const propsGroup = new THREE.Group();
+    scene.add(propsGroup);
 
+    const renderPlan = () => {
+      [...roadsGroup.children].forEach((c) => roadsGroup.remove(c));
+      [...propsGroup.children].forEach((c) => propsGroup.remove(c));
+      trafficLights.length = 0;
+      plan.cells.forEach((cell, k) => {
+        const [cx, cz] = parseKey(k);
+        const { model, rot } = plan.variantAt(cx, cz);
+        const tpl = kit[model] ?? kit["road-straight"];
+        if (tpl) {
+          const tile = tpl.clone(true);
+          tile.scale.setScalar(TILE);
+          tile.position.set(cx * TILE, 0.012, cz * TILE);
+          tile.rotation.y = (rot * Math.PI) / 2;
+          tile.traverse((n) => {
+            const m = n as THREE.Mesh;
+            if (m.isMesh) m.receiveShadow = true;
+          });
+          roadsGroup.add(tile);
+        }
+        if (cell.light) {
+          const off = TILE / 2 - 0.6;
+          ([
+            ["x", -off, -off],
+            ["z", off, off],
+          ] as const).forEach(([axis, ox, oz]) => {
+            const l = makeTrafficLight(axis);
+            l.position.set(cx * TILE + ox, 0, cz * TILE + oz);
+            l.rotation.y = Math.atan2(-ox, -oz);
+            setShadow(l);
+            propsGroup.add(l);
+          });
+        }
+        if (cell.lamp) {
+          const tplL = kit["light-square"];
+          if (tplL) {
+            const lamp = tplL.clone(true);
+            lamp.scale.setScalar(6);
+            lamp.position.set(cx * TILE - TILE / 2 + 0.7, 0, cz * TILE + TILE / 2 - 0.7);
+            setShadow(lamp);
+            propsGroup.add(lamp);
+          }
+        }
+      });
+    };
 
-    /* ----- Itinéraire routier complet : ville → voie d'accès → tunnel → retour ----- */
-    const CITY_SOUTH = -24; // rue la plus au sud de la grille
+    let ti = 0;
+    const spawnNetCar = (cx: number, cz: number) => {
+      const car = kitCar(ti).clone(true);
+      setShadow(car);
+      scene.add(car);
+      const exits = plan.exitsAt(cx, cz);
+      const dirOut = (exits[0] ?? 0) as Dir;
+      netCars.push({
+        car,
+        wheels: findWheels(car),
+        speed: 3.4 + (ti % 3) * 0.5,
+        baseY: 0,
+        yaw: 0,
+        cx,
+        cz,
+        dirIn: dirOut,
+        dirOut,
+        t: Math.random() * 0.5,
+      });
+      ti++;
+    };
+
+    /* ----- Itinéraire routier complet : route → parcelle → tunnel → retour ----- */
+    const CITY_SOUTH = MAIN_CZ_START * TILE; // départ sur la route principale
     const SITE_ROAD_Z = WASH_SITE_Z + 13; // rue est-ouest de la parcelle
     const WASH_IN_X = PATH_START;
     const WASH_OUT_X = PATH_END;
@@ -780,16 +877,26 @@ export default function CarWashScene() {
       return { x, z, heading };
     };
 
-    /* Une voiture de la ville décide spontanément d'aller au lavage : elle
-       quitte la circulation, suit l'itinéraire jusqu'au tunnel, puis revient
-       rouler en ville une fois propre. */
+    /* Une voiture du réseau décide spontanément d'aller au lavage : celle qui
+       est la plus proche de la parcelle quitte la circulation, suit
+       l'itinéraire jusqu'au tunnel, puis repart rouler une fois propre. */
     let washCooldown = 6 + Math.random() * 6;
     const sendCityCarToWash = () => {
-      if (trafficCars.length <= 4) return;
-      const idx = Math.floor(Math.random() * trafficCars.length);
-      const origin = trafficCars.splice(idx, 1)[0];
-      if (!origin) return;
+      if (netCars.length <= 2) return;
       const start = posAt(0);
+      let best = -1;
+      let bestD = Infinity;
+      netCars.forEach((c, i) => {
+        const d =
+          (c.car.position.x - start.x) ** 2 + (c.car.position.z - start.z) ** 2;
+        if (d < bestD) {
+          bestD = d;
+          best = i;
+        }
+      });
+      if (best < 0) return;
+      const origin = netCars.splice(best, 1)[0];
+      if (!origin) return;
       origin.car.position.set(start.x, origin.baseY, start.z);
       tintCar(origin.car, 1);
       washCars.push({
@@ -802,6 +909,7 @@ export default function CarWashScene() {
         origin,
       });
     };
+
 
 
 
