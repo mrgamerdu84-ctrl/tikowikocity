@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { saveToDrive } from "@/lib/drive.functions";
+import { saveToDrive, loadFromDrive } from "@/lib/drive.functions";
+
+const SAVE_VERSION = 1;
+
 
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
@@ -90,7 +93,12 @@ export default function CarWashScene() {
   };
 
   const [driveState, setDriveState] = useState<"idle" | "saving" | "done" | "error">("idle");
+  const [loadState, setLoadState] = useState<"idle" | "loading" | "done" | "error">("idle");
   const saveFn = useServerFn(saveToDrive);
+  const loadFn = useServerFn(loadFromDrive);
+  const cinemaStateRef = useRef(cinema);
+  cinemaStateRef.current = cinema;
+
   const handleSaveToDrive = async () => {
     setDriveState("saving");
     try {
@@ -99,10 +107,15 @@ export default function CarWashScene() {
         data: {
           fileName: `tikowikocarwash-${stamp}.json`,
           payload: {
+            version: SAVE_VERSION,
             app: "TikowikoCarWash",
             savedAt: new Date().toISOString(),
-            machines: machinesRef.current,
-            cinema,
+            // Extensible: new progression fields can be added here without
+            // breaking older saves (loader applies only known keys).
+            state: {
+              machines: machinesRef.current,
+              cinema: cinemaStateRef.current,
+            },
           },
         },
       });
@@ -120,6 +133,44 @@ export default function CarWashScene() {
       toast.error("Échec de la sauvegarde sur Drive");
     }
   };
+
+  const handleLoadFromDrive = async () => {
+    setLoadState("loading");
+    try {
+      const res = await loadFn({ data: undefined });
+      if (!res.found) {
+        setLoadState("idle");
+        toast.info("Aucune sauvegarde trouvée dans le dossier TikowikoCarWash.");
+        return;
+      }
+      const state = JSON.parse(res.stateJson || "{}") as {
+        machines?: Partial<typeof machines>;
+        cinema?: unknown;
+      };
+      if (state.machines && typeof state.machines === "object") {
+        setMachines((prev) => {
+          const next = { ...prev };
+          (Object.keys(prev) as Array<keyof typeof prev>).forEach((k) => {
+            const v = state.machines?.[k];
+            if (typeof v === "boolean") next[k] = v;
+          });
+          machinesRef.current = next;
+          return next;
+        });
+      }
+      if (typeof state.cinema === "boolean" && state.cinema !== cinemaStateRef.current) {
+        cinemaRef.current();
+      }
+      setLoadState("done");
+      toast.success("Progression restaurée depuis Drive", { description: res.fileName });
+      window.setTimeout(() => setLoadState("idle"), 4000);
+    } catch (err) {
+      console.error(err);
+      setLoadState("error");
+      toast.error(err instanceof Error ? err.message : "Échec du chargement depuis Drive");
+    }
+  };
+
 
 
 
@@ -1758,7 +1809,7 @@ export default function CarWashScene() {
         </button>
         <button
           type="button"
-          disabled={driveState === "saving"}
+          disabled={driveState === "saving" || loadState === "loading"}
           onClick={handleSaveToDrive}
           className="rounded-full bg-ink/10 px-3.5 py-2.5 text-[12.5px] font-bold text-ink transition-transform active:translate-y-0.5 disabled:opacity-60"
         >
@@ -1770,6 +1821,21 @@ export default function CarWashScene() {
                 ? "⚠️ Réessayer"
                 : "☁️ Sauver sur Drive"}
         </button>
+        <button
+          type="button"
+          disabled={loadState === "loading" || driveState === "saving"}
+          onClick={handleLoadFromDrive}
+          className="rounded-full bg-ink/10 px-3.5 py-2.5 text-[12.5px] font-bold text-ink transition-transform active:translate-y-0.5 disabled:opacity-60"
+        >
+          {loadState === "loading"
+            ? "⏳ Lecture..."
+            : loadState === "done"
+              ? "✅ Chargé"
+              : loadState === "error"
+                ? "⚠️ Réessayer"
+                : "📥 Charger depuis Drive"}
+        </button>
+
       </div>
 
     </>
