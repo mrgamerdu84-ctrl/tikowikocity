@@ -1,9 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
 import modelsAsset from "@/assets/car-wash-models.json.asset.json";
+import tunnelAsset from "@/assets/tunnel.glb.asset.json";
+import blueSuvAsset from "@/assets/blue_suv.glb.asset.json";
+import graySedanAsset from "@/assets/gray_sedan.glb.asset.json";
+import greenSportsAsset from "@/assets/green_sports.glb.asset.json";
+import yellowPickupAsset from "@/assets/yellow_pickup.glb.asset.json";
+import washCartoonAsset from "@/assets/wash_cartoon.glb.asset.json";
+
+const MESHY_CARS = [blueSuvAsset, graySedanAsset, greenSportsAsset, yellowPickupAsset];
+
 
 const MESSAGES = [
   "Préparation du savon...",
@@ -143,6 +153,35 @@ export default function CarWashScene() {
       return inst;
     };
 
+    /* Les modèles Meshy sont exportés en Y-up mais avec une échelle et une
+       orientation libres : on les tourne face à +X, on les met à l'échelle
+       voulue et on les pose au sol. */
+    const normalizeModel = (source: THREE.Object3D, targetLength: number) => {
+      const root = new THREE.Group();
+      const inner = new THREE.Group();
+      inner.add(source);
+      root.add(inner);
+
+      let box = new THREE.Box3().setFromObject(inner);
+      const size = box.getSize(new THREE.Vector3());
+
+      // la plus grande dimension au sol suit l'axe X (sens de circulation)
+      if (size.z > size.x) {
+        inner.rotation.y = Math.PI / 2;
+        inner.updateMatrixWorld(true);
+        box = new THREE.Box3().setFromObject(inner);
+      }
+
+      const finalSize = box.getSize(new THREE.Vector3());
+      const center = box.getCenter(new THREE.Vector3());
+      inner.position.set(-center.x, -box.min.y, -center.z);
+      root.scale.setScalar(targetLength / Math.max(finalSize.x, 0.0001));
+      setShadow(root);
+      return root;
+    };
+
+
+
     const isolateMaterials = (car: THREE.Object3D) => {
       const materials: THREE.MeshStandardMaterial[] = [];
       car.traverse((n) => {
@@ -246,23 +285,33 @@ export default function CarWashScene() {
     };
 
     const models: Record<string, THREE.Group> = {};
+    const meshyCars: THREE.Object3D[] = [];
     const sedanCars: THREE.Object3D[] = [];
     const brushes: THREE.Object3D[] = [];
     const foamSprites: THREE.Object3D[] = [];
 
     const spawnSedan = () => {
-      const template = models["sedan"];
+      const template =
+        meshyCars.length > 0
+          ? meshyCars[Math.floor(Math.random() * meshyCars.length)]!
+          : models["sedan"];
       if (!template) return;
       const sedan = template.clone(true);
       setShadow(sedan);
-      sedan.rotation.y = Math.PI / 2;
-      sedan.position.set(PATH_START, CAR_Y, 0);
+      const isKenney = template === models["sedan"];
+      if (isKenney) sedan.rotation.y = Math.PI / 2;
+      const baseY = isKenney ? CAR_Y : 0.06;
+      sedan.userData["baseY"] = baseY;
+      sedan.position.set(PATH_START, baseY, 0);
       sedan.userData["wheels"] = findWheels(sedan);
       tintCar(sedan, 1);
       scene.add(sedan);
+
       sedanCars.push(sedan);
     };
     spawnRef.current = spawnSedan;
+
+
 
     let cinemaMode = false;
     cinemaRef.current = () => {
@@ -280,7 +329,10 @@ export default function CarWashScene() {
       place(models["hRoof"]!, x, 2.4, z);
     };
 
+    let kenneyTunnel: THREE.Object3D | null = null;
+
     const buildScene = () => {
+
       for (let x = -13; x <= 13; x += 1) {
         [-1, 0, 1].forEach((z) => place(models["roadStraight"]!, x, ROAD_Y, z, 0));
       }
@@ -290,6 +342,8 @@ export default function CarWashScene() {
       tunnel.position.set(2, 0, 0);
       setShadow(tunnel);
       scene.add(tunnel);
+      kenneyTunnel = tunnel;
+
 
       [-1, 1].forEach((zSide) => {
         [1, 3].forEach((x) => {
@@ -359,10 +413,12 @@ export default function CarWashScene() {
         else dirtiness = 1 - (car.position.x - zoneStart) / (zoneEnd - zoneStart);
         tintCar(car, dirtiness);
 
+        const baseY = (car.userData["baseY"] as number | undefined) ?? CAR_Y;
         car.position.y =
           car.position.x > zoneStart && car.position.x < zoneEnd
-            ? CAR_Y + Math.sin(t * 30) * 0.01
-            : CAR_Y;
+            ? baseY + Math.sin(t * 30) * 0.01
+            : baseY;
+
 
         if (car.position.x > PATH_END) {
           scene.remove(car);
@@ -406,6 +462,8 @@ export default function CarWashScene() {
     window.addEventListener("resize", onResize);
 
     const loader = new GLTFLoader();
+    loader.setMeshoptDecoder(MeshoptDecoder);
+
     const loadAll = async () => {
       const res = await fetch(modelsAsset.url);
       const data = (await res.json()) as Record<string, string>;
@@ -427,17 +485,66 @@ export default function CarWashScene() {
       );
     };
 
+    const loadMeshy = async () => {
+      const load = (url: string) =>
+        new Promise<THREE.Group>((resolve, reject) => {
+          loader.load(
+            url,
+            (gltf) => resolve(gltf.scene),
+            undefined,
+            (err) => reject(err instanceof Error ? err : new Error(String(err))),
+          );
+        });
+
+      // Tunnel détaillé : il remplace le tunnel en primitives
+      load(tunnelAsset.url)
+        .then((raw) => {
+          if (disposed) return;
+          const tunnel = normalizeModel(raw, 7.5);
+          tunnel.position.set(2, 0, 0);
+          scene.add(tunnel);
+          if (kenneyTunnel) {
+            scene.remove(kenneyTunnel);
+            kenneyTunnel = null;
+          }
+        })
+        .catch((err: unknown) => console.error("tunnel Meshy", err));
+
+      // Bâtiment de lavage décoratif, en retrait de la route
+      load(washCartoonAsset.url)
+        .then((raw) => {
+          if (disposed) return;
+          const building = normalizeModel(raw, 5);
+          building.position.set(-4, 0, -7);
+
+          scene.add(building);
+        })
+        .catch((err: unknown) => console.error("bâtiment Meshy", err));
+
+      // Véhicules : ajoutés au pool de spawn au fur et à mesure
+      MESHY_CARS.forEach((asset) => {
+        load(asset.url)
+          .then((raw) => {
+            if (disposed) return;
+            meshyCars.push(normalizeModel(raw, 2.4));
+          })
+          .catch((err: unknown) => console.error("voiture Meshy", err));
+      });
+    };
+
     loadAll()
       .then(() => {
         if (disposed) return;
         buildScene();
         setLoading(false);
         animate();
+        void loadMeshy();
       })
       .catch((err: unknown) => {
         console.error(err);
         setMessage("Oups, un modèle n'a pas pu charger.");
       });
+
 
     return () => {
       disposed = true;
@@ -461,9 +568,10 @@ export default function CarWashScene() {
       )}
 
       <div className="pointer-events-none fixed left-4 top-4 max-w-[280px] text-ink drop-shadow-[0_1px_0_rgba(255,255,255,.6)]">
-        <h1 className="flex items-center gap-2 text-[22px] font-bold tracking-wide">
-          <span aria-hidden>🫧</span> Le Car Wash de Kenney
-        </h1>
+        <p className="flex items-center gap-2 text-[22px] font-bold tracking-wide">
+          <span aria-hidden>🫧</span> Le Car Wash 3D
+        </p>
+
         <p className="mt-1 text-[12.5px] leading-relaxed opacity-85">
           Construit avec les kits Kenney (voitures, routes, bâtiments). Glisse pour tourner la
           caméra, molette pour zoomer.
