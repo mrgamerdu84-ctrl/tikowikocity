@@ -754,6 +754,7 @@ export default function CarWashScene() {
 
     /* Une voiture de la ville décide spontanément d'aller au lavage : elle
        quitte la circulation, suit l'itinéraire jusqu'au tunnel, puis revient
+       rouler en ville une fois propre. */
     let washCooldown = 6 + Math.random() * 6;
     const sendCityCarToWash = () => {
       if (trafficCars.length <= 4) return;
