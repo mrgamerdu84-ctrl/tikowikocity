@@ -103,7 +103,7 @@ export default function CarWashScene() {
       0.1,
       300,
     );
-    camera.position.set(-18, 14, 24);
+    camera.position.set(-26, 20, 34);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -118,7 +118,7 @@ export default function CarWashScene() {
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
     controls.minDistance = 6;
-    controls.maxDistance = 60;
+    controls.maxDistance = 110;
     controls.maxPolarAngle = Math.PI * 0.49;
     controls.update();
 
@@ -132,7 +132,7 @@ export default function CarWashScene() {
     sun.shadow.camera.right = 35;
     sun.shadow.camera.top = 35;
     sun.shadow.camera.bottom = -35;
-    sun.shadow.camera.far = 80;
+    sun.shadow.camera.far = 120;
     sun.shadow.bias = -0.0015;
     scene.add(sun);
 
@@ -346,16 +346,21 @@ export default function CarWashScene() {
     const conveyorSlats: THREE.Mesh[] = [];
     type TrafficCar = {
       car: THREE.Object3D;
-      dir: number;
-      u: number;
-      speed: number;
+      axis: "x" | "z";
+      /* coordonnée fixe = centre de la voie */
       lane: number;
+      /* position le long de la rue */
+      s: number;
+      dir: number;
+      speed: number;
+      heading: number;
       yaw: number;
       baseY: number;
     };
     const trafficCars: TrafficCar[] = [];
-    let cityCurve: THREE.CatmullRomCurve3 | null = null;
-    let cityLen = 1;
+    const CITY_MIN = -33;
+    const CITY_MAX = 33;
+
 
 
     const spawnSedan = () => {
@@ -389,20 +394,76 @@ export default function CarWashScene() {
       setCinema(cinemaMode);
     };
 
-    const buildHouse = (x: number, z: number) => {
-      place(models["hFloor"]!, x, 0, z);
-      place(models["hWallWindow"]!, x - 1, 0, z, 0);
-      place(models["hWallWindow"]!, x + 1, 0, z, Math.PI);
-      place(models["hWallWindow"]!, x, 0, z + 1, Math.PI / 2);
-      place(models["hWallWindow"]!, x, 0, z - 1, -Math.PI / 2);
-      place(models["hRoof"]!, x, 2.4, z);
+    /* Maison procédurale : 4 murs pleins + toit à deux pentes posé dessus. */
+    const houseWallMats = [0xf6ece0, 0xe8dcc8, 0xf1e3d3, 0xe3ead9].map(
+      (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.9 }),
+    );
+    const roofMats = [0xc1543f, 0xa9563f, 0x8f4f6b, 0x4f6f8f].map(
+      (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.85 }),
+    );
+    const doorMat = new THREE.MeshStandardMaterial({ color: 0x6b4a2f, roughness: 0.8 });
+    const houseWinMat = new THREE.MeshStandardMaterial({
+      color: 0x9ad8ff,
+      roughness: 0.3,
+    });
+
+    const buildHouse = (x: number, z: number, rotY = 0, variant = 0) => {
+      const g = new THREE.Group();
+      const w = 3.4;
+      const d = 3;
+      const h = 2.2;
+      const body = new THREE.Mesh(
+        new THREE.BoxGeometry(w, h, d),
+        houseWallMats[variant % houseWallMats.length]!,
+      );
+      body.position.y = h / 2;
+      g.add(body);
+
+      // Toit à deux pentes : prisme triangulaire qui repose exactement sur les murs
+      const rh = 1.1;
+      const overhang = 0.22;
+      const rw = w / 2 + overhang;
+      const shape = new THREE.Shape();
+      shape.moveTo(-rw, 0);
+      shape.lineTo(rw, 0);
+      shape.lineTo(0, rh);
+      shape.closePath();
+      const roofGeo = new THREE.ExtrudeGeometry(shape, {
+        depth: d + overhang * 2,
+        bevelEnabled: false,
+      });
+      roofGeo.translate(0, 0, -(d / 2 + overhang));
+      const roof = new THREE.Mesh(roofGeo, roofMats[variant % roofMats.length]!);
+      roof.position.y = h;
+      g.add(roof);
+
+
+      const door = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.1, 0.08), doorMat);
+      door.position.set(0, 0.55, d / 2 + 0.04);
+      g.add(door);
+      [-1, 1].forEach((sx) => {
+        const win = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.55, 0.08), houseWinMat);
+        win.position.set(sx * 1.1, 1.3, d / 2 + 0.04);
+        g.add(win);
+        const back = win.clone();
+        back.position.z = -d / 2 - 0.04;
+        g.add(back);
+      });
+
+      g.position.set(x, 0, z);
+      g.rotation.y = rotY;
+      setShadow(g);
+      scene.add(g);
     };
+
+    // Grille de rues régulière (rues nord-sud et est-ouest)
+    const X_STREETS = [-30, -18, -6, 6, 18, 30];
+    const Z_STREETS = [-24, -12, 0, 12, 24];
+    const STREET_W = 5;
+    const LANE = 1.25;
 
     const buildScene = () => {
 
-      for (let x = -13; x <= 13; x += 1) {
-        [-1, 0, 1].forEach((z) => place(models["roadStraight"]!, x, ROAD_Y, z, 0));
-      }
 
       const tunnel = models["tunnel"]!.clone(true);
       tunnel.rotation.y = Math.PI / 2;
@@ -453,80 +514,82 @@ export default function CarWashScene() {
 
       spawnSedan();
 
-      // ----- Ville : boulevard en boucle avec virages, immeubles alignés -----
-      const halfX = 17;
-      const halfZ = 11.5;
-      const r = 5;
-      const pts: THREE.Vector3[] = [];
-      const corners: Array<[number, number, number]> = [
-        [halfX - r, halfZ - r, 0],
-        [-(halfX - r), halfZ - r, Math.PI / 2],
-        [-(halfX - r), -(halfZ - r), Math.PI],
-        [halfX - r, -(halfZ - r), -Math.PI / 2],
-      ];
-      // segments droits + quarts de virage (sens horaire vu de dessus)
-      corners.forEach(([cx, cz, a0]) => {
-        for (let s = 0; s <= 6; s++) {
-          const a = a0 + (s / 6) * (Math.PI / 2);
-          pts.push(new THREE.Vector3(cx + Math.cos(a) * r, 0, cz + Math.sin(a) * r));
-        }
+      // ----- Ville : grille de rues régulière -----
+      const asphalt = new THREE.MeshStandardMaterial({
+        color: 0x4a4f57,
+        roughness: 0.95,
       });
-      const cityCurveLocal = new THREE.CatmullRomCurve3(pts, true, "centripetal", 0.5);
-      cityCurve = cityCurveLocal;
-      cityLen = cityCurveLocal.getLength();
+      const sidewalkMat = new THREE.MeshStandardMaterial({
+        color: 0xd6d2c4,
+        roughness: 1,
+      });
+      const dashMat = new THREE.MeshStandardMaterial({
+        color: 0xf5f0d8,
+        roughness: 0.7,
+      });
 
-      const normalAt = (u: number) => {
-        const tan = cityCurveLocal.getTangentAt(u);
-        return new THREE.Vector3(-tan.z, 0, tan.x).normalize();
+      const xMin = X_STREETS[0]!;
+      const xMax = X_STREETS[X_STREETS.length - 1]!;
+      const zMin = Z_STREETS[0]!;
+      const zMax = Z_STREETS[Z_STREETS.length - 1]!;
+      const spanX = xMax - xMin + STREET_W;
+      const spanZ = zMax - zMin + STREET_W;
+
+      const addSlab = (
+        mat: THREE.Material,
+        w: number,
+        d: number,
+        x: number,
+        z: number,
+        y: number,
+      ) => {
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat);
+        m.rotation.x = -Math.PI / 2;
+        m.position.set(x, y, z);
+        m.receiveShadow = true;
+        scene.add(m);
+        return m;
       };
 
-      // Chaussée
-      const ROAD_W = 7;
-      const N = 420;
-      const posArr: number[] = [];
-      const idxArr: number[] = [];
-      for (let i = 0; i <= N; i++) {
-        const u = (i % N) / N;
-        const p = cityCurveLocal.getPointAt(u);
-        const n = normalAt(u);
-        const a = p.clone().addScaledVector(n, ROAD_W / 2);
-        const b = p.clone().addScaledVector(n, -ROAD_W / 2);
-        posArr.push(a.x, 0.02, a.z, b.x, 0.02, b.z);
-      }
-      for (let i = 0; i < N; i++) {
-        const o = i * 2;
-        idxArr.push(o, o + 1, o + 2, o + 1, o + 3, o + 2);
-      }
-      const roadGeo = new THREE.BufferGeometry();
-      roadGeo.setAttribute("position", new THREE.Float32BufferAttribute(posArr, 3));
-      roadGeo.setIndex(idxArr);
-      roadGeo.computeVertexNormals();
-      const roadMesh = new THREE.Mesh(
-        roadGeo,
-        new THREE.MeshStandardMaterial({
-          color: 0x4a4f57,
-          roughness: 0.95,
-          side: THREE.DoubleSide,
-        }),
+      // Trottoirs (légèrement plus larges que la chaussée) puis chaussée
+      Z_STREETS.forEach((z) => {
+        addSlab(sidewalkMat, spanX, STREET_W + 1.2, 0, z, 0.005);
+      });
+      X_STREETS.forEach((x) => {
+        addSlab(sidewalkMat, STREET_W + 1.2, spanZ, x, 0, 0.005);
+      });
+      Z_STREETS.forEach((z) => {
+        addSlab(asphalt, spanX, STREET_W, 0, z, 0.02);
+      });
+      X_STREETS.forEach((x) => {
+        addSlab(asphalt, STREET_W, spanZ, x, 0, 0.02);
+      });
 
-      );
-      roadMesh.receiveShadow = true;
-      scene.add(roadMesh);
+      // Ligne axiale discontinue (interrompue aux carrefours)
+      const dashGeoX = new THREE.PlaneGeometry(1.4, 0.16);
+      const nearCross = (v: number, list: number[]) =>
+        list.some((c) => Math.abs(v - c) < STREET_W / 2 + 1);
+      Z_STREETS.forEach((z) => {
+        for (let x = xMin - STREET_W / 2 + 1; x < xMax + STREET_W / 2; x += 3) {
+          if (nearCross(x, X_STREETS)) continue;
+          const d = new THREE.Mesh(dashGeoX, dashMat);
+          d.rotation.x = -Math.PI / 2;
+          d.position.set(x, 0.03, z);
+          scene.add(d);
+        }
+      });
+      X_STREETS.forEach((x) => {
+        for (let z = zMin - STREET_W / 2 + 1; z < zMax + STREET_W / 2; z += 3) {
+          if (nearCross(z, Z_STREETS)) continue;
+          const d = new THREE.Mesh(dashGeoX, dashMat);
+          d.rotation.x = -Math.PI / 2;
+          d.rotation.z = Math.PI / 2;
+          d.position.set(x, 0.03, z);
+          scene.add(d);
+        }
+      });
 
-      // Ligne centrale discontinue
-      const dashMat = new THREE.MeshStandardMaterial({ color: 0xf5f0d8, roughness: 0.7 });
-      const dashGeo = new THREE.BoxGeometry(1.1, 0.02, 0.16);
-      const dashes = Math.round(cityLen / 3);
-      for (let i = 0; i < dashes; i++) {
-        const u = i / dashes;
-        const p = cityCurveLocal.getPointAt(u);
-        const tan = cityCurveLocal.getTangentAt(u);
-        const d = new THREE.Mesh(dashGeo, dashMat);
-        d.position.set(p.x, 0.04, p.z);
-        d.rotation.y = Math.atan2(tan.x, tan.z) + Math.PI / 2;
-        scene.add(d);
-      }
-
+      // ----- Bâtiments : un par parcelle, hauteurs cohérentes par quartier -----
       const buildingMats = [0xdfe6ee, 0xf3d6a8, 0xcfe3d0, 0xefc4c4, 0xd8d2ef].map(
         (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.85 }),
       );
@@ -542,91 +605,134 @@ export default function CarWashScene() {
         h: number,
         d: number,
         mi: number,
-        rotY: number,
       ) => {
         const g = new THREE.Group();
         const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), buildingMats[mi]!);
         body.position.y = h / 2;
         g.add(body);
-        for (let fy = 0.8; fy < h - 0.5; fy += 1.1) {
-          for (let fx = -w / 2 + 0.5; fx < w / 2 - 0.2; fx += 0.9) {
-            const win = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.55, 0.06), windowMat);
+        // toit plat avec acrotère : pas de trou visible
+        const cap = new THREE.Mesh(
+          new THREE.BoxGeometry(w + 0.18, 0.25, d + 0.18),
+          buildingMats[(mi + 2) % buildingMats.length]!,
+        );
+        cap.position.y = h + 0.1;
+        g.add(cap);
+        for (let fy = 0.9; fy < h - 0.7; fy += 1.2) {
+          for (let fx = -w / 2 + 0.6; fx <= w / 2 - 0.6; fx += 1.1) {
+            const win = new THREE.Mesh(
+              new THREE.BoxGeometry(0.5, 0.6, 0.06),
+              windowMat,
+            );
             win.position.set(fx, fy, d / 2 + 0.03);
             g.add(win);
             const back = win.clone();
             back.position.z = -d / 2 - 0.03;
             g.add(back);
           }
+          for (let fz = -d / 2 + 0.6; fz <= d / 2 - 0.6; fz += 1.1) {
+            const win = new THREE.Mesh(
+              new THREE.BoxGeometry(0.06, 0.6, 0.5),
+              windowMat,
+            );
+            win.position.set(w / 2 + 0.03, fy, fz);
+            g.add(win);
+            const back = win.clone();
+            back.position.x = -w / 2 - 0.03;
+            g.add(back);
+          }
         }
         g.position.set(x, 0, z);
-        g.rotation.y = rotY;
         setShadow(g);
         scene.add(g);
       };
 
-      // Immeubles alignés le long du boulevard (extérieur de la boucle)
-      const BLOCKS = 26;
-      for (let i = 0; i < BLOCKS; i++) {
-        const u = (i + 0.5) / BLOCKS;
-        const p = cityCurveLocal.getPointAt(u);
-        const tan = cityCurveLocal.getTangentAt(u);
-        const n = normalAt(u);
-        const w = 3.2 + (i % 3) * 0.8;
-        const d = 3 + (i % 2) * 0.9;
-        const h = 2.6 + ((i * 7) % 4) * 1.1;
-        const out = p.clone().addScaledVector(n, ROAD_W / 2 + d / 2 + 2.2);
-
-        makeBuilding(out.x, out.z, w, h, d, i % 5, Math.atan2(tan.x, tan.z) + Math.PI / 2);
+      const blockCentersX: number[] = [];
+      for (let i = 0; i < X_STREETS.length - 1; i++) {
+        blockCentersX.push((X_STREETS[i]! + X_STREETS[i + 1]!) / 2);
+      }
+      const blockCentersZ: number[] = [];
+      for (let i = 0; i < Z_STREETS.length - 1; i++) {
+        blockCentersZ.push((Z_STREETS[i]! + Z_STREETS[i + 1]!) / 2);
       }
 
-      // Arbres sur le trottoir intérieur du boulevard
-      for (let i = 0; i < 22; i++) {
-        const u = (i + 0.25) / 22;
-        const p = cityCurveLocal.getPointAt(u);
-        const n = normalAt(u);
-        const q = p.clone().addScaledVector(n, -(ROAD_W / 2 + 1.1));
-        const tr = makeTree();
-        tr.position.set(q.x, 0, q.z);
-        scene.add(tr);
-      }
+      const lawnMat = new THREE.MeshStandardMaterial({ color: 0x7fc76b, roughness: 1 });
+      blockCentersX.forEach((bx, ix) => {
+        blockCentersZ.forEach((bz, iz) => {
+          // pelouse du pâté de maisons (entre les trottoirs)
+          addSlab(lawnMat, 12 - STREET_W - 1.2, 12 - STREET_W - 1.2, bx, bz, 0.01);
+          // anneau : 0 = centre-ville, 2 = périphérie pavillonnaire
 
-      // Voitures qui circulent sur le boulevard (deux sens séparés)
+          const ring = Math.max(Math.abs(bx) / 12, Math.abs(bz) / 12);
+          if (ring < 1.2) {
+            // Centre : immeuble unique, hauteur qui décroît doucement vers l'extérieur
+            const h = 8.5 - ring * 3 + ((ix + iz) % 2) * 0.8;
+            makeBuilding(bx, bz, 4.2, h, 4.2, (ix + iz) % 5);
+          } else if (ring < 1.8) {
+            // Transition : petit immeuble de 3 à 4 étages
+            const h = 4.4 - (ring - 1.2) * 1.2 + ((ix + iz) % 2) * 0.5;
+            makeBuilding(bx, bz, 4.2, h, 4.2, (ix + iz + 1) % 5);
+          } else {
+            // Périphérie : pavillon aligné, face à la rue
+            buildHouse(bx, bz, bz > 0 ? Math.PI : 0, ix + iz);
+          }
+
+        });
+      });
+
+      // Arbres réguliers le long des trottoirs
+      Z_STREETS.forEach((z, zi) => {
+        for (let x = xMin + 3; x <= xMax - 3; x += 6) {
+          if (nearCross(x, X_STREETS)) continue;
+          [-1, 1].forEach((side) => {
+            const tr = makeTree();
+            tr.position.set(x, 0, z + side * (STREET_W / 2 + 0.9));
+            tr.scale.setScalar(0.85 + ((zi + x) % 3) * 0.06);
+            scene.add(tr);
+          });
+        }
+      });
+
+      // ----- Circulation : deux voies par rue, sens opposés, bien centrées -----
       const cityTemplates = [models["taxi"]!, models["sedan"]!];
-      for (let i = 0; i < 10; i++) {
-        const dir = i % 2 === 0 ? 1 : -1;
-        const car = cityTemplates[i % cityTemplates.length]!.clone(true);
+      let ti = 0;
+      const addTraffic = (
+        axis: "x" | "z",
+        lane: number,
+        dir: number,
+        s: number,
+      ) => {
+        const car = cityTemplates[ti % cityTemplates.length]!.clone(true);
         setShadow(car);
         scene.add(car);
+        // modèles Kenney : le nez pointe vers +Z
+        const heading =
+          axis === "x" ? (dir > 0 ? Math.PI / 2 : -Math.PI / 2) : dir > 0 ? 0 : Math.PI;
         trafficCars.push({
           car,
+          axis,
+          lane,
+          s,
           dir,
-          u: (i / 10) % 1,
-          speed: 3 + Math.random() * 2,
-          lane: dir > 0 ? -1.7 : 1.7,
+          speed: 3.4 + (ti % 3) * 0.5,
+          heading,
           yaw: 0,
           baseY: CAR_Y,
         });
-      }
+        ti++;
+      };
 
-      const houseSpots: Array<[number, number]> = [
-        [-11, 4.5],
-        [-8, 5],
-        [8, 5],
-        [11, 4.5],
-        [-11, -4.5],
-        [-8, -5],
-        [8, -5],
-        [11, -4.5],
-      ];
-      houseSpots.forEach(([x, z]) => buildHouse(x, z));
-
-      for (let i = 0; i < 10; i++) {
-        const t = makeTree();
-        const side = i % 2 === 0 ? -1 : 1;
-        t.position.set(-13 + i * 2.9, 0, side * 2.6 + (Math.random() * 0.6 - 0.3));
-        scene.add(t);
-      }
+      Z_STREETS.forEach((z, i) => {
+        if (z === 0) return; // rue du car wash réservée aux voitures à laver
+        addTraffic("x", z + LANE, 1, xMin + ((i * 11) % 40));
+        addTraffic("x", z - LANE, -1, xMin + ((i * 17) % 40));
+      });
+      X_STREETS.forEach((x, i) => {
+        if (i % 2 !== 0) return;
+        addTraffic("z", x - LANE, 1, zMin + ((i * 13) % 34));
+        addTraffic("z", x + LANE, -1, zMin + ((i * 7) % 34));
+      });
     };
+
 
 
     const clock = new THREE.Clock();
@@ -710,20 +816,18 @@ export default function CarWashScene() {
         });
       }
 
-      // Circulation en ville : suivi du boulevard, virages inclus
-      if (cityCurve) {
-        const curve = cityCurve;
-        trafficCars.forEach((e) => {
-          if (ctl.traffic) {
-            e.u = (e.u + (dt * e.speed * e.dir) / cityLen + 1) % 1;
-          }
-          const p = curve.getPointAt(e.u);
-          const tan = curve.getTangentAt(e.u);
-          const n = new THREE.Vector3(-tan.z, 0, tan.x).normalize();
-          e.car.position.set(p.x + n.x * e.lane, e.baseY, p.z + n.z * e.lane);
-          e.car.rotation.y = Math.atan2(tan.x * e.dir, tan.z * e.dir) + e.yaw;
-        });
-      }
+      // Circulation en ville : chaque voiture reste centrée dans sa voie
+      trafficCars.forEach((e) => {
+        if (ctl.traffic) {
+          e.s += dt * e.speed * e.dir;
+          if (e.s > CITY_MAX) e.s = CITY_MIN;
+          if (e.s < CITY_MIN) e.s = CITY_MAX;
+        }
+        if (e.axis === "x") e.car.position.set(e.s, e.baseY, e.lane);
+        else e.car.position.set(e.lane, e.baseY, e.s);
+        e.car.rotation.y = e.heading + e.yaw;
+      });
+
 
 
 
