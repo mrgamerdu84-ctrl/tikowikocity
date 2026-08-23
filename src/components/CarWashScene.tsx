@@ -1656,9 +1656,11 @@ export default function CarWashScene() {
 
     const onResize = () => {
       camera.aspect = window.innerWidth / window.innerHeight;
+      camera.fov = isPortrait() ? 58 : 45;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
     };
+
     window.addEventListener("resize", onResize);
 
     const loader = new GLTFLoader();
