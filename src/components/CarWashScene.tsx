@@ -2797,35 +2797,49 @@ export default function CarWashScene() {
       )}
 
 
-      <div className="fixed right-2 top-2 z-40 w-[118px] rounded-2xl bg-white/90 ring-1 ring-ink/10 p-2 sm:right-4 sm:top-4 sm:w-[190px] sm:p-3 shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur">
-        <p className="mb-2 text-[12px] font-bold uppercase tracking-wide text-ink opacity-80">
-          Panneau de contrôle
-        </p>
-        <div className="flex flex-col gap-1.5">
-          {(
-            [
-              ["belt", "🛤️ Tapis"],
-              ["rollers", "🌀 Rouleaux"],
-              ["brushes", "🧽 Brosses"],
-              ["traffic", "🚦 Trafic"],
-            ] as Array<[keyof typeof machines, string]>
-          ).map(([key, label]) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => toggleMachine(key)}
-              aria-pressed={machines[key]}
-              className={`flex items-center justify-between rounded-xl px-2 py-1.5 text-[11px] font-semibold transition-colors sm:px-3 sm:py-2 sm:text-[12.5px] ${
-                machines[key]
-                  ? "bg-splash text-splash-foreground"
-                  : "bg-ink/10 text-ink opacity-70"
-              }`}
-            >
-              <span>{label}</span>
-              <span className="text-[11px]">{machines[key] ? "ON" : "OFF"}</span>
-            </button>
-          ))}
-        </div>
+      <div
+        className={`fixed right-2 top-2 z-40 w-[132px] rounded-2xl bg-white/90 ring-1 ring-ink/10 p-1.5 sm:right-4 sm:top-4 sm:w-[190px] sm:p-2 shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur ${
+          buildMode ? "hidden" : ""
+        }`}
+      >
+        <button
+          type="button"
+          onClick={() => setControlOpen((v) => !v)}
+          aria-expanded={controlOpen}
+          className="flex w-full items-center gap-1 rounded-xl px-1.5 py-1 text-[11.5px] font-bold uppercase tracking-wide text-ink opacity-80"
+        >
+          ⚙️ Machines
+          <span aria-hidden className="ml-auto text-[10px]">
+            {controlOpen ? "▲" : "▼"}
+          </span>
+        </button>
+        {controlOpen && (
+          <div className="mt-1.5 flex flex-col gap-1.5">
+            {(
+              [
+                ["belt", "🛤️ Tapis"],
+                ["rollers", "🌀 Rouleaux"],
+                ["brushes", "🧽 Brosses"],
+                ["traffic", "🚦 Trafic"],
+              ] as Array<[keyof typeof machines, string]>
+            ).map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => toggleMachine(key)}
+                aria-pressed={machines[key]}
+                className={`flex items-center justify-between rounded-xl px-2 py-1.5 text-[11px] font-semibold transition-colors sm:px-3 sm:py-2 sm:text-[12.5px] ${
+                  machines[key]
+                    ? "bg-splash text-splash-foreground"
+                    : "bg-ink/10 text-ink opacity-70"
+                }`}
+              >
+                <span>{label}</span>
+                <span className="text-[11px]">{machines[key] ? "ON" : "OFF"}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
 
