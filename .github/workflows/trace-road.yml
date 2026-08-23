@@ -1,0 +1,87 @@
+name: Ajouter tracé de route
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/trace-road.yml
+
+permissions:
+  contents: write
+
+jobs:
+  trace-road:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Ajouter le tracé continu des routes
+        shell: python
+        run: |
+          from pathlib import Path
+
+          p = Path("src/components/CarWashScene.tsx")
+          s = p.read_text(encoding="utf-8")
+
+          old = '    let downAt: { x: number; y: number; id: number; type: string } | null = null;\n'
+          new = '''    let downAt: { x: number; y: number; id: number; type: string } | null = null;\n    let roadDragLast: { cx: number; cz: number } | null = null;\n    const isRoadTool = (t: BuildTool): t is RoadHint =>\n      t === "straight" || t === "bend" || t === "intersection" || t === "crossroad";\n    const traceRoadTo = (target: { cx: number; cz: number }) => {\n      let changed = false;\n      if (!roadDragLast) {\n        if (canBuild(target.cx, target.cz)) {\n          plan.place(target.cx, target.cz, "straight", rotRef.current);\n          changed = true;\n        }\n        roadDragLast = { ...target };\n        if (changed) renderPlan();\n        return;\n      }\n\n      let cx = roadDragLast.cx;\n      let cz = roadDragLast.cz;\n      let guard = 0;\n      while ((cx !== target.cx || cz !== target.cz) && guard++ < 80) {\n        const dx = target.cx - cx;\n        const dz = target.cz - cz;\n        // On avance case par case : le changement d'axe crée le virage automatiquement.\n        if (Math.abs(dx) >= Math.abs(dz) && dx !== 0) cx += Math.sign(dx);\n        else if (dz !== 0) cz += Math.sign(dz);\n\n        if (!canBuild(cx, cz)) {\n          roadDragLast = { cx, cz };\n          break;\n        }\n        plan.place(cx, cz, "straight", 0);\n        changed = true;\n        roadDragLast = { cx, cz };\n      }\n      if (changed) renderPlan();\n    };\n'''
+          if old not in s:
+            raise SystemExit("Point d'insertion tracé route introuvable")
+          s = s.replace(old, new, 1)
+
+          old = '''      (ghost.material as THREE.MeshBasicMaterial).color.set(ok ? 0x2bd07c : 0xe05252);\n    };'''
+          new = '''      (ghost.material as THREE.MeshBasicMaterial).color.set(ok ? 0x2bd07c : 0xe05252);\n      if (downAt?.id === ev.pointerId && isRoadTool(toolRef.current)) {\n        ev.preventDefault();\n        traceRoadTo(c);\n      }\n    };'''
+          if old not in s:
+            raise SystemExit("Bloc pointermove introuvable")
+          s = s.replace(old, new, 1)
+
+          old = '''      try {\n        renderer.domElement.setPointerCapture(ev.pointerId);\n      } catch {\n        // Certains WebView ne prennent pas en charge la capture de pointeur.\n      }\n      onPointerMove(ev);\n    };'''
+          new = '''      try {\n        renderer.domElement.setPointerCapture(ev.pointerId);\n      } catch {\n        // Certains WebView ne prennent pas en charge la capture de pointeur.\n      }\n      roadDragLast = null;\n      onPointerMove(ev);\n    };'''
+          if old not in s:
+            raise SystemExit("Bloc pointerdown introuvable")
+          s = s.replace(old, new, 1)
+
+          old = '''      if (!buildRef.current) return;\n      if (ev.pointerType === "mouse" && ev.button !== 0) return;\n      const tapTolerance = start.type === "touch" || start.type === "pen" ? 24 : 8;\n      if (Math.hypot(ev.clientX - start.x, ev.clientY - start.y) > tapTolerance) return;\n      const c = cellUnderPointer(ev);\n      if (!c) return;\n      const tool = toolRef.current;'''
+          new = '''      if (!buildRef.current) return;\n      if (ev.pointerType === "mouse" && ev.button !== 0) return;\n      const tool = toolRef.current;\n      const c = cellUnderPointer(ev);\n      if (isRoadTool(tool)) {\n        if (c) traceRoadTo(c);\n        roadDragLast = null;\n        return;\n      }\n      const tapTolerance = start.type === "touch" || start.type === "pen" ? 24 : 8;\n      if (Math.hypot(ev.clientX - start.x, ev.clientY - start.y) > tapTolerance) return;\n      if (!c) return;'''
+          if old not in s:
+            raise SystemExit("Bloc pointerup introuvable")
+          s = s.replace(old, new, 1)
+
+          old = '''    const onPointerCancel = (ev: PointerEvent) => {\n      if (downAt?.id === ev.pointerId) downAt = null;\n      releasePointer(ev);\n    };'''
+          new = '''    const onPointerCancel = (ev: PointerEvent) => {\n      if (downAt?.id === ev.pointerId) downAt = null;\n      roadDragLast = null;\n      releasePointer(ev);\n    };'''
+          if old not in s:
+            raise SystemExit("Bloc pointercancel introuvable")
+          s = s.replace(old, new, 1)
+
+          old = '''      if (!on) {\n        ghost.visible = false;\n        downAt = null;\n      }'''
+          new = '''      if (!on) {\n        ghost.visible = false;\n        downAt = null;\n        roadDragLast = null;\n      }'''
+          if old not in s:
+            raise SystemExit("Bloc sortie construction introuvable")
+          s = s.replace(old, new, 1)
+
+          p.write_text(s, encoding="utf-8")
+
+          cat = Path("src/game/catalog.ts")
+          c = cat.read_text(encoding="utf-8")
+          c = c.replace('  straight: "🛣️ Droite",', '  straight: "🛣️ Tracer route",', 1)
+          cat.write_text(c, encoding="utf-8")
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Vérifier TypeScript
+        run: |
+          bun install --frozen-lockfile
+          bunx tsc --noEmit
+
+      - name: Enregistrer la fonction
+        run: |
+          rm -f .github/workflows/trace-road.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/CarWashScene.tsx src/game/catalog.ts .github/workflows/trace-road.yml
+          git commit -m "Ajouté tracé continu des routes avec virages automatiques"
+          git push origin HEAD:main
