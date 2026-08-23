@@ -318,8 +318,8 @@ export default function CarWashScene() {
       return g;
     };
 
-    /* ---------- Mobilier urbain ---------- */
-    /* ---------- Mobilier urbain : modèles Kenney (voir makeTrafficLight) ---------- */
+    /* ---------- Mobilier urbain : modèles Kenney ---------- */
+
 
 
     type TrafficLight = { axis: "x" | "z"; red: THREE.Mesh; green: THREE.Mesh };
