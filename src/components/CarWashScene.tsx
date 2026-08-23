@@ -153,8 +153,9 @@ export default function CarWashScene() {
       return inst;
     };
 
-    /* Les modèles Meshy arrivent avec une échelle et une orientation
-       arbitraires : on les remet debout, face à +X, posés au sol. */
+    /* Les modèles Meshy sont exportés en Y-up mais avec une échelle et une
+       orientation libres : on les tourne face à +X, on les met à l'échelle
+       voulue et on les pose au sol. */
     const normalizeModel = (source: THREE.Object3D, targetLength: number) => {
       const root = new THREE.Group();
       const inner = new THREE.Group();
@@ -164,29 +165,21 @@ export default function CarWashScene() {
       let box = new THREE.Box3().setFromObject(inner);
       const size = box.getSize(new THREE.Vector3());
 
-      // l'axe le plus « plat » est l'axe vertical du modèle
-      if (size.z < size.y && size.z < size.x) inner.rotation.x = -Math.PI / 2;
-      else if (size.x < size.y && size.x < size.z) inner.rotation.z = Math.PI / 2;
-      inner.updateMatrixWorld(true);
-
-      box = new THREE.Box3().setFromObject(inner);
-      const s2 = box.getSize(new THREE.Vector3());
-      // la plus grande dimension au sol doit suivre l'axe X (sens de circulation)
-      if (s2.z > s2.x) {
-        inner.rotateY(Math.PI / 2);
+      // la plus grande dimension au sol suit l'axe X (sens de circulation)
+      if (size.z > size.x) {
+        inner.rotation.y = Math.PI / 2;
         inner.updateMatrixWorld(true);
         box = new THREE.Box3().setFromObject(inner);
       }
 
       const finalSize = box.getSize(new THREE.Vector3());
-      const scale = targetLength / Math.max(finalSize.x, 0.0001);
       const center = box.getCenter(new THREE.Vector3());
-      inner.position.sub(center.multiplyScalar(1));
-      inner.position.y += finalSize.y / 2;
-      root.scale.setScalar(scale);
+      inner.position.set(-center.x, -box.min.y, -center.z);
+      root.scale.setScalar(targetLength / Math.max(finalSize.x, 0.0001));
       setShadow(root);
       return root;
     };
+
 
 
     const isolateMaterials = (car: THREE.Object3D) => {
