@@ -1820,34 +1820,53 @@ export default function CarWashScene() {
         >
           🎥 {cinema ? "Vue libre" : "Vue cinéma"}
         </button>
-        <button
-          type="button"
-          disabled={driveState === "saving" || loadState === "loading"}
-          onClick={handleSaveToDrive}
-          className="rounded-full bg-ink/10 px-3.5 py-2.5 text-[12.5px] font-bold text-ink transition-transform active:translate-y-0.5 disabled:opacity-60"
-        >
-          {driveState === "saving"
-            ? "⏳ Envoi..."
-            : driveState === "done"
-              ? "✅ Sur Drive"
-              : driveState === "error"
-                ? "⚠️ Réessayer"
-                : "☁️ Sauver sur Drive"}
-        </button>
-        <button
-          type="button"
-          disabled={loadState === "loading" || driveState === "saving"}
-          onClick={handleLoadFromDrive}
-          className="rounded-full bg-ink/10 px-3.5 py-2.5 text-[12.5px] font-bold text-ink transition-transform active:translate-y-0.5 disabled:opacity-60"
-        >
-          {loadState === "loading"
-            ? "⏳ Lecture..."
-            : loadState === "done"
-              ? "✅ Chargé"
-              : loadState === "error"
-                ? "⚠️ Réessayer"
-                : "📥 Charger depuis Drive"}
-        </button>
+        <div className="relative" data-drive-menu>
+          <button
+            type="button"
+            disabled={driveState === "saving" || loadState === "loading"}
+            onClick={() => setDriveMenuOpen((v) => !v)}
+            aria-expanded={driveMenuOpen}
+            className="rounded-full bg-ink/10 px-3 py-2.5 text-[12.5px] font-bold text-ink transition-transform active:translate-y-0.5 disabled:opacity-60"
+          >
+            ☁️ Drive
+          </button>
+          {driveMenuOpen && (
+            <div className="absolute bottom-full right-0 mb-2 flex w-44 flex-col gap-1.5 rounded-2xl bg-white/95 p-2 shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur">
+              <button
+                type="button"
+                disabled={driveState === "saving" || loadState === "loading"}
+                onClick={handleSaveToDrive}
+                className="flex items-center justify-between rounded-xl bg-ink/5 px-3 py-2 text-left text-[12.5px] font-semibold text-ink transition-colors active:bg-ink/10 disabled:opacity-60"
+              >
+                <span>
+                  {driveState === "saving"
+                    ? "⏳ Envoi..."
+                    : driveState === "done"
+                      ? "✅ Sauvé"
+                      : driveState === "error"
+                        ? "⚠️ Réessayer"
+                        : "☁️ Sauvegarder"}
+                </span>
+              </button>
+              <button
+                type="button"
+                disabled={loadState === "loading" || driveState === "saving"}
+                onClick={handleLoadFromDrive}
+                className="flex items-center justify-between rounded-xl bg-ink/5 px-3 py-2 text-left text-[12.5px] font-semibold text-ink transition-colors active:bg-ink/10 disabled:opacity-60"
+              >
+                <span>
+                  {loadState === "loading"
+                    ? "⏳ Lecture..."
+                    : loadState === "done"
+                      ? "✅ Chargé"
+                      : loadState === "error"
+                        ? "⚠️ Réessayer"
+                        : "📥 Charger"}
+                </span>
+              </button>
+            </div>
+          )}
+        </div>
 
       </div>
 
