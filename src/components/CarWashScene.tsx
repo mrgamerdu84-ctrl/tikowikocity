@@ -1102,6 +1102,10 @@ export default function CarWashScene() {
         // bouclage strictement dans les limites de la chaussée
         if (e.s > e.sMax) e.s = e.sMin;
         if (e.s < e.sMin) e.s = e.sMax;
+        // roues qui tournent proportionnellement à la distance parcourue
+        e.wheels.forEach((w) => {
+          w.rotation.x -= (step / 0.35) * 2;
+        });
       });
 
       trafficCars.forEach((e) => {
@@ -1109,6 +1113,14 @@ export default function CarWashScene() {
         else e.car.position.set(e.lane, e.baseY, e.s);
         e.car.rotation.y = e.heading + e.yaw;
       });
+
+      // Feux : vert sur l'axe qui passe, rouge sur l'autre
+      trafficLights.forEach((l) => {
+        const green = ctl.traffic && l.axis === greenAxis;
+        (l.green.material as THREE.MeshStandardMaterial).emissiveIntensity = green ? 1.4 : 0.06;
+        (l.red.material as THREE.MeshStandardMaterial).emissiveIntensity = green ? 0.06 : 1.4;
+      });
+
 
 
 
