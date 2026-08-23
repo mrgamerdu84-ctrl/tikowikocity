@@ -422,7 +422,16 @@ export default function CarWashScene() {
 
     const models: Record<string, THREE.Group> = {};
     const meshyCars: THREE.Object3D[] = [];
-    const sedanCars: THREE.Object3D[] = [];
+    type WashCar = {
+      car: THREE.Object3D;
+      d: number;
+      speed: number;
+      yaw: number;
+      baseY: number;
+      wheels: THREE.Object3D[];
+    };
+    const washCars: WashCar[] = [];
+
     const brushes: Array<{
       pivot: THREE.Object3D;
       spin: THREE.Object3D;
