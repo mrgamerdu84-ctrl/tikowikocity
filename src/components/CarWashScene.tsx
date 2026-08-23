@@ -5,7 +5,7 @@ import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.j
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
 import modelsAsset from "@/assets/car-wash-models.json.asset.json";
-import tunnelAsset from "@/assets/tunnel.glb.asset.json";
+
 import blueSuvAsset from "@/assets/blue_suv.glb.asset.json";
 import graySedanAsset from "@/assets/gray_sedan.glb.asset.json";
 import greenSportsAsset from "@/assets/green_sports.glb.asset.json";
