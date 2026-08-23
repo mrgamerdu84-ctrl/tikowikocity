@@ -120,6 +120,32 @@ export default function CarWashScene() {
     return () => window.clearTimeout(id);
   }, [gain]);
 
+  /* ----- Boutique d'améliorations ----- */
+  const [upgrades, setUpgrades] = useState<UpgradeLevels>(DEFAULT_UPGRADES);
+  const upgradesRef = useRef(upgrades);
+  const [shopOpen, setShopOpen] = useState(false);
+
+  const buyUpgrade = (key: UpgradeKey) => {
+    const level = upgradesRef.current[key];
+    if (level >= MAX_LEVEL) return;
+    const cost = upgradeCost(key, level);
+    if (economyRef.current.money < cost) {
+      toast.error(`Il manque ${(cost - economyRef.current.money).toLocaleString("fr-FR")} €`);
+      return;
+    }
+    const nextEco = { ...economyRef.current, money: economyRef.current.money - cost };
+    economyRef.current = nextEco;
+    setEconomy(nextEco);
+    const nextUp = { ...upgradesRef.current, [key]: level + 1 };
+    upgradesRef.current = nextUp;
+    setUpgrades(nextUp);
+    const def = UPGRADES.find((u) => u.key === key)!;
+    toast.success(`${def.icon} ${def.label} niveau ${level + 1}`, {
+      description: def.effect(level + 1),
+    });
+  };
+
+
   const toggleMachine = (key: keyof typeof machines) => {
     setMachines((prev) => {
       const next = { ...prev, [key]: !prev[key] };
