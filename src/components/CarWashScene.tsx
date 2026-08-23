@@ -2297,9 +2297,7 @@ export default function CarWashScene() {
         renderDecor();
       },
     };
-    /* Restauration de la sauvegarde locale dès que la ville est prête. */
-    restoreLocalRef.current();
-    localReadyRef.current = true;
+
 
 
 
@@ -2635,6 +2633,9 @@ export default function CarWashScene() {
       .then(() => {
         if (disposed) return;
         buildScene();
+        /* Restauration de la sauvegarde locale une fois la ville prête. */
+        restoreLocalRef.current();
+        localReadyRef.current = true;
         setLoading(false);
         animate();
 
