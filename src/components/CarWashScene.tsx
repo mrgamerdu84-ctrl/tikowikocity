@@ -100,19 +100,40 @@ export default function CarWashScene() {
 
     let disposed = false;
     let frame = 0;
+    let waterSurface: THREE.Mesh | null = null;
+    let pondSurface: THREE.Mesh | null = null;
 
     /* GLTFLoader décode les textures via ImageBitmapLoader (fetch), ce que
        l'iframe de prévisualisation peut bloquer : on force le décodage <img>. */
     (window as unknown as { createImageBitmap?: unknown }).createImageBitmap = undefined;
 
     const scene = new THREE.Scene();
-    scene.fog = new THREE.Fog(0xdff2ff, 160, 420);
+    scene.fog = new THREE.Fog(0xd9eefb, 220, 700);
+
+    /* Ciel dégradé (canvas) pour sortir du fond plat */
+    const skyCanvas = document.createElement("canvas");
+    skyCanvas.width = 4;
+    skyCanvas.height = 256;
+    const sctx = skyCanvas.getContext("2d")!;
+    const grad = sctx.createLinearGradient(0, 0, 0, 256);
+    grad.addColorStop(0, "#3fa9e8");
+    grad.addColorStop(0.55, "#9fd8f5");
+    grad.addColorStop(1, "#e9f6ff");
+    sctx.fillStyle = grad;
+    sctx.fillRect(0, 0, 4, 256);
+    const skyTex = new THREE.CanvasTexture(skyCanvas);
+    skyTex.colorSpace = THREE.SRGBColorSpace;
+    const skyDome = new THREE.Mesh(
+      new THREE.SphereGeometry(760, 32, 16),
+      new THREE.MeshBasicMaterial({ map: skyTex, side: THREE.BackSide, fog: false }),
+    );
+    scene.add(skyDome);
 
     const camera = new THREE.PerspectiveCamera(
       45,
       window.innerWidth / window.innerHeight,
       0.1,
-      300,
+      2000,
     );
     camera.position.set(-34, 26, WASH_SITE_Z + 40);
 
@@ -129,7 +150,7 @@ export default function CarWashScene() {
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
     controls.minDistance = 6;
-    controls.maxDistance = 110;
+    controls.maxDistance = 160;
     controls.maxPolarAngle = Math.PI * 0.49;
     controls.update();
 
@@ -148,13 +169,14 @@ export default function CarWashScene() {
     scene.add(sun);
 
     const ground = new THREE.Mesh(
-      new THREE.PlaneGeometry(240, 240),
+      new THREE.PlaneGeometry(900, 900),
       new THREE.MeshStandardMaterial({ color: 0x7fc76b, roughness: 1 }),
     );
     ground.rotation.x = -Math.PI / 2;
     ground.position.y = -0.02;
     ground.receiveShadow = true;
     scene.add(ground);
+
 
     const setShadow = (obj: THREE.Object3D) => {
       obj.traverse((n) => {
@@ -316,6 +338,131 @@ export default function CarWashScene() {
       }
       return g;
     };
+
+    /* ---------- Décor naturel : collines, montagnes, lac ---------- */
+    const rand = (() => {
+      let seed = 1337;
+      return () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
+    })();
+
+    const buildLandscape = () => {
+      const rockMat = new THREE.MeshStandardMaterial({ color: 0x8b8f96, roughness: 1, flatShading: true });
+      const rockDark = new THREE.MeshStandardMaterial({ color: 0x6f747c, roughness: 1, flatShading: true });
+      const snowMat = new THREE.MeshStandardMaterial({ color: 0xf3f8ff, roughness: 0.9, flatShading: true });
+      const hillMat = new THREE.MeshStandardMaterial({ color: 0x6bb85c, roughness: 1, flatShading: true });
+      const hillMat2 = new THREE.MeshStandardMaterial({ color: 0x58a552, roughness: 1, flatShading: true });
+
+      // Chaîne de montagnes lointaine, sur tout l'horizon
+      for (let i = 0; i < 54; i++) {
+        const a = (i / 54) * Math.PI * 2 + rand() * 0.05;
+        const r = 250 + rand() * 130;
+        const h = 42 + rand() * 78;
+        const rad = h * (0.55 + rand() * 0.3);
+        const m = new THREE.Mesh(
+          new THREE.ConeGeometry(rad, h, 5 + Math.floor(rand() * 3), 1),
+          rand() > 0.5 ? rockMat : rockDark,
+        );
+        m.position.set(Math.cos(a) * r, h / 2 - 3, Math.sin(a) * r);
+        m.rotation.y = rand() * Math.PI;
+        scene.add(m);
+        if (h > 80) {
+          const cap = new THREE.Mesh(new THREE.ConeGeometry(rad * 0.34, h * 0.24, 6, 1), snowMat);
+          cap.position.set(m.position.x, h - h * 0.12 - 3, m.position.z);
+          cap.rotation.y = m.rotation.y;
+          scene.add(cap);
+        }
+      }
+
+      // Collines verdoyantes en avant-plan des montagnes
+      for (let i = 0; i < 44; i++) {
+        const a = (i / 44) * Math.PI * 2 + rand() * 0.12;
+        const r = 175 + rand() * 70;
+        const h = 8 + rand() * 22;
+        const x = Math.cos(a) * r;
+        const z = Math.sin(a) * r;
+        // on dégage la vallée du lac
+        if (Math.hypot(x + 62, z - 34) < 110) continue;
+        const m = new THREE.Mesh(
+          new THREE.SphereGeometry(h * 1.9, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2),
+          rand() > 0.5 ? hillMat : hillMat2,
+        );
+        m.scale.y = 0.42 + rand() * 0.3;
+        m.position.set(x, -1, z);
+        scene.add(m);
+      }
+
+
+      // Lac au nord-ouest + plage et arbres
+      const lake = new THREE.Group();
+      const sand = new THREE.Mesh(
+        new THREE.CircleGeometry(22, 40),
+        new THREE.MeshStandardMaterial({ color: 0xe4d6a8, roughness: 1 }),
+      );
+      sand.rotation.x = -Math.PI / 2;
+      sand.position.y = 0.02;
+      lake.add(sand);
+      const water = new THREE.Mesh(
+        new THREE.CircleGeometry(18.5, 48),
+        new THREE.MeshStandardMaterial({
+          color: 0x3fa9d8,
+          roughness: 0.15,
+          metalness: 0.35,
+          transparent: true,
+          opacity: 0.92,
+        }),
+      );
+      water.rotation.x = -Math.PI / 2;
+      water.position.y = 0.05;
+      lake.add(water);
+      lake.position.set(-62, 0, 34);
+      lake.scale.set(1.25, 1, 0.85);
+      scene.add(lake);
+      waterSurface = water;
+
+      for (let i = 0; i < 16; i++) {
+        const a = (i / 16) * Math.PI * 2;
+        const tr = makeTree();
+        tr.position.set(
+          -62 + Math.cos(a) * (28 + rand() * 6) * 1.25,
+          0,
+          34 + Math.sin(a) * (24 + rand() * 6) * 0.85,
+        );
+        tr.scale.setScalar(0.9 + rand() * 0.5);
+        setShadow(tr);
+        scene.add(tr);
+      }
+
+      // Bosquets épars entre la ville et les collines
+      for (let i = 0; i < 46; i++) {
+        const a = rand() * Math.PI * 2;
+        const r = 58 + rand() * 55;
+        const x = Math.cos(a) * r;
+        const z = Math.sin(a) * r;
+        if (Math.abs(x) < 40 && Math.abs(z) < 52) continue;
+        const tr = makeTree();
+        tr.position.set(x, 0, z);
+        tr.scale.setScalar(0.8 + rand() * 0.7);
+        setShadow(tr);
+        scene.add(tr);
+      }
+
+      /* Promenade en diagonale : casse la rigidité du quadrillage,
+         relie l'angle nord-ouest de la ville au lac. */
+      const from = new THREE.Vector2(-32, 24);
+      const to = new THREE.Vector2(-50, 34);
+      const dir = to.clone().sub(from);
+      const promenade = new THREE.Mesh(
+        new THREE.PlaneGeometry(dir.length() + 14, 4.4),
+        new THREE.MeshStandardMaterial({ color: 0xd8cfae, roughness: 1 }),
+      );
+      promenade.rotation.x = -Math.PI / 2;
+      promenade.rotation.z = -Math.atan2(dir.y, dir.x);
+      promenade.position.set((from.x + to.x) / 2, 0.03, (from.y + to.y) / 2);
+      promenade.receiveShadow = true;
+      scene.add(promenade);
+    };
+
+
 
     /* ---------- Mobilier urbain : modèles Kenney ---------- */
 
@@ -606,6 +753,8 @@ export default function CarWashScene() {
 
 
     const buildScene = () => {
+      buildLandscape();
+
 
 
       /* ----- Grand portique de lavage (structure bien visible) ----- */
@@ -863,10 +1012,104 @@ export default function CarWashScene() {
       }
 
       const lawnMat = new THREE.MeshStandardMaterial({ color: 0x7fc76b, roughness: 1 });
+      const pavingMat = new THREE.MeshStandardMaterial({ color: 0xded7c4, roughness: 1 });
+
+      /* Deux îlots sortent du moule : un parc avec bassin, une place pavée. */
+      const PARK = { x: blockCentersX[1]!, z: blockCentersZ[2]! };
+      const PLAZA = { x: blockCentersX[3]!, z: blockCentersZ[1]! };
+      const isSpecial = (x: number, z: number) =>
+        (x === PARK.x && z === PARK.z) || (x === PLAZA.x && z === PLAZA.z);
+
+      const buildPark = (cx: number, cz: number) => {
+        // allées diagonales en croix sur la pelouse
+        [-1, 1].forEach((s) => {
+          const path = new THREE.Mesh(new THREE.PlaneGeometry(8.4, 1.5), pavingMat);
+          path.rotation.x = -Math.PI / 2;
+          path.rotation.z = (s * Math.PI) / 4;
+          path.position.set(cx, 0.02, cz);
+          path.receiveShadow = true;
+          scene.add(path);
+        });
+        // bassin
+        const pond = new THREE.Mesh(
+          new THREE.CircleGeometry(1.9, 28),
+          new THREE.MeshStandardMaterial({
+            color: 0x3fa9d8,
+            roughness: 0.15,
+            metalness: 0.35,
+          }),
+        );
+        pond.rotation.x = -Math.PI / 2;
+        pond.position.set(cx, 0.06, cz);
+        scene.add(pond);
+        pondSurface = pond;
+        const rim = new THREE.Mesh(
+          new THREE.TorusGeometry(2.0, 0.16, 8, 28),
+          new THREE.MeshStandardMaterial({ color: 0xcfc7ae, roughness: 1 }),
+        );
+        rim.rotation.x = -Math.PI / 2;
+        rim.position.set(cx, 0.16, cz);
+        setShadow(rim);
+        scene.add(rim);
+        // arbres en couronne
+        for (let i = 0; i < 8; i++) {
+          const a = (i / 8) * Math.PI * 2 + 0.3;
+          const tr = makeTree();
+          tr.position.set(cx + Math.cos(a) * 4, 0, cz + Math.sin(a) * 4);
+          tr.scale.setScalar(0.8 + (i % 3) * 0.08);
+          setShadow(tr);
+          scene.add(tr);
+        }
+      };
+
+      const buildPlaza = (cx: number, cz: number) => {
+        addSlab(pavingMat, 11, 11, cx, cz, 0.015);
+        // fontaine centrale
+        const basin = new THREE.Mesh(
+          new THREE.CylinderGeometry(2.1, 2.3, 0.6, 20),
+          new THREE.MeshStandardMaterial({ color: 0xe6e0cd, roughness: 0.9 }),
+        );
+        basin.position.set(cx, 0.3, cz);
+        setShadow(basin);
+        scene.add(basin);
+        const jet = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.16, 0.3, 2.2, 10),
+          new THREE.MeshStandardMaterial({
+            color: 0x9fdcf5,
+            transparent: true,
+            opacity: 0.75,
+          }),
+        );
+        jet.position.set(cx, 1.5, cz);
+        scene.add(jet);
+        // arbres et coins verts
+        [
+          [-1, -1],
+          [1, -1],
+          [-1, 1],
+          [1, 1],
+        ].forEach(([sx, sz]) => {
+          const tr = makeTree();
+          tr.position.set(cx + sx! * 4.2, 0, cz + sz! * 4.2);
+          tr.scale.setScalar(0.85);
+          setShadow(tr);
+          scene.add(tr);
+        });
+      };
+
       blockCentersX.forEach((bx, ix) => {
         blockCentersZ.forEach((bz, iz) => {
           // pelouse du pâté de maisons (entre les trottoirs)
           addSlab(lawnMat, 12 - STREET_W, 12 - STREET_W, bx, bz, 0.01);
+
+          if (bx === PARK.x && bz === PARK.z) {
+            buildPark(bx, bz);
+            return;
+          }
+          if (bx === PLAZA.x && bz === PLAZA.z) {
+            buildPlaza(bx, bz);
+            return;
+          }
 
           // anneau : 0 = centre-ville, 2 = périphérie pavillonnaire
           const ring = Math.max(Math.abs(bx) / 12, Math.abs(bz) / 12);
@@ -898,6 +1141,7 @@ export default function CarWashScene() {
           if ((xi + zi) % 2 === 0) continue;
           const bx = (X_STREETS[xi]! + X_STREETS[xi + 1]!) / 2;
           const bz = (Z_STREETS[zi]! + Z_STREETS[zi + 1]!) / 2;
+          if (isSpecial(bx, bz)) continue;
           [-1, 1].forEach((s) => {
             const tr = makeTree();
             tr.position.set(bx + s * 2.4, 0, bz + s * 2.4);
@@ -907,6 +1151,7 @@ export default function CarWashScene() {
           });
         }
       }
+
 
       /* Mobilier urbain 100 % Kenney, posé sur une grille stricte :
          feux aux carrefours majeurs, lampadaires et bennes en bord de bloc. */
@@ -1094,6 +1339,11 @@ export default function CarWashScene() {
       frame = requestAnimationFrame(animate);
       const dt = Math.min(clock.getDelta(), 0.05);
       const t = clock.elapsedTime;
+
+      // léger clapotis sur les surfaces d'eau
+      if (waterSurface) waterSurface.position.y = 0.05 + Math.sin(t * 0.8) * 0.03;
+      if (pondSurface) pondSurface.position.y = 0.06 + Math.sin(t * 1.1 + 1) * 0.025;
+
 
       const ctl = machinesRef.current;
       const SPEED = 2.6;
