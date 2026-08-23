@@ -5,9 +5,10 @@ import PlayerSetup from "@/components/PlayerSetup";
 import { usePlayer } from "@/lib/player";
 
 
-const TITLE = "TikowikoCity — le jeu de gestion de car wash";
+const TITLE = "TikowikoCity — gérez votre ville et son car wash";
 const DESCRIPTION =
-  "TikowikoCity : construisez votre ville et votre station de lavage. Construisez votre ville autour du car wash, gérez le trafic et développez votre petite cité.";
+  "TikowikoCity : construisez votre ville, gérez le trafic et faites tourner votre station de lavage. Gagnez de l'argent à chaque lavage et améliorez votre car wash.";
+
 
 export const Route = createFileRoute("/")({
   head: () => ({
