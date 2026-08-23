@@ -15,6 +15,19 @@ import modelsAsset from "@/assets/car-wash-models.json.asset.json";
 
 import tunnelAsset from "@/assets/tunnel.glb.asset.json";
 import kenneyPackAsset from "@/assets/kenney-pack.glb.asset.json";
+import { CityPlan, type SerializedPlan } from "@/game/cityPlan";
+import {
+  TILE,
+  DIR_VEC,
+  opposite,
+  axisOf,
+  rightOf,
+  parseKey,
+  worldToCell,
+  type Dir,
+} from "@/game/grid";
+import { TOOL_LABEL, type BuildTool, type RoadHint } from "@/game/catalog";
+
 
 /* Modèles issus des kits Kenney (car-kit, city-kit-roads, building-kit),
    regroupés dans un seul GLB optimisé. */
@@ -91,6 +104,46 @@ export default function CarWashScene() {
     });
   };
 
+  /* ----- Mode construction (pose de routes / mobilier par le joueur) ----- */
+  const [buildMode, setBuildMode] = useState(false);
+  const [tool, setTool] = useState<BuildTool>("straight");
+  const [rot, setRot] = useState(0);
+  const buildRef = useRef(false);
+  const toolRef = useRef<BuildTool>("straight");
+  const rotRef = useRef(0);
+  const buildApplyRef = useRef<(on: boolean) => void>(() => {});
+  const planIoRef = useRef<{
+    save: () => SerializedPlan;
+    load: (data: SerializedPlan) => void;
+  }>({ save: () => [], load: () => {} });
+
+  const chooseTool = (t: BuildTool) => {
+    toolRef.current = t;
+    setTool(t);
+  };
+  const toggleBuild = () => {
+    setBuildMode((prev) => {
+      const next = !prev;
+      buildRef.current = next;
+      buildApplyRef.current(next);
+      return next;
+    });
+  };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() !== "r" || !buildRef.current) return;
+      setRot((r) => {
+        const next = (r + 1) % 4;
+        rotRef.current = next;
+        return next;
+      });
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+
+
   const [driveState, setDriveState] = useState<"idle" | "saving" | "done" | "error">("idle");
   const [loadState, setLoadState] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [driveMenuOpen, setDriveMenuOpen] = useState(false);
@@ -125,6 +178,8 @@ export default function CarWashScene() {
             state: {
               machines: machinesRef.current,
               cinema: cinemaStateRef.current,
+              city: planIoRef.current.save(),
+
             },
           },
         },
@@ -157,6 +212,7 @@ export default function CarWashScene() {
       const state = JSON.parse(res.stateJson || "{}") as {
         machines?: Partial<typeof machines>;
         cinema?: unknown;
+        city?: SerializedPlan;
       };
       if (state.machines && typeof state.machines === "object") {
         setMachines((prev) => {
@@ -169,9 +225,11 @@ export default function CarWashScene() {
           return next;
         });
       }
+      if (Array.isArray(state.city)) planIoRef.current.load(state.city);
       if (typeof state.cinema === "boolean" && state.cinema !== cinemaStateRef.current) {
         cinemaRef.current();
       }
+
       setLoadState("done");
       setDriveMenuOpen(false);
       toast.success("Progression restaurée depuis Drive", { description: res.fileName });
@@ -202,7 +260,7 @@ export default function CarWashScene() {
     let disposed = false;
     let frame = 0;
     let waterSurface: THREE.Mesh | null = null;
-    let pondSurface: THREE.Mesh | null = null;
+    
 
     /* GLTFLoader décode les textures via ImageBitmapLoader (fetch), ce que
        l'iframe de prévisualisation peut bloquer : on force le décodage <img>. */
@@ -695,8 +753,9 @@ export default function CarWashScene() {
       yaw: number;
       baseY: number;
       wheels: THREE.Object3D[];
-      /* voiture de ville empruntée : elle retourne circuler après le lavage */
-      origin: TrafficCar;
+      /* voiture du réseau empruntée : elle repart circuler après le lavage */
+      origin: NetCar;
+
     };
     const washCars: WashCar[] = [];
 
@@ -709,26 +768,52 @@ export default function CarWashScene() {
     }> = [];
     const foamSprites: THREE.Object3D[] = [];
     const conveyorSlats: THREE.Mesh[] = [];
-    type TrafficCar = {
-      car: THREE.Object3D;
-      axis: "x" | "z";
-      /* coordonnée fixe = centre de la voie */
-      lane: number;
-      /* position le long de la rue */
-      s: number;
-      dir: number;
-      speed: number;
-      heading: number;
-      yaw: number;
-      baseY: number;
-      wheels: THREE.Object3D[];
-      /* bornes de la chaussée pour cet axe : jamais de sortie sur la pelouse */
-      sMin: number;
-      sMax: number;
+    /* ----- Réseau routier du joueur ----- */
+    const plan = new CityPlan();
+    const MAIN_CX = Math.round(WASH_ACCESS_X / TILE);
+    const MAIN_CZ_START = -5; // première case au nord de la parcelle
+    const MAIN_CZ_END = 12; // s'enfonce vers les reliefs du fond
+    const LANE = 1.5;
 
+    /* Voiture circulant de case en case sur le réseau construit. */
+    type NetCar = {
+      car: THREE.Object3D;
+      wheels: THREE.Object3D[];
+      speed: number;
+      baseY: number;
+      yaw: number;
+      cx: number;
+      cz: number;
+      dirIn: Dir;
+      dirOut: Dir;
+      /** progression dans la case courante (0 → 1) */
+      t: number;
+    };
+    const netCars: NetCar[] = [];
+
+    /* Position/cap d'une voiture : courbe quadratique entrée → sortie de case,
+       décalée à droite pour rester sur sa voie, y compris dans les virages. */
+    const netPose = (e: NetCar) => {
+      const cxw = e.cx * TILE;
+      const czw = e.cz * TILE;
+      const vin = DIR_VEC[e.dirIn]!;
+      const vout = DIR_VEC[e.dirOut]!;
+      const rin = rightOf(e.dirIn);
+      const rout = rightOf(e.dirOut);
+      const ax = cxw - (vin[0] * TILE) / 2 + rin[0] * LANE;
+      const az = czw - (vin[1] * TILE) / 2 + rin[1] * LANE;
+      const bx = cxw + (vout[0] * TILE) / 2 + rout[0] * LANE;
+      const bz = czw + (vout[1] * TILE) / 2 + rout[1] * LANE;
+      const ccx = cxw + ((rin[0] + rout[0]) * LANE) / 2;
+      const ccz = czw + ((rin[1] + rout[1]) * LANE) / 2;
+      const u = 1 - e.t;
+      const x = u * u * ax + 2 * u * e.t * ccx + e.t * e.t * bx;
+      const z = u * u * az + 2 * u * e.t * ccz + e.t * e.t * bz;
+      const dx = 2 * u * (ccx - ax) + 2 * e.t * (bx - ccx);
+      const dz = 2 * u * (ccz - az) + 2 * e.t * (bz - ccz);
+      return { x, z, heading: Math.atan2(dx, dz) };
     };
 
-    const trafficCars: TrafficCar[] = [];
     /* Toute la station de lavage (tunnel, tapis, brosses, voitures à laver)
        vit dans ce groupe : ses coordonnées locales restent inchangées. */
     const washSite = new THREE.Group();
@@ -738,10 +823,81 @@ export default function CarWashScene() {
        détaillé dès qu'il est chargé. */
     let tunnelPlaceholder: THREE.Object3D | null = null;
 
+    /* Rendu du plan : tuiles de route auto-raccordées + mobilier posé. */
+    const roadsGroup = new THREE.Group();
+    scene.add(roadsGroup);
+    const propsGroup = new THREE.Group();
+    scene.add(propsGroup);
 
+    const renderPlan = () => {
+      [...roadsGroup.children].forEach((c) => roadsGroup.remove(c));
+      [...propsGroup.children].forEach((c) => propsGroup.remove(c));
+      trafficLights.length = 0;
+      plan.cells.forEach((cell, k) => {
+        const [cx, cz] = parseKey(k);
+        const { model, rot } = plan.variantAt(cx, cz);
+        const tpl = kit[model] ?? kit["road-straight"];
+        if (tpl) {
+          const tile = tpl.clone(true);
+          tile.scale.setScalar(TILE);
+          tile.position.set(cx * TILE, 0.012, cz * TILE);
+          tile.rotation.y = (rot * Math.PI) / 2;
+          tile.traverse((n) => {
+            const m = n as THREE.Mesh;
+            if (m.isMesh) m.receiveShadow = true;
+          });
+          roadsGroup.add(tile);
+        }
+        if (cell.light) {
+          const off = TILE / 2 - 0.6;
+          ([
+            ["x", -off, -off],
+            ["z", off, off],
+          ] as const).forEach(([axis, ox, oz]) => {
+            const l = makeTrafficLight(axis);
+            l.position.set(cx * TILE + ox, 0, cz * TILE + oz);
+            l.rotation.y = Math.atan2(-ox, -oz);
+            setShadow(l);
+            propsGroup.add(l);
+          });
+        }
+        if (cell.lamp) {
+          const tplL = kit["light-square"];
+          if (tplL) {
+            const lamp = tplL.clone(true);
+            lamp.scale.setScalar(6);
+            lamp.position.set(cx * TILE - TILE / 2 + 0.7, 0, cz * TILE + TILE / 2 - 0.7);
+            setShadow(lamp);
+            propsGroup.add(lamp);
+          }
+        }
+      });
+    };
 
-    /* ----- Itinéraire routier complet : ville → voie d'accès → tunnel → retour ----- */
-    const CITY_SOUTH = -24; // rue la plus au sud de la grille
+    let ti = 0;
+    const spawnNetCar = (cx: number, cz: number) => {
+      const car = kitCar(ti).clone(true);
+      setShadow(car);
+      scene.add(car);
+      const exits = plan.exitsAt(cx, cz);
+      const dirOut = (exits[0] ?? 0) as Dir;
+      netCars.push({
+        car,
+        wheels: findWheels(car),
+        speed: 3.4 + (ti % 3) * 0.5,
+        baseY: 0,
+        yaw: 0,
+        cx,
+        cz,
+        dirIn: dirOut,
+        dirOut,
+        t: Math.random() * 0.5,
+      });
+      ti++;
+    };
+
+    /* ----- Itinéraire routier complet : route → parcelle → tunnel → retour ----- */
+    const CITY_SOUTH = MAIN_CZ_START * TILE; // départ sur la route principale
     const SITE_ROAD_Z = WASH_SITE_Z + 13; // rue est-ouest de la parcelle
     const WASH_IN_X = PATH_START;
     const WASH_OUT_X = PATH_END;
@@ -780,16 +936,26 @@ export default function CarWashScene() {
       return { x, z, heading };
     };
 
-    /* Une voiture de la ville décide spontanément d'aller au lavage : elle
-       quitte la circulation, suit l'itinéraire jusqu'au tunnel, puis revient
-       rouler en ville une fois propre. */
+    /* Une voiture du réseau décide spontanément d'aller au lavage : celle qui
+       est la plus proche de la parcelle quitte la circulation, suit
+       l'itinéraire jusqu'au tunnel, puis repart rouler une fois propre. */
     let washCooldown = 6 + Math.random() * 6;
     const sendCityCarToWash = () => {
-      if (trafficCars.length <= 4) return;
-      const idx = Math.floor(Math.random() * trafficCars.length);
-      const origin = trafficCars.splice(idx, 1)[0];
-      if (!origin) return;
+      if (netCars.length <= 2) return;
       const start = posAt(0);
+      let best = -1;
+      let bestD = Infinity;
+      netCars.forEach((c, i) => {
+        const d =
+          (c.car.position.x - start.x) ** 2 + (c.car.position.z - start.z) ** 2;
+        if (d < bestD) {
+          bestD = d;
+          best = i;
+        }
+      });
+      if (best < 0) return;
+      const origin = netCars.splice(best, 1)[0];
+      if (!origin) return;
       origin.car.position.set(start.x, origin.baseY, start.z);
       tintCar(origin.car, 1);
       washCars.push({
@@ -808,6 +974,7 @@ export default function CarWashScene() {
 
 
 
+
     let cinemaMode = false;
     cinemaRef.current = () => {
       cinemaMode = !cinemaMode;
@@ -815,106 +982,8 @@ export default function CarWashScene() {
       setCinema(cinemaMode);
     };
 
-    /* Bâtiments assemblés avec le kit maison Kenney (dalles, murs à fenêtres,
-       toitures) : ils gardent la texture « colormap » d'origine. */
-    const CELL = 2; // taille d'une dalle hFloor
-    const FLOOR_H = 2.4; // hauteur d'un mur hWallWindow
+    const STREET_W = TILE; // largeur d'une chaussée = une tuile Kenney
 
-    const buildKenneyBuilding = (
-      x: number,
-      z: number,
-      cols: number,
-      rows: number,
-      floors: number,
-      rotY = 0,
-    ) => {
-      const g = new THREE.Group();
-      const floorTpl = kit["floor"] ?? models["hFloor"]!;
-      const wallTpl = kit["wall-window-square"] ?? models["hWallWindow"]!;
-      const roofTpl = kit["roof-flat-center"] ?? floorTpl;
-      const doorTpl = kit["wall-doorway-square"] ?? wallTpl;
-
-      const ox = (-(cols - 1) * CELL) / 2;
-      const oz = (-(rows - 1) * CELL) / 2;
-
-      for (let f = 0; f < floors; f++) {
-        const y = f * FLOOR_H;
-        for (let i = 0; i < cols; i++) {
-          for (let j = 0; j < rows; j++) {
-            const cx = ox + i * CELL;
-            const cz = oz + j * CELL;
-            const slab = floorTpl.clone(true);
-            slab.position.set(cx, y, cz);
-            g.add(slab);
-
-            const wall = (wx: number, wz: number, wr: number, door = false) => {
-              const w = (door ? doorTpl : wallTpl).clone(true);
-              w.position.set(wx, y, wz);
-              w.rotation.y = wr;
-              g.add(w);
-            };
-            if (i === 0) wall(cx - CELL / 2, cz, 0);
-            if (i === cols - 1) wall(cx + CELL / 2, cz, 0);
-            if (j === 0) wall(cx, cz - CELL / 2, Math.PI / 2, f === 0 && i === 0);
-            if (j === rows - 1) wall(cx, cz + CELL / 2, Math.PI / 2);
-
-          }
-        }
-      }
-
-      // Toiture : dalles pleines, sans trou
-      const top = floors * FLOOR_H;
-      for (let i = 0; i < cols; i++) {
-        for (let j = 0; j < rows; j++) {
-          const deck = roofTpl.clone(true);
-          deck.position.set(ox + i * CELL, top, oz + j * CELL);
-          g.add(deck);
-        }
-      }
-
-      /* Palette pastel variée : hash pseudo-aléatoire sur la position pour
-         que deux immeubles voisins n'aient jamais la même teinte (l'ancienne
-         formule linéaire retombait toujours sur les mêmes indices). */
-      const PASTELS = [
-        0xffb3c6, 0xffd39b, 0xc9a7f0, 0xa8e6a3, 0xffe066, 0x9fd8ef,
-        0xf7b267, 0xb8b3f0, 0x8fd6b4, 0xffa987, 0xf2e2c4, 0xe58fb0,
-      ];
-      const hash = Math.abs(Math.sin(x * 12.9898 + z * 78.233) * 43758.5453) % 1;
-      const tint = new THREE.Color(
-        PASTELS[Math.floor(hash * PASTELS.length) % PASTELS.length],
-      );
-      // légère variation de luminosité en plus de la teinte
-      const bright = 1.02 + ((Math.abs(Math.sin(x * 3.17 + z * 5.11)) * 100) % 1) * 0.22;
-      const tinted = new Map<THREE.Material, THREE.MeshStandardMaterial>();
-      g.traverse((n) => {
-        const mesh = n as THREE.Mesh;
-        if (!mesh.isMesh) return;
-        const mat = mesh.material as THREE.MeshStandardMaterial;
-        if (mat.transparent || mat.name === "glass") return;
-        let cloned = tinted.get(mat);
-        if (!cloned) {
-          cloned = mat.clone();
-          cloned.color.lerp(tint, 0.9).multiplyScalar(bright);
-          tinted.set(mat, cloned);
-        }
-        mesh.material = cloned;
-      });
-
-
-
-      g.position.set(x, 0, z);
-      g.rotation.y = rotY;
-      setShadow(g);
-      scene.add(g);
-    };
-
-
-    // Grille de rues régulière (rues nord-sud et est-ouest)
-    const X_STREETS = [-30, -18, -6, 6, 18, 30];
-    const Z_STREETS = [-24, -12, 0, 12, 24];
-    const STREET_W = 6; // = une tuile de route Kenney mise à l'échelle
-    const TILE = 6;
-    const LANE = 1.5;
 
 
     const buildScene = () => {
@@ -1084,7 +1153,7 @@ export default function CarWashScene() {
       }
 
 
-      // ----- Ville : grille de rues régulière -----
+      // ----- Sols et matériaux partagés -----
       const asphalt = new THREE.MeshStandardMaterial({
         color: 0x4a4f57,
         roughness: 0.95,
@@ -1097,11 +1166,9 @@ export default function CarWashScene() {
         color: 0xf5f0d8,
         roughness: 0.7,
       });
-
-      const xMin = X_STREETS[0]!;
-      const xMax = X_STREETS[X_STREETS.length - 1]!;
-      const zMin = Z_STREETS[0]!;
-      const zMax = Z_STREETS[Z_STREETS.length - 1]!;
+      const lawnMat = new THREE.MeshStandardMaterial({ color: 0x7fc76b, roughness: 1 });
+      const dashGeoX = new THREE.PlaneGeometry(1.4, 0.16);
+      const zMin = MAIN_CZ_START * TILE; // extrémité sud de la route principale
 
       const addSlab = (
         mat: THREE.Material,
@@ -1119,261 +1186,14 @@ export default function CarWashScene() {
         return m;
       };
 
-      /* ----- Chaussées : vraies tuiles du kit Kenney city-kit-roads -----
-         Une tuile = 1 unité de kit, mise à l'échelle sur la largeur de rue. */
-      const dashGeoX = new THREE.PlaneGeometry(1.4, 0.16);
-      const nearCross = (v: number, list: number[]) =>
-        list.some((c) => Math.abs(v - c) < STREET_W / 2 + 1);
-
-      const roadTile = (name: string, x: number, z: number, rotY: number) => {
-        const tpl = kit[name];
-        if (!tpl) return;
-        const t = tpl.clone(true);
-        t.scale.setScalar(TILE);
-        t.position.set(x, 0.012, z);
-        t.rotation.y = rotY;
-        t.traverse((n) => {
-          const m = n as THREE.Mesh;
-          if (m.isMesh) m.receiveShadow = true;
-        });
-        scene.add(t);
-      };
-      const onStreetX = (x: number) => X_STREETS.some((c) => Math.abs(c - x) < 0.01);
-      const onStreetZ = (z: number) => Z_STREETS.some((c) => Math.abs(c - z) < 0.01);
-
-      Z_STREETS.forEach((z) => {
-        for (let x = xMin; x <= xMax; x += TILE) {
-          if (onStreetX(x)) continue;
-          roadTile("road-straight", x, z, Math.PI / 2);
-        }
-      });
-      X_STREETS.forEach((x) => {
-        for (let z = zMin; z <= zMax; z += TILE) {
-          if (onStreetZ(z)) continue;
-          roadTile("road-straight", x, z, 0);
-        }
-      });
-      // Carrefours du quadrillage
-      X_STREETS.forEach((x) => {
-        Z_STREETS.forEach((z) => {
-          roadTile("road-crossroad", x, z, 0);
-        });
-      });
-      // Voie d'accès au car wash, dans le même style
-      for (let z = zMin - TILE; z >= WASH_SITE_Z; z -= TILE) {
-        roadTile("road-straight", WASH_ACCESS_X, z, 0);
+      /* ----- Route principale : du car wash vers les reliefs du fond -----
+         Elle est posée par le jeu et ne peut pas être effacée ; tout le reste
+         du réseau est construit par le joueur. */
+      for (let cz = MAIN_CZ_START; cz <= MAIN_CZ_END; cz++) {
+        plan.place(MAIN_CX, cz, "straight", 0, true);
       }
+      renderPlan();
 
-
-      // ----- Bâtiments Kenney : un par parcelle, hauteurs cohérentes -----
-      const blockCentersX: number[] = [];
-      for (let i = 0; i < X_STREETS.length - 1; i++) {
-        blockCentersX.push((X_STREETS[i]! + X_STREETS[i + 1]!) / 2);
-      }
-      const blockCentersZ: number[] = [];
-      for (let i = 0; i < Z_STREETS.length - 1; i++) {
-        blockCentersZ.push((Z_STREETS[i]! + Z_STREETS[i + 1]!) / 2);
-      }
-
-      const lawnMat = new THREE.MeshStandardMaterial({ color: 0x7fc76b, roughness: 1 });
-      const pavingMat = new THREE.MeshStandardMaterial({ color: 0xded7c4, roughness: 1 });
-
-      /* Deux îlots sortent du moule : un parc avec bassin, une place pavée. */
-      const PARK = { x: blockCentersX[1]!, z: blockCentersZ[2]! };
-      const PLAZA = { x: blockCentersX[3]!, z: blockCentersZ[1]! };
-      const isSpecial = (x: number, z: number) =>
-        (x === PARK.x && z === PARK.z) || (x === PLAZA.x && z === PLAZA.z);
-
-      const buildPark = (cx: number, cz: number) => {
-        // allées diagonales en croix sur la pelouse
-        [-1, 1].forEach((s) => {
-          const path = new THREE.Mesh(new THREE.PlaneGeometry(8.4, 1.5), pavingMat);
-          path.rotation.x = -Math.PI / 2;
-          path.rotation.z = (s * Math.PI) / 4;
-          path.position.set(cx, 0.02, cz);
-          path.receiveShadow = true;
-          scene.add(path);
-        });
-        // bassin
-        const pond = new THREE.Mesh(
-          new THREE.CircleGeometry(1.9, 28),
-          new THREE.MeshStandardMaterial({
-            color: 0x3fa9d8,
-            roughness: 0.15,
-            metalness: 0.35,
-          }),
-        );
-        pond.rotation.x = -Math.PI / 2;
-        pond.position.set(cx, 0.06, cz);
-        scene.add(pond);
-        pondSurface = pond;
-        const rim = new THREE.Mesh(
-          new THREE.TorusGeometry(2.0, 0.16, 8, 28),
-          new THREE.MeshStandardMaterial({ color: 0xcfc7ae, roughness: 1 }),
-        );
-        rim.rotation.x = -Math.PI / 2;
-        rim.position.set(cx, 0.16, cz);
-        setShadow(rim);
-        scene.add(rim);
-        // arbres en couronne
-        for (let i = 0; i < 8; i++) {
-          const a = (i / 8) * Math.PI * 2 + 0.3;
-          const tr = makeTree();
-          tr.position.set(cx + Math.cos(a) * 4, 0, cz + Math.sin(a) * 4);
-          tr.scale.setScalar(0.8 + (i % 3) * 0.08);
-          setShadow(tr);
-          scene.add(tr);
-        }
-      };
-
-      const buildPlaza = (cx: number, cz: number) => {
-        addSlab(pavingMat, 11, 11, cx, cz, 0.015);
-        // fontaine centrale
-        const basin = new THREE.Mesh(
-          new THREE.CylinderGeometry(2.1, 2.3, 0.6, 20),
-          new THREE.MeshStandardMaterial({ color: 0xe6e0cd, roughness: 0.9 }),
-        );
-        basin.position.set(cx, 0.3, cz);
-        setShadow(basin);
-        scene.add(basin);
-        const jet = new THREE.Mesh(
-          new THREE.CylinderGeometry(0.16, 0.3, 2.2, 10),
-          new THREE.MeshStandardMaterial({
-            color: 0x9fdcf5,
-            transparent: true,
-            opacity: 0.75,
-          }),
-        );
-        jet.position.set(cx, 1.5, cz);
-        scene.add(jet);
-        // arbres et coins verts
-        [
-          [-1, -1],
-          [1, -1],
-          [-1, 1],
-          [1, 1],
-        ].forEach(([sx, sz]) => {
-          const tr = makeTree();
-          tr.position.set(cx + sx! * 4.2, 0, cz + sz! * 4.2);
-          tr.scale.setScalar(0.85);
-          setShadow(tr);
-          scene.add(tr);
-        });
-      };
-
-      blockCentersX.forEach((bx, ix) => {
-        blockCentersZ.forEach((bz, iz) => {
-          // pelouse du pâté de maisons (entre les trottoirs)
-          addSlab(lawnMat, 12 - STREET_W, 12 - STREET_W, bx, bz, 0.01);
-
-          if (bx === PARK.x && bz === PARK.z) {
-            buildPark(bx, bz);
-            return;
-          }
-          if (bx === PLAZA.x && bz === PLAZA.z) {
-            buildPlaza(bx, bz);
-            return;
-          }
-
-          // anneau : 0 = centre-ville, 2 = périphérie pavillonnaire
-          const ring = Math.max(Math.abs(bx) / 12, Math.abs(bz) / 12);
-          let floors: number;
-          if (ring < 1.2) floors = 4 - ((ix + iz) % 2);
-          else if (ring < 1.8) floors = 2 + ((ix + iz) % 2);
-          else floors = 1;
-          buildKenneyBuilding(bx, bz, 2, 2, floors, bz > 0 ? Math.PI : 0);
-        });
-      });
-
-
-      // Arbres alignés le long des trottoirs, un sur deux entre carrefours
-      Z_STREETS.forEach((z, zi) => {
-        for (let x = xMin + 3; x <= xMax - 3; x += 6) {
-          if (nearCross(x, X_STREETS)) continue;
-          [-1, 1].forEach((side) => {
-            const tr = makeTree();
-            tr.position.set(x, 0, z + side * (STREET_W / 2 + 1.1));
-            tr.scale.setScalar(0.85 + ((zi + x) % 3) * 0.06);
-            setShadow(tr);
-            scene.add(tr);
-          });
-        }
-      });
-      // Rangées d'arbres au cœur des îlots verts
-      for (let xi = 0; xi < X_STREETS.length - 1; xi++) {
-        for (let zi = 0; zi < Z_STREETS.length - 1; zi++) {
-          if ((xi + zi) % 2 === 0) continue;
-          const bx = (X_STREETS[xi]! + X_STREETS[xi + 1]!) / 2;
-          const bz = (Z_STREETS[zi]! + Z_STREETS[zi + 1]!) / 2;
-          if (isSpecial(bx, bz)) continue;
-          [-1, 1].forEach((s) => {
-            const tr = makeTree();
-            tr.position.set(bx + s * 2.4, 0, bz + s * 2.4);
-            tr.scale.setScalar(0.75);
-            setShadow(tr);
-            scene.add(tr);
-          });
-        }
-      }
-
-
-      /* Mobilier urbain 100 % Kenney, posé sur une grille stricte :
-         feux aux carrefours majeurs, lampadaires et bennes en bord de bloc. */
-      const CURB_OFFSET = STREET_W / 2 + 0.45;
-      const signalX = X_STREETS.filter((_, i) => i % 2 === 1);
-      const signalZ = Z_STREETS.filter((_, i) => i % 2 === 1);
-      signalX.forEach((cx) => {
-        signalZ.forEach((cz) => {
-          const corners: Array<{ x: number; z: number; axis: "x" | "z" }> = [
-            { x: cx - CURB_OFFSET, z: cz - CURB_OFFSET, axis: "x" },
-            { x: cx + CURB_OFFSET, z: cz + CURB_OFFSET, axis: "z" },
-          ];
-          corners.forEach(({ x, z, axis }) => {
-            const light = makeTrafficLight(axis);
-            light.position.set(x, 0, z);
-            light.rotation.y = Math.atan2(cx - x, cz - z);
-            setShadow(light);
-            scene.add(light);
-          });
-        });
-      });
-
-      const FURNITURE_OFFSET = STREET_W / 2 + 0.6;
-      const placeKit = (
-        name: string,
-        x: number,
-        z: number,
-        rotY: number,
-        scale = 6,
-      ) => {
-        const tpl = kit[name];
-        if (!tpl) return;
-        const inst = tpl.clone(true);
-        inst.scale.setScalar(scale);
-        inst.position.set(x, 0, z);
-        inst.rotation.y = rotY;
-        setShadow(inst);
-        scene.add(inst);
-      };
-
-      for (let xi = 0; xi < X_STREETS.length - 1; xi++) {
-        for (let zi = 0; zi < Z_STREETS.length - 1; zi++) {
-          const bx = (X_STREETS[xi]! + X_STREETS[xi + 1]!) / 2;
-          const southStreet = Z_STREETS[zi]!;
-          const northStreet = Z_STREETS[zi + 1]!;
-
-          // lampadaires alternés de part et d'autre du bloc
-          placeKit("light-square", bx - 2, southStreet + FURNITURE_OFFSET, Math.PI);
-          placeKit("light-square", bx + 2, northStreet - FURNITURE_OFFSET, 0);
-
-          // bennes et panneaux de rue, un bloc sur deux
-          if ((xi + zi) % 2 === 0) {
-            placeKit("dumpster", bx + 2.4, southStreet + FURNITURE_OFFSET, Math.PI / 2, 6);
-          } else {
-            placeKit("road-sign-street", bx - 2.4, northStreet - FURNITURE_OFFSET, 0, 6);
-          }
-        }
-      }
 
 
 
@@ -1467,53 +1287,117 @@ export default function CarWashScene() {
       }
 
 
-      // ----- Circulation : deux voies par rue, sens opposés, bien centrées -----
-      let ti = 0;
-      const addTraffic = (
-        axis: "x" | "z",
-        lane: number,
-        dir: number,
-        s: number,
-      ) => {
-        const car = kitCar(ti).clone(true);
-        setShadow(car);
-        scene.add(car);
-        // modèles Kenney : le nez pointe vers +Z
-        const heading =
-          axis === "x" ? (dir > 0 ? Math.PI / 2 : -Math.PI / 2) : dir > 0 ? 0 : Math.PI;
-        /* on ne circule que sur la chaussée : bornes = extrémités de la rue */
-        const sMin = axis === "x" ? xMin : zMin;
-        const sMax = axis === "x" ? xMax : zMax;
-        trafficCars.push({
-          car,
-          axis,
-          lane,
-          s: Math.min(Math.max(s, sMin), sMax),
-          dir,
-          speed: 3.4 + (ti % 3) * 0.5,
-          heading,
-          yaw: 0,
-          baseY: 0,
-          wheels: findWheels(car),
-          sMin,
-          sMax,
-        });
-
-
-
-        ti++;
-      };
-
-      Z_STREETS.forEach((z, i) => {
-        addTraffic("x", z + LANE, 1, xMin + ((i * 11) % 40));
-        addTraffic("x", z - LANE, -1, xMin + ((i * 17) % 40));
-      });
-      X_STREETS.forEach((x, i) => {
-        if (i % 2 !== 0) return;
-        addTraffic("z", x - LANE, 1, zMin + ((i * 13) % 34));
-        addTraffic("z", x + LANE, -1, zMin + ((i * 7) % 34));
-      });
+      // ----- Trafic initial : quelques voitures sur la route principale -----
+      for (let i = 0; i < 6; i++) {
+        spawnNetCar(MAIN_CX, MAIN_CZ_START + 2 + i * 2);
+      }
     };
+
+    /* ---------- Mode construction : le joueur pose son réseau ---------- */
+    const gridHelper = new THREE.GridHelper(TILE * 30, 30, 0x2b6cb0, 0x9ec5e8);
+    (gridHelper.material as THREE.Material).transparent = true;
+    (gridHelper.material as THREE.Material).opacity = 0.3;
+    gridHelper.position.y = 0.04;
+    gridHelper.visible = false;
+    scene.add(gridHelper);
+
+    const ghost = new THREE.Mesh(
+      new THREE.PlaneGeometry(TILE * 0.94, TILE * 0.94),
+      new THREE.MeshBasicMaterial({ color: 0x2bd07c, transparent: true, opacity: 0.45 }),
+    );
+    ghost.rotation.x = -Math.PI / 2;
+    ghost.position.y = 0.07;
+    ghost.visible = false;
+    scene.add(ghost);
+
+    const BUILD_MIN_CZ = MAIN_CZ_START + 1;
+    const BUILD_MAX_CZ = MAIN_CZ_END + 2;
+    const BUILD_MAX_CX = 12;
+    const canBuild = (cx: number, cz: number) =>
+      Math.abs(cx) <= BUILD_MAX_CX &&
+      cz >= BUILD_MIN_CZ &&
+      cz <= BUILD_MAX_CZ &&
+      !plan.get(cx, cz)?.locked;
+
+    const ray = new THREE.Raycaster();
+    const ndc = new THREE.Vector2();
+    const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    const hitPoint = new THREE.Vector3();
+    const cellUnderPointer = (ev: PointerEvent) => {
+      const rect = renderer.domElement.getBoundingClientRect();
+      ndc.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+      ndc.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
+      ray.setFromCamera(ndc, camera);
+      if (!ray.ray.intersectPlane(groundPlane, hitPoint)) return null;
+      return { cx: worldToCell(hitPoint.x), cz: worldToCell(hitPoint.z) };
+    };
+
+    let downAt: { x: number; y: number } | null = null;
+    const onPointerMove = (ev: PointerEvent) => {
+      if (!buildRef.current) {
+        ghost.visible = false;
+        return;
+      }
+      const c = cellUnderPointer(ev);
+      if (!c) {
+        ghost.visible = false;
+        return;
+      }
+      ghost.visible = true;
+      ghost.position.set(c.cx * TILE, 0.07, c.cz * TILE);
+      const existing = plan.get(c.cx, c.cz);
+      const tool = toolRef.current;
+      const ok =
+        tool === "erase"
+          ? !!existing && !existing.locked
+          : tool === "light" || tool === "lamp"
+            ? !!existing
+            : canBuild(c.cx, c.cz);
+      (ghost.material as THREE.MeshBasicMaterial).color.set(ok ? 0x2bd07c : 0xe05252);
+    };
+    const onPointerDown = (ev: PointerEvent) => {
+      downAt = { x: ev.clientX, y: ev.clientY };
+    };
+    const onPointerUp = (ev: PointerEvent) => {
+      const start = downAt;
+      downAt = null;
+      if (!buildRef.current || !start) return;
+      if (Math.hypot(ev.clientX - start.x, ev.clientY - start.y) > 6) return;
+      const c = cellUnderPointer(ev);
+      if (!c) return;
+      const tool = toolRef.current;
+      if (tool === "erase") {
+        if (plan.remove(c.cx, c.cz)) renderPlan();
+        return;
+      }
+      if (tool === "light" || tool === "lamp") {
+        const cell = plan.get(c.cx, c.cz);
+        if (!cell) return;
+        plan.setProp(c.cx, c.cz, tool, !cell[tool]);
+        renderPlan();
+        return;
+      }
+      if (!canBuild(c.cx, c.cz)) return;
+      plan.place(c.cx, c.cz, tool, rotRef.current);
+      renderPlan();
+    };
+    renderer.domElement.addEventListener("pointermove", onPointerMove);
+    renderer.domElement.addEventListener("pointerdown", onPointerDown);
+    renderer.domElement.addEventListener("pointerup", onPointerUp);
+
+    buildApplyRef.current = (on: boolean) => {
+      gridHelper.visible = on;
+      controls.enableRotate = !on;
+      if (!on) ghost.visible = false;
+    };
+    planIoRef.current = {
+      save: () => plan.serialize(),
+      load: (data) => {
+        plan.load(data);
+        renderPlan();
+      },
+    };
+
 
 
 
@@ -1525,7 +1409,7 @@ export default function CarWashScene() {
 
       // léger clapotis sur les surfaces d'eau
       if (waterSurface) waterSurface.position.y = 0.05 + Math.sin(t * 0.8) * 0.03;
-      if (pondSurface) pondSurface.position.y = 0.06 + Math.sin(t * 1.1 + 1) * 0.025;
+      
 
 
       const ctl = machinesRef.current;
@@ -1583,29 +1467,22 @@ export default function CarWashScene() {
         aheadD = e.d;
       }
 
-      /* Fin de l'itinéraire : la voiture, propre, reprend sa vie en ville */
+      /* Fin de l'itinéraire : la voiture, propre, reprend la route principale */
       for (let i = washCars.length - 1; i >= 0; i--) {
         const e = washCars[i]!;
         if (e.d >= ROUTE_LEN - 0.05) {
           const o = e.origin;
           tintCar(o.car, 0);
-          /* on la réinjecte sur sa rue, à une place libre */
-          let s = o.sMin + Math.random() * (o.sMax - o.sMin);
-          for (let k = 0; k < 12; k++) {
-            const clash = trafficCars.some(
-              (c) =>
-                c.axis === o.axis &&
-                Math.abs(c.lane - o.lane) < 0.5 &&
-                Math.abs(c.s - s) < 6,
-            );
-            if (!clash) break;
-            s = o.sMin + Math.random() * (o.sMax - o.sMin);
-          }
-          o.s = s;
-          trafficCars.push(o);
+          o.cx = MAIN_CX;
+          o.cz = MAIN_CZ_START;
+          o.dirIn = 0;
+          o.dirOut = 0; // repart vers le nord
+          o.t = 0.1;
+          netCars.push(o);
           washCars.splice(i, 1);
         }
       }
+
 
 
       /* De temps en temps, une voiture de la ville part au lavage. */
@@ -1645,63 +1522,69 @@ export default function CarWashScene() {
         });
       }
 
-      /* Circulation : voitures strictement sur la chaussée, à distance de la
-         voiture de devant, et cycle de feux rouge/vert aux carrefours.
-         Phase 0 : rues Est-Ouest au vert. Phase 1 : rues Nord-Sud au vert. */
-      const CAR_GAP = 4.2;
+      /* Circulation sur le réseau construit par le joueur : chaque voiture
+         traverse une case, choisit une sortie au carrefour et s'arrête aux
+         feux posés par le joueur. */
       const LIGHT_CYCLE = 9; // secondes par phase
       const phase = Math.floor(t / LIGHT_CYCLE) % 2;
       const greenAxis: "x" | "z" = phase === 0 ? "x" : "z";
-      const HALF_CROSS = STREET_W / 2 + 0.6;
-      trafficCars.forEach((e) => {
+
+      netCars.forEach((e) => {
         if (!ctl.traffic) return;
         const step = dt * e.speed;
-        const nextS = e.s + step * e.dir;
+        const nt = e.t + step / TILE;
 
-        // 1) distance de sécurité avec la voiture devant, même rue même voie
-        let blocked = false;
-        for (const o of trafficCars) {
-          if (o === e || o.axis !== e.axis) continue;
-          if (Math.abs(o.lane - e.lane) > 0.5) continue;
-          const ahead = (o.s - nextS) * e.dir;
-          if (ahead > 0 && ahead < CAR_GAP) {
-            blocked = true;
-            break;
-          }
-        }
+        // distance de sécurité avec la voiture devant, dans la même case
+        const tooClose = netCars.some(
+          (o) =>
+            o !== e && o.cx === e.cx && o.cz === e.cz && o.t > e.t && o.t - e.t < 0.4,
+        );
+        if (tooClose) return;
 
-        // 2) feu rouge : on s'arrête AVANT le carrefour, jamais dedans
-        if (!blocked && e.axis !== greenAxis) {
-          const crossings = e.axis === "x" ? X_STREETS : Z_STREETS;
-          for (const c of crossings) {
-            const distNow = (c - e.s) * e.dir;
-            const distNext = (c - nextS) * e.dir;
-            // déjà engagé dans le carrefour : on le dégage toujours
-            if (Math.abs(e.s - c) <= HALF_CROSS) continue;
-            // la ligne d'arrêt est à HALF_CROSS avant le centre du carrefour
-            if (distNow > HALF_CROSS && distNext <= HALF_CROSS) {
-              blocked = true;
-              break;
+        if (nt < 1) {
+          e.t = nt;
+        } else {
+          const [dx, dz] = DIR_VEC[e.dirOut]!;
+          const nx = e.cx + dx;
+          const nz = e.cz + dz;
+          const next = plan.get(nx, nz);
+          if (!next) {
+            // cul-de-sac : demi-tour sans quitter la chaussée
+            e.dirIn = e.dirOut;
+            e.dirOut = opposite(e.dirIn);
+            e.t = 0;
+          } else {
+            const busy =
+              netCars.filter((o) => o !== e && o.cx === nx && o.cz === nz).length >= 2;
+            const red = next.light && axisOf(e.dirOut) !== greenAxis;
+            if (busy || red) {
+              e.t = 0.97;
+              return;
             }
+            e.cx = nx;
+            e.cz = nz;
+            e.dirIn = e.dirOut;
+            e.t = Math.min(nt - 1, 0.5);
+            const exits = plan.exitsFrom(nx, nz, e.dirIn);
+            e.dirOut =
+              exits.includes(e.dirIn) && Math.random() < 0.65
+                ? e.dirIn
+                : exits[Math.floor(Math.random() * exits.length)]!;
           }
         }
 
-        if (blocked) return;
-
-        e.s = nextS;
-        // bouclage strictement dans les limites de la chaussée
-        if (e.s > e.sMax) e.s = e.sMin;
-        if (e.s < e.sMin) e.s = e.sMax;
-        // roues qui tournent proportionnellement à la distance parcourue
         e.wheels.forEach((w) => {
           w.rotation.x -= ((w.userData['spinSign'] as number) ?? 1) * (step / 0.35) * 2;
         });
       });
 
-      trafficCars.forEach((e) => {
-        if (e.axis === "x") e.car.position.set(e.s, e.baseY, e.lane);
-        else e.car.position.set(e.lane, e.baseY, e.s);
-        e.car.rotation.y = e.heading + e.yaw;
+      netCars.forEach((e) => {
+        const p = netPose(e);
+        e.car.position.set(p.x, e.baseY, p.z);
+        let delta = p.heading + e.yaw - e.car.rotation.y;
+        while (delta > Math.PI) delta -= Math.PI * 2;
+        while (delta < -Math.PI) delta += Math.PI * 2;
+        e.car.rotation.y += delta * Math.min(dt * 8, 1);
       });
 
       // Feux : vert sur l'axe qui passe, rouge sur l'autre
@@ -1710,6 +1593,7 @@ export default function CarWashScene() {
         (l.green.material as THREE.MeshStandardMaterial).emissiveIntensity = green ? 1.4 : 0.06;
         (l.red.material as THREE.MeshStandardMaterial).emissiveIntensity = green ? 0.06 : 1.4;
       });
+
 
 
 
@@ -1839,12 +1723,16 @@ export default function CarWashScene() {
     return () => {
       disposed = true;
       cancelAnimationFrame(frame);
-      
+
       window.removeEventListener("resize", onResize);
+      renderer.domElement.removeEventListener("pointermove", onPointerMove);
+      renderer.domElement.removeEventListener("pointerdown", onPointerDown);
+      renderer.domElement.removeEventListener("pointerup", onPointerUp);
       controls.dispose();
       renderer.dispose();
       renderer.domElement.remove();
     };
+
 
   }, []);
 
@@ -1971,6 +1859,58 @@ export default function CarWashScene() {
 
       </div>
 
+      {/* Mode construction : palette de pièces à poser sur la grille */}
+      <div className="fixed bottom-4 left-1/2 z-40 flex w-[min(94vw,560px)] -translate-x-1/2 flex-col items-center gap-2">
+        <button
+          type="button"
+          onClick={toggleBuild}
+          aria-pressed={buildMode}
+          className={`rounded-full px-4 py-2.5 text-[12.5px] font-bold shadow-[0_6px_20px_rgba(6,58,94,0.18)] transition-transform active:translate-y-0.5 ${
+            buildMode ? "bg-splash text-splash-foreground" : "bg-white/90 text-ink"
+          }`}
+        >
+          🏗️ {buildMode ? "Quitter la construction" : "Construire"}
+        </button>
+        {buildMode && (
+          <div className="flex w-full flex-wrap items-center justify-center gap-1.5 rounded-2xl bg-white/90 p-2 shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur">
+            {(
+              [
+                "straight",
+                "bend",
+                "intersection",
+                "crossroad",
+                "light",
+                "lamp",
+                "erase",
+              ] as BuildTool[]
+            ).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => chooseTool(t)}
+                aria-pressed={tool === t}
+                className={`rounded-xl px-2.5 py-1.5 text-[11.5px] font-semibold transition-colors ${
+                  tool === t ? "bg-splash text-splash-foreground" : "bg-ink/10 text-ink"
+                }`}
+              >
+                {TOOL_LABEL[t]}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => {
+                const next = (rotRef.current + 1) % 4;
+                rotRef.current = next;
+                setRot(next);
+              }}
+              className="rounded-xl bg-sunny px-2.5 py-1.5 text-[11.5px] font-bold text-sunny-foreground"
+            >
+              🔄 {rot * 90}°
+            </button>
+          </div>
+        )}
+      </div>
     </>
+
   );
 }
