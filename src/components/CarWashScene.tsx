@@ -422,19 +422,21 @@ export default function CarWashScene() {
       // Toit à deux pentes : prisme triangulaire qui repose exactement sur les murs
       const rh = 1.1;
       const overhang = 0.22;
-      const roofGeo = new THREE.CylinderGeometry(
-        0.0001,
-        Math.SQRT2 * (d / 2 + overhang),
-        rh,
-        4,
-        1,
-      );
+      const rw = w / 2 + overhang;
+      const shape = new THREE.Shape();
+      shape.moveTo(-rw, 0);
+      shape.lineTo(rw, 0);
+      shape.lineTo(0, rh);
+      shape.closePath();
+      const roofGeo = new THREE.ExtrudeGeometry(shape, {
+        depth: d + overhang * 2,
+        bevelEnabled: false,
+      });
+      roofGeo.translate(0, 0, -(d / 2 + overhang));
       const roof = new THREE.Mesh(roofGeo, roofMats[variant % roofMats.length]!);
-      roof.rotation.z = Math.PI / 2;
-      roof.rotation.y = Math.PI / 4;
-      roof.scale.set(1, (w + overhang * 2) / rh, 1);
-      roof.position.y = h + rh / 2;
+      roof.position.y = h;
       g.add(roof);
+
 
       const door = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.1, 0.08), doorMat);
       door.position.set(0, 0.55, d / 2 + 0.04);
