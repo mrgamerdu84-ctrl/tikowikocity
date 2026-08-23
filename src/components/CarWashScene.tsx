@@ -2559,7 +2559,24 @@ export default function CarWashScene() {
         </div>
       )}
 
-      <div className="pointer-events-none fixed left-2 top-2 z-40 max-w-[calc(100vw-146px)] rounded-2xl bg-white/90 ring-1 ring-ink/10 px-3 py-2 text-ink shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur sm:left-4 sm:top-4 sm:max-w-[300px] sm:px-4 sm:py-3">
+      {/* Mode construction : barre d'infos minimale pour dégager la vue 3D */}
+      {buildMode && (
+        <div className="pointer-events-none fixed left-2 right-2 top-2 z-40 flex items-center gap-2 rounded-full bg-white/85 px-3 py-1.5 text-ink shadow-[0_4px_14px_rgba(6,58,94,0.14)] ring-1 ring-ink/10 backdrop-blur sm:left-4 sm:right-4 sm:top-4">
+          <span className="text-[13px] font-extrabold tabular-nums">
+            💰 {economy.money.toLocaleString("fr-FR")} €
+          </span>
+          <span className="text-[12.5px] font-semibold opacity-80">
+            👥 {residents} · 🏠 {city.houses}
+          </span>
+          <span className="ml-auto truncate text-[12px] font-semibold opacity-70">
+            Mode construction — {TOOL_LABEL[tool]}
+          </span>
+        </div>
+      )}
+
+      <div
+        className={`pointer-events-none fixed left-2 top-2 z-40 max-w-[calc(100vw-146px)] rounded-2xl bg-white/90 ring-1 ring-ink/10 px-3 py-2 text-ink shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur sm:left-4 sm:top-4 sm:max-w-[300px] sm:px-4 sm:py-3 ${buildMode ? "hidden" : ""}`}
+      >
         <p className="flex items-center gap-2 text-[17px] font-bold tracking-wide sm:text-[22px]">
           <span aria-hidden>🫧</span> TikowikoCity
         </p>
