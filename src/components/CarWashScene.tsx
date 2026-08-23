@@ -334,10 +334,8 @@ export default function CarWashScene() {
       2000,
     );
     if (isPortrait()) camera.position.set(-26, 36, WASH_SITE_Z + 54);
-    // Cadrage desktop/paysage : caméra au nord de la ville, regard vers le sud.
-    // La ville occupe le centre/premier plan, le car wash reste visible en
-    // arrière-plan relié par la route, les montagnes restent lointaines.
-    else camera.position.set(-15, 28, 55);
+    // DEBUG: vue plongeante extrême pour vérifier que la caméra est bien appliquée
+    else camera.position.set(0, 80, 0);
 
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
