@@ -366,6 +366,128 @@ export default function CarWashScene() {
   const cinemaStateRef = useRef(cinema);
   cinemaStateRef.current = cinema;
 
+  /** Photographie complète de la partie (ville + progression). */
+  const collectState = () => ({
+    machines: machinesRef.current,
+    cinema: cinemaStateRef.current,
+    city: planIoRef.current.save(),
+    houses: planIoRef.current.saveHouses(),
+    decor: planIoRef.current.saveDecor(),
+    washStyle: washStyleRef.current,
+    residents: residentsRef.current,
+    economy: economyRef.current,
+    history: historyRef.current,
+    upgrades: upgradesRef.current,
+  });
+
+  type SavedState = {
+    machines?: Partial<typeof machines>;
+    cinema?: unknown;
+    city?: SerializedPlan;
+    houses?: SerializedHouses;
+    decor?: SerializedDecor;
+    washStyle?: unknown;
+    residents?: unknown;
+    economy?: { money?: unknown; washes?: unknown };
+    history?: unknown;
+    upgrades?: unknown;
+  };
+
+  /** Réapplique une sauvegarde (locale ou Drive) à la partie en cours. */
+  const applySavedStateRef = useRef<(state: SavedState, withCinema?: boolean) => void>(
+    () => {},
+  );
+  applySavedStateRef.current = (state: SavedState, withCinema = true) => {
+    if (state.machines && typeof state.machines === "object") {
+      setMachines((prev) => {
+        const next = { ...prev };
+        (Object.keys(prev) as Array<keyof typeof prev>).forEach((k) => {
+          const v = state.machines?.[k];
+          if (typeof v === "boolean") next[k] = v;
+        });
+        machinesRef.current = next;
+        return next;
+      });
+    }
+    if (Array.isArray(state.city)) planIoRef.current.load(state.city);
+    if (Array.isArray(state.houses)) planIoRef.current.loadHouses(state.houses);
+    if (Array.isArray(state.decor)) planIoRef.current.loadDecor(state.decor);
+    if (state.washStyle) {
+      const s = sanitizeWashStyle(state.washStyle);
+      washStyleRef.current = s;
+      setWashStyle(s);
+      washApplyRef.current(s);
+    }
+    if (typeof state.residents === "number" && Number.isFinite(state.residents)) {
+      const r = Math.max(0, Math.round(state.residents));
+      residentsRef.current = r;
+      setResidents(r);
+    }
+    if (state.economy && typeof state.economy === "object") {
+      const money = state.economy.money;
+      const washes = state.economy.washes;
+      const next = {
+        money: typeof money === "number" && Number.isFinite(money) ? money : 0,
+        washes: typeof washes === "number" && Number.isFinite(washes) ? washes : 0,
+      };
+      economyRef.current = next;
+      setEconomy(next);
+    }
+    if (state.history !== undefined) {
+      const h = sanitizeHistory(state.history);
+      historyRef.current = h;
+      setHistory(h);
+    }
+    if (state.upgrades) {
+      const up = sanitizeUpgrades(state.upgrades);
+      upgradesRef.current = up;
+      setUpgrades(up);
+    }
+    if (
+      withCinema &&
+      typeof state.cinema === "boolean" &&
+      state.cinema !== cinemaStateRef.current
+    ) {
+      cinemaRef.current();
+    }
+  };
+
+  /* Sauvegarde locale automatique : la création du joueur est restaurée
+     telle quelle au prochain lancement, sans action de sa part. */
+  const restoreLocalRef = useRef<() => void>(() => {});
+  restoreLocalRef.current = () => {
+    const saved = readLocalCity();
+    if (!saved) return;
+    try {
+      applySavedStateRef.current(saved.state as SavedState, false);
+      localReadyRef.current = true;
+      toast.success("Ville restaurée", {
+        description: "Ta dernière création a été rechargée automatiquement.",
+      });
+    } catch (err) {
+      console.error(err);
+      localReadyRef.current = true;
+    }
+  };
+  const localReadyRef = useRef(false);
+
+  useEffect(() => {
+    const flush = () => {
+      if (!localReadyRef.current) return;
+      saveLocalCity(collectState(), SAVE_VERSION);
+    };
+    const timer = window.setInterval(flush, 4000);
+    window.addEventListener("pagehide", flush);
+    window.addEventListener("beforeunload", flush);
+    return () => {
+      flush();
+      window.clearInterval(timer);
+      window.removeEventListener("pagehide", flush);
+      window.removeEventListener("beforeunload", flush);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleSaveToDrive = async () => {
     setDriveState("saving");
     try {
@@ -379,20 +501,7 @@ export default function CarWashScene() {
             savedAt: new Date().toISOString(),
             // Extensible: new progression fields can be added here without
             // breaking older saves (loader applies only known keys).
-            state: {
-              machines: machinesRef.current,
-              cinema: cinemaStateRef.current,
-              city: planIoRef.current.save(),
-              houses: planIoRef.current.saveHouses(),
-              decor: planIoRef.current.saveDecor(),
-              washStyle: washStyleRef.current,
-              residents: residentsRef.current,
-              economy: economyRef.current,
-              history: historyRef.current,
-              upgrades: upgradesRef.current,
-
-
-            },
+            state: collectState(),
           },
         },
       });
@@ -421,68 +530,9 @@ export default function CarWashScene() {
         toast.info("Aucune sauvegarde trouvée dans le dossier TikowikoCity.");
         return;
       }
-      const state = JSON.parse(res.stateJson || "{}") as {
-        machines?: Partial<typeof machines>;
-        cinema?: unknown;
-        city?: SerializedPlan;
-        houses?: SerializedHouses;
-        decor?: SerializedDecor;
-        washStyle?: unknown;
-        residents?: unknown;
-        economy?: { money?: unknown; washes?: unknown };
-        history?: unknown;
-        upgrades?: unknown;
-
-      };
-      if (state.machines && typeof state.machines === "object") {
-        setMachines((prev) => {
-          const next = { ...prev };
-          (Object.keys(prev) as Array<keyof typeof prev>).forEach((k) => {
-            const v = state.machines?.[k];
-            if (typeof v === "boolean") next[k] = v;
-          });
-          machinesRef.current = next;
-          return next;
-        });
-      }
-      if (Array.isArray(state.city)) planIoRef.current.load(state.city);
-      if (Array.isArray(state.houses)) planIoRef.current.loadHouses(state.houses);
-      if (Array.isArray(state.decor)) planIoRef.current.loadDecor(state.decor);
-      if (state.washStyle) {
-        const s = sanitizeWashStyle(state.washStyle);
-        washStyleRef.current = s;
-        setWashStyle(s);
-        washApplyRef.current(s);
-      }
-      if (typeof state.residents === "number" && Number.isFinite(state.residents)) {
-        const r = Math.max(0, Math.round(state.residents));
-        residentsRef.current = r;
-        setResidents(r);
-      }
-      if (state.economy && typeof state.economy === "object") {
-        const money = state.economy.money;
-        const washes = state.economy.washes;
-        const next = {
-          money: typeof money === "number" && Number.isFinite(money) ? money : 0,
-          washes: typeof washes === "number" && Number.isFinite(washes) ? washes : 0,
-        };
-        economyRef.current = next;
-        setEconomy(next);
-      }
-      if (state.history !== undefined) {
-        const h = sanitizeHistory(state.history);
-        historyRef.current = h;
-        setHistory(h);
-      }
-      if (state.upgrades) {
-        const up = sanitizeUpgrades(state.upgrades);
-        upgradesRef.current = up;
-        setUpgrades(up);
-      }
-
-      if (typeof state.cinema === "boolean" && state.cinema !== cinemaStateRef.current) {
-        cinemaRef.current();
-      }
+      const state = JSON.parse(res.stateJson || "{}") as SavedState;
+      applySavedStateRef.current(state);
+      saveLocalCity(collectState(), SAVE_VERSION);
 
       setLoadState("done");
       setDriveMenuOpen(false);
