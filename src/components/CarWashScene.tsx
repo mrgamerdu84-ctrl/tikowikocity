@@ -614,7 +614,7 @@ export default function CarWashScene() {
         let cloned = tinted.get(mat);
         if (!cloned) {
           cloned = mat.clone();
-          cloned.color.multiply(tint).multiplyScalar(1.5);
+          cloned.color.lerp(tint, 0.75).multiplyScalar(1.15);
           tinted.set(mat, cloned);
         }
         mesh.material = cloned;
@@ -805,11 +805,11 @@ export default function CarWashScene() {
         }
       });
 
-      /* Mobilier urbain identique à CHAQUE carrefour : 4 feux, 2 lampadaires,
-         un banc et une poubelle sur les coins. */
+      /* Mobilier urbain : UN seul poteau de feu par angle de carrefour (4 max),
+         et un peu de mobilier bas sur quelques carrefours seulement. */
       const CORNER = STREET_W / 2 + 1.1;
-      X_STREETS.forEach((cx) => {
-        Z_STREETS.forEach((cz) => {
+      X_STREETS.forEach((cx, xi) => {
+        Z_STREETS.forEach((cz, zi) => {
           const corners: Array<[number, number]> = [
             [cx - CORNER, cz - CORNER],
             [cx + CORNER, cz - CORNER],
@@ -823,22 +823,26 @@ export default function CarWashScene() {
             light.rotation.y = Math.atan2(cx - px, cz - pz);
             setShadow(light);
             scene.add(light);
-
-            let item: THREE.Group | null = null;
-            if (k === 0 || k === 2) item = makeLamp();
-            else if (k === 1) item = makeBench();
-            else item = makeBin();
-            item.position.set(
-              px + (px > cx ? 1.1 : -1.1),
-              0,
-              pz + (pz > cz ? 1.1 : -1.1),
-            );
-            item.rotation.y = Math.atan2(cx - px, cz - pz);
-            setShadow(item);
-            scene.add(item);
           });
+
+          // mobilier bas (pas de poteaux) sur un carrefour sur deux
+          if ((xi + zi) % 2 === 0) {
+            const [bx, bz] = corners[1];
+            const bench = makeBench();
+            bench.position.set(bx + 1.4, 0, bz - 1.4);
+            bench.rotation.y = Math.atan2(cx - bx, cz - bz);
+            setShadow(bench);
+            scene.add(bench);
+
+            const [nx, nz] = corners[3];
+            const bin = makeBin();
+            bin.position.set(nx - 1.4, 0, nz + 1.4);
+            setShadow(bin);
+            scene.add(bin);
+          }
         });
       });
+
 
 
       /* ----- Parcelle dédiée du car wash (périphérie sud) ----- */
