@@ -1174,6 +1174,8 @@ export default function CarWashScene() {
       origin: NetCar;
       /* true dès que le lavage a été facturé (évite les doubles paiements) */
       paid?: boolean;
+      /* nappe de mousse qui recouvre la carrosserie pendant le lavage */
+      soap?: THREE.Group;
 
     };
     const washCars: WashCar[] = [];
@@ -1185,7 +1187,9 @@ export default function CarWashScene() {
       dir: number;
       kind: "roller" | "brush";
     }> = [];
+    const waterJets: WaterJet[] = [];
     const foamSprites: THREE.Object3D[] = [];
+
     const conveyorSlats: THREE.Mesh[] = [];
     /* ----- Réseau routier du joueur ----- */
     const plan = new CityPlan();
