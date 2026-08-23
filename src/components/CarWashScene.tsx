@@ -103,7 +103,7 @@ export default function CarWashScene() {
       0.1,
       300,
     );
-    camera.position.set(-18, 14, 24);
+    camera.position.set(-26, 20, 34);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
