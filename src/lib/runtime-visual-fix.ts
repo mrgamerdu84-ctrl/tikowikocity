@@ -2,12 +2,9 @@ import * as THREE from "three";
 import { TILE } from "@/game/grid";
 
 /**
- * Correctifs visuels légers appliqués au runtime sans modifier la logique du jeu.
- * - conserve les modèles Kenney mais restaure des carrosseries opaques/colorées ;
- * - rend les vitres propres et les feux arrière petits/nettement définis ;
- * - redresse et réduit les feux tricolores ;
- * - complète les intersections avec quatre feux ;
- * - empêche les PointLight des maisons d'illuminer toute la façade.
+ * Correctifs visuels légers appliqués au runtime.
+ * IMPORTANT : ce module reste volontairement très peu coûteux, car la ville
+ * ajoute beaucoup de morceaux Kenney pendant le mode construction.
  */
 const marker = "__tikowikoNightVisualFixInstalled";
 const globalState = globalThis as typeof globalThis & Record<string, unknown>;
@@ -86,7 +83,7 @@ if (!globalState[marker]) {
         if (rear && material.color) {
           hasRearLight = true;
           material.color.setHex(0xb91f2d);
-          material.emissive.setHex(0xff2638);
+          material.emissive?.setHex(0xff2638);
           material.emissiveIntensity = 0.42;
           material.transparent = false;
           material.opacity = 1;
@@ -117,7 +114,7 @@ if (!globalState[marker]) {
             material.color.copy(fallback);
             material.transparent = false;
             material.opacity = 1;
-            material.roughness = Math.min(material.roughness, 0.72);
+            material.roughness = Math.min(material.roughness ?? 0.7, 0.72);
           }
         }
         return material;
@@ -162,12 +159,15 @@ if (!globalState[marker]) {
     return cloned;
   };
 
-  const isTrafficGroup = (obj: THREE.Object3D) => {
-    let found = false;
-    obj.traverse((node) => {
-      if (node.name === "traffic-light") found = true;
-    });
-    return found;
+  const looksLikeTrafficGroup = (obj: THREE.Object3D) => {
+    // Les feux créés par le jeu sont de petits groupes (modèle + 2 ampoules).
+    // On ne traverse jamais les gros assemblages de maisons/décors.
+    if (obj.children.length < 2 || obj.children.length > 5) return false;
+    if (obj.children.some((child) => child.name === "traffic-light")) return true;
+    return obj.children.some(
+      (child) =>
+        child.children.length <= 4 && child.children.some((nested) => nested.name === "traffic-light"),
+    );
   };
 
   const prepareTrafficGroup = (obj: THREE.Object3D) => {
@@ -194,30 +194,20 @@ if (!globalState[marker]) {
     });
   };
 
-  const tameHouseLighting = (obj: THREE.Object3D) => {
-    if (obj instanceof THREE.PointLight && obj.color.getHex() === 0xffc56e) {
-      obj.visible = false;
-      obj.castShadow = false;
-    }
-    obj.traverse((node) => {
-      const mesh = node as THREE.Mesh;
-      if (!mesh.isMesh) return;
-      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-      mats.forEach((raw) => {
-        const material = raw as THREE.MeshStandardMaterial;
-        if (material.userData?.["nightWindow"]) {
-          capNumberProperty(material, "emissiveIntensity", 0.62);
-        }
-      });
-    });
-  };
-
   const originalAdd = objectProto.add;
   objectProto.add = function patchedAdd(this: THREE.Object3D, ...objects: THREE.Object3D[]) {
-    objects.forEach((obj) => tameHouseLighting(obj));
+    // Cas maison : la lumière est ajoutée directement comme PointLight.
+    // Aucun traverse() n'est nécessaire, ce qui évite de reparcourir tous les
+    // modules Kenney à chaque pose d'une maison.
+    for (const obj of objects) {
+      if (obj instanceof THREE.PointLight && obj.color.getHex() === 0xffc56e) {
+        obj.visible = false;
+        obj.castShadow = false;
+      }
+    }
 
     const trafficObjects = objects.filter(
-      (obj) => !obj.userData["tikowikoTrafficDuplicate"] && isTrafficGroup(obj),
+      (obj) => !obj.userData["tikowikoTrafficDuplicate"] && looksLikeTrafficGroup(obj),
     );
     trafficObjects.forEach(prepareTrafficGroup);
 
