@@ -686,13 +686,28 @@ export default function CarWashScene() {
 
 
       // Véhicules : ajoutés au pool de spawn au fur et à mesure
-      MESHY_CARS.forEach((asset) => {
-        load(asset.url)
-          .then((raw) => {
-            if (disposed) return;
-            meshyCars.push(normalizeModel(raw, 2.4));
-          })
-          .catch((err: unknown) => console.error("voiture Meshy", err));
+      await Promise.all(
+        MESHY_CARS.map((asset) =>
+          load(asset.url)
+            .then((raw) => {
+              if (disposed) return;
+              meshyCars.push(normalizeModel(raw, 2.4));
+            })
+            .catch((err: unknown) => console.error("voiture Meshy", err)),
+        ),
+      );
+      if (disposed || meshyCars.length === 0) return;
+
+      // Le trafic Kenney est remplacé par les voitures Meshy, bien orientées
+      trafficCars.forEach((entry, i) => {
+        const template = meshyCars[i % meshyCars.length]!;
+        const next = template.clone(true);
+        setShadow(next);
+        next.position.set(entry.car.position.x, 0.06, entry.car.position.z);
+        next.rotation.y = entry.dir > 0 ? 0 : Math.PI;
+        scene.add(next);
+        scene.remove(entry.car);
+        entry.car = next;
       });
     };
 
