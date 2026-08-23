@@ -731,10 +731,17 @@ export default function CarWashScene() {
       const data = car.userData as { materials?: THREE.MeshStandardMaterial[] };
       const materials = data.materials ?? isolateMaterials(car);
       data.materials = materials;
+      const clean = 1 - dirtiness;
       materials.forEach((m) => {
         m.color.setHex(0xffffff).lerp(DIRT_COLOR, dirtiness);
+        /* Carrosserie fraîchement lavée : vernis brillant + léger éclat. */
+        m.roughness = 0.85 - clean * 0.7;
+        m.metalness = 0.05 + clean * 0.55;
+        m.emissive.setHex(0xffffff);
+        m.emissiveIntensity = clean * 0.12;
       });
     };
+
 
     /* Récupère les roues et mémorise, pour chacune, le sens de rotation
        correct : certains modèles (4x4/SUV) ont des roues dont l'axe local
@@ -779,6 +786,13 @@ export default function CarWashScene() {
     const brushCoreGeo = new THREE.CylinderGeometry(0.09, 0.09, 1.9, 12);
     const brushPadGeo = new THREE.CylinderGeometry(0.3, 0.3, 1.62, 16, 1);
     const brushRibGeo = new THREE.TorusGeometry(0.31, 0.035, 8, 20);
+    /* Lanières souples accrochées au rouleau : fines lamelles qui pendent
+       et viennent frotter la carrosserie. */
+    const flapGeo = new THREE.BoxGeometry(0.045, 0.5, 0.16);
+    flapGeo.translate(0, -0.25, 0);
+    const flapMats = [0x2f7fb4, 0x67c3ea, 0xe8eef2].map(
+      (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.9 }),
+    );
 
     const makeBrush = () => {
       const g = new THREE.Group();
@@ -797,6 +811,23 @@ export default function CarWashScene() {
         rib.position.y = -0.62 + i * 0.31;
         g.add(rib);
       }
+
+      /* Couronnes de lanières réparties sur la hauteur du rouleau. */
+      const flaps = new THREE.Group();
+      for (let row = 0; row < 4; row++) {
+        for (let k = 0; k < 10; k++) {
+          const a = (k / 10) * Math.PI * 2 + row * 0.31;
+          const f = new THREE.Mesh(flapGeo, flapMats[(row + k) % flapMats.length]!);
+          f.position.set(Math.cos(a) * 0.3, 0.62 - row * 0.4, Math.sin(a) * 0.3);
+          f.rotation.y = -a;
+          f.rotation.z = 0.35;
+          f.userData['a0'] = a;
+          f.userData['row'] = row;
+          flaps.add(f);
+        }
+      }
+      g.add(flaps);
+      g.userData['flaps'] = flaps;
       return g;
     };
 
@@ -822,6 +853,79 @@ export default function CarWashScene() {
       }
       return group;
     };
+
+    /* Rampe de gicleurs : buse + nappe d'eau translucide + gouttelettes
+       animées qui retombent sur la carrosserie. */
+    const nozzleMat = new THREE.MeshStandardMaterial({
+      color: 0x8f9aa6,
+      roughness: 0.4,
+      metalness: 0.6,
+    });
+    const waterMat = new THREE.MeshStandardMaterial({
+      color: 0x9fd8f5,
+      transparent: true,
+      opacity: 0.32,
+      roughness: 0.1,
+      depthWrite: false,
+    });
+    const dropMat = new THREE.MeshStandardMaterial({
+      color: 0xcdeeff,
+      transparent: true,
+      opacity: 0.8,
+      roughness: 0.15,
+    });
+    const nozzleGeo = new THREE.CylinderGeometry(0.07, 0.09, 0.22, 8);
+    const jetGeo = new THREE.ConeGeometry(0.42, 1.5, 10, 1, true);
+    const dropGeo = new THREE.SphereGeometry(0.05, 5, 4);
+
+    type WaterJet = { group: THREE.Group; drops: THREE.Mesh[]; cone: THREE.Mesh };
+    const makeWaterJet = () => {
+      const group = new THREE.Group();
+      const nozzle = new THREE.Mesh(nozzleGeo, nozzleMat);
+      group.add(nozzle);
+      const cone = new THREE.Mesh(jetGeo, waterMat);
+      cone.position.y = -0.85;
+      cone.rotation.x = Math.PI; // pointe vers le bas
+      group.add(cone);
+      const drops: THREE.Mesh[] = [];
+      for (let i = 0; i < 12; i++) {
+        const d = new THREE.Mesh(dropGeo, dropMat);
+        d.userData['t'] = Math.random();
+        d.userData['ox'] = (Math.random() - 0.5) * 0.5;
+        d.userData['oz'] = (Math.random() - 0.5) * 0.5;
+        drops.push(d);
+        group.add(d);
+      }
+      return { group, drops, cone } as WaterJet;
+    };
+
+    /* Nappe de mousse qui vient recouvrir la carrosserie pendant le lavage. */
+    const soapMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.9,
+      roughness: 0.45,
+    });
+    const soapGeo = new THREE.IcosahedronGeometry(0.22, 0);
+    const makeSoapCoat = () => {
+      const g = new THREE.Group();
+      for (let i = 0; i < 26; i++) {
+        const b = new THREE.Mesh(soapGeo, soapMat);
+        const a = Math.random() * Math.PI * 2;
+        b.position.set(
+          (Math.random() - 0.5) * 3.4,
+          0.25 + Math.random() * 0.95,
+          Math.cos(a) * (0.55 + Math.random() * 0.35),
+        );
+        b.userData['s'] = 0.5 + Math.random() * 0.8;
+        b.scale.setScalar(0.001);
+        g.add(b);
+      }
+      g.visible = false;
+      return g;
+    };
+
+
 
     const makeTree = () => {
       const g = new THREE.Group();
@@ -1070,6 +1174,8 @@ export default function CarWashScene() {
       origin: NetCar;
       /* true dès que le lavage a été facturé (évite les doubles paiements) */
       paid?: boolean;
+      /* nappe de mousse qui recouvre la carrosserie pendant le lavage */
+      soap?: THREE.Group;
 
     };
     const washCars: WashCar[] = [];
@@ -1081,7 +1187,9 @@ export default function CarWashScene() {
       dir: number;
       kind: "roller" | "brush";
     }> = [];
+    const waterJets: WaterJet[] = [];
     const foamSprites: THREE.Object3D[] = [];
+
     const conveyorSlats: THREE.Mesh[] = [];
     /* ----- Réseau routier du joueur ----- */
     const plan = new CityPlan();
@@ -1134,9 +1242,9 @@ export default function CarWashScene() {
     const washSite = new THREE.Group();
     washSite.position.z = WASH_SITE_Z;
     scene.add(washSite);
-    /* Portique de lavage provisoire (Kenney) remplacé par le modèle Meshy
-       détaillé dès qu'il est chargé. */
-    let tunnelPlaceholder: THREE.Object3D | null = null;
+    /* Ancien portique provisoire : plus aucun modèle temporaire n'est ajouté
+       à la scène, seul le tunnel détaillé est monté après chargement. */
+
 
     /* Rendu du plan : tuiles de route auto-raccordées + mobilier posé. */
     const roadsGroup = new THREE.Group();
@@ -1614,6 +1722,8 @@ export default function CarWashScene() {
       if (!origin) return;
       origin.car.position.set(start.x, origin.baseY, start.z);
       tintCar(origin.car, 1);
+      const soap = makeSoapCoat();
+      origin.car.add(soap);
       washCars.push({
         car: origin.car,
         d: 0,
@@ -1622,7 +1732,9 @@ export default function CarWashScene() {
         baseY: origin.baseY,
         wheels: origin.wheels,
         origin,
+        soap,
       });
+
     };
 
 
@@ -1752,13 +1864,10 @@ export default function CarWashScene() {
 
       washSite.add(hall);
 
-      const tunnel = models["tunnel"]!.clone(true);
-      tunnel.rotation.y = Math.PI / 2;
-      tunnel.scale.setScalar(1.5);
-      tunnel.position.set(2, 0, 0);
-      setShadow(tunnel);
-      washSite.add(tunnel);
-      tunnelPlaceholder = tunnel;
+      /* Pas de portique provisoire : seul le tunnel détaillé est ajouté une
+         fois chargé, ce qui évite les résidus de l'ancien modèle. */
+
+
 
 
 
@@ -1800,6 +1909,15 @@ export default function CarWashScene() {
       });
 
 
+      /* Rampes de gicleurs : arche d'eau à l'entrée, rinçage à la sortie. */
+      [-1.4, 1.4, 4.2].forEach((x) => {
+        [-1.5, 0, 1.5].forEach((z) => {
+          const jet = makeWaterJet();
+          jet.group.position.set(x, ROAD_Y + 3.1, z);
+          washSite.add(jet.group);
+          waterJets.push(jet);
+        });
+      });
 
       for (let i = 0; i < 2; i++) {
         const foam = makeFoamVeil();
@@ -1807,6 +1925,7 @@ export default function CarWashScene() {
         washSite.add(foam);
         foamSprites.push(foam);
       }
+
 
 
       // ----- Sols et matériaux partagés -----
@@ -2373,6 +2492,21 @@ export default function CarWashScene() {
         else dirtiness = 1 - (e.d - WASH_D0) / (WASH_D1 - WASH_D0);
         tintCar(e.car, dirtiness);
 
+        /* Mousse : elle se dépose sur la première moitié du tunnel puis
+           est rincée sur la seconde. */
+        if (e.soap) {
+          const prog = 1 - dirtiness; // 0 → 1 dans le tunnel
+          const inTunnel = e.d > WASH_D0 && e.d < WASH_D1;
+          const cover = inTunnel ? Math.sin(Math.PI * Math.min(prog * 1.15, 1)) : 0;
+          e.soap.visible = cover > 0.02;
+          e.soap.children.forEach((b, j) => {
+            const s = (b.userData['s'] as number) ?? 1;
+            b.scale.setScalar(Math.max(cover * s * (0.8 + Math.sin(t * 5 + j) * 0.12), 0.001));
+            b.rotation.y += dt * 1.5;
+          });
+        }
+
+
         const p = posAt(e.d);
         e.car.position.set(
           p.x,
@@ -2395,6 +2529,10 @@ export default function CarWashScene() {
         if (e.d >= ROUTE_LEN - 0.05) {
           const o = e.origin;
           tintCar(o.car, 0);
+          if (e.soap) {
+            o.car.remove(e.soap);
+            e.soap.clear();
+          }
           o.cx = MAIN_CX;
           o.cz = MAIN_CZ_START;
           o.dirIn = 0;
@@ -2403,6 +2541,7 @@ export default function CarWashScene() {
           netCars.push(o);
           washCars.splice(i, 1);
         }
+
       }
 
 
@@ -2428,6 +2567,18 @@ export default function CarWashScene() {
         if (on) b.spin.rotation.y += dt * brushSpeed * b.dir;
         const engage = carInWash ? 1 : 0;
         const wobble = carInWash ? Math.sin(t * 6 + i) * 0.06 : 0;
+
+        /* Lanières : elles s'écartent avec la vitesse de rotation et
+           battent contre la carrosserie quand une voiture passe. */
+        const flaps = b.spin.userData['flaps'] as THREE.Group | undefined;
+        if (flaps) {
+          const fly = (on ? 1 : 0) * (carInWash ? 0.95 : 0.4);
+          flaps.children.forEach((f, k) => {
+            const beat = Math.sin(t * (on ? 9 : 2) + k * 0.7) * 0.18 * (0.4 + fly);
+            f.rotation.z = 0.35 + fly * 0.75 + beat;
+          });
+        }
+
         if (b.kind === "roller") {
           const side = Math.sign(b.pivot.position.z) || 1;
           const target = side * (1.45 - engage * 0.32 + wobble);
@@ -2437,6 +2588,7 @@ export default function CarWashScene() {
           b.pivot.position.y += (target - b.pivot.position.y) * Math.min(dt * 4, 1);
         }
       });
+
 
       // Tapis roulant : les lattes défilent en boucle
       const beltLen = zoneEnd - zoneStart;
@@ -2531,6 +2683,29 @@ export default function CarWashScene() {
         f.visible = carInWash;
       });
 
+      /* Gicleurs : nappe d'eau + gouttelettes qui retombent sur la voiture. */
+      const jetsOn = carInWash && ctl.belt;
+      waterJets.forEach((j, ji) => {
+        j.group.visible = jetsOn;
+        if (!jetsOn) return;
+        const pulse = 0.8 + Math.sin(t * 8 + ji) * 0.2;
+        j.cone.scale.set(pulse, 1, pulse);
+        (j.cone.material as THREE.MeshStandardMaterial).opacity = 0.22 + pulse * 0.14;
+        j.drops.forEach((d) => {
+          let dt0 = ((d.userData['t'] as number) ?? 0) + dt * 1.5;
+          if (dt0 > 1) dt0 -= 1;
+          d.userData['t'] = dt0;
+          const fall = dt0 * 2.7;
+          d.position.set(
+            (d.userData['ox'] as number) * (1 + dt0),
+            -0.2 - fall,
+            (d.userData['oz'] as number) * (1 + dt0),
+          );
+          d.scale.setScalar(1 - dt0 * 0.5);
+        });
+      });
+
+
 
       if (cinemaMode) {
         const angle = t * 0.18;
@@ -2618,10 +2793,18 @@ export default function CarWashScene() {
           meshyTunnel.position.set(2, 0, 0);
           setShadow(meshyTunnel);
           washSite.add(meshyTunnel);
-          if (tunnelPlaceholder) {
-            washSite.remove(tunnelPlaceholder);
-            tunnelPlaceholder = null;
-          }
+          /* Purge défensive : tout reste d'un ancien portique éventuellement
+             présent dans la station est retiré et libéré. */
+          [...washSite.children].forEach((c) => {
+            if (c === meshyTunnel) return;
+            if (!c.userData['legacyTunnel']) return;
+            washSite.remove(c);
+            c.traverse((n) => {
+              const m = n as THREE.Mesh;
+              if (m.isMesh) m.geometry.dispose();
+            });
+          });
+
         })
         .catch((err: unknown) => console.error("tunnel Meshy", err));
 
