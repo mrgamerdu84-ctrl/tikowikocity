@@ -1901,6 +1901,15 @@ export default function CarWashScene() {
       });
 
 
+      /* Rampes de gicleurs : arche d'eau à l'entrée, rinçage à la sortie. */
+      [-1.4, 1.4, 4.2].forEach((x) => {
+        [-1.5, 0, 1.5].forEach((z) => {
+          const jet = makeWaterJet();
+          jet.group.position.set(x, ROAD_Y + 3.1, z);
+          washSite.add(jet.group);
+          waterJets.push(jet);
+        });
+      });
 
       for (let i = 0; i < 2; i++) {
         const foam = makeFoamVeil();
@@ -1908,6 +1917,7 @@ export default function CarWashScene() {
         washSite.add(foam);
         foamSprites.push(foam);
       }
+
 
 
       // ----- Sols et matériaux partagés -----
