@@ -527,16 +527,13 @@ export default function CarWashScene() {
       return { x, z, heading };
     };
 
+    let spawnIndex = 0;
     const spawnSedan = () => {
-      const template =
-        meshyCars.length > 0
-          ? meshyCars[Math.floor(Math.random() * meshyCars.length)]!
-          : models["sedan"];
+      const template = kitCar(spawnIndex++ * 3 + 1);
       if (!template) return;
       const sedan = template.clone(true);
       setShadow(sedan);
-      const isKenney = template === models["sedan"];
-      const baseY = isKenney ? CAR_Y : 0.06;
+      const baseY = 0;
       const start = posAt(0);
       sedan.position.set(start.x, baseY, start.z);
       tintCar(sedan, 1);
@@ -545,11 +542,12 @@ export default function CarWashScene() {
         car: sedan,
         d: 0,
         speed: 5.2,
-        yaw: isKenney ? 0 : MESHY_YAW,
+        yaw: 0,
         baseY,
         wheels: findWheels(sedan),
       });
     };
+
     spawnRef.current = spawnSedan;
 
 
