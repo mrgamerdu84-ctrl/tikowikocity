@@ -589,63 +589,7 @@ export default function CarWashScene() {
         }
       });
 
-      // ----- Bâtiments : un par parcelle, hauteurs cohérentes par quartier -----
-      const buildingMats = [0xdfe6ee, 0xf3d6a8, 0xcfe3d0, 0xefc4c4, 0xd8d2ef].map(
-        (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.85 }),
-      );
-      const windowMat = new THREE.MeshStandardMaterial({
-        color: 0x8fd3ff,
-        roughness: 0.25,
-        metalness: 0.1,
-      });
-      const makeBuilding = (
-        x: number,
-        z: number,
-        w: number,
-        h: number,
-        d: number,
-        mi: number,
-      ) => {
-        const g = new THREE.Group();
-        const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), buildingMats[mi]!);
-        body.position.y = h / 2;
-        g.add(body);
-        // toit plat avec acrotère : pas de trou visible
-        const cap = new THREE.Mesh(
-          new THREE.BoxGeometry(w + 0.18, 0.25, d + 0.18),
-          buildingMats[(mi + 2) % buildingMats.length]!,
-        );
-        cap.position.y = h + 0.1;
-        g.add(cap);
-        for (let fy = 0.9; fy < h - 0.7; fy += 1.2) {
-          for (let fx = -w / 2 + 0.6; fx <= w / 2 - 0.6; fx += 1.1) {
-            const win = new THREE.Mesh(
-              new THREE.BoxGeometry(0.5, 0.6, 0.06),
-              windowMat,
-            );
-            win.position.set(fx, fy, d / 2 + 0.03);
-            g.add(win);
-            const back = win.clone();
-            back.position.z = -d / 2 - 0.03;
-            g.add(back);
-          }
-          for (let fz = -d / 2 + 0.6; fz <= d / 2 - 0.6; fz += 1.1) {
-            const win = new THREE.Mesh(
-              new THREE.BoxGeometry(0.06, 0.6, 0.5),
-              windowMat,
-            );
-            win.position.set(w / 2 + 0.03, fy, fz);
-            g.add(win);
-            const back = win.clone();
-            back.position.x = -w / 2 - 0.03;
-            g.add(back);
-          }
-        }
-        g.position.set(x, 0, z);
-        setShadow(g);
-        scene.add(g);
-      };
-
+      // ----- Bâtiments Kenney : un par parcelle, hauteurs cohérentes -----
       const blockCentersX: number[] = [];
       for (let i = 0; i < X_STREETS.length - 1; i++) {
         blockCentersX.push((X_STREETS[i]! + X_STREETS[i + 1]!) / 2);
@@ -660,24 +604,17 @@ export default function CarWashScene() {
         blockCentersZ.forEach((bz, iz) => {
           // pelouse du pâté de maisons (entre les trottoirs)
           addSlab(lawnMat, 12 - STREET_W - 1.2, 12 - STREET_W - 1.2, bx, bz, 0.01);
+
           // anneau : 0 = centre-ville, 2 = périphérie pavillonnaire
-
           const ring = Math.max(Math.abs(bx) / 12, Math.abs(bz) / 12);
-          if (ring < 1.2) {
-            // Centre : immeuble unique, hauteur qui décroît doucement vers l'extérieur
-            const h = 8.5 - ring * 3 + ((ix + iz) % 2) * 0.8;
-            makeBuilding(bx, bz, 4.2, h, 4.2, (ix + iz) % 5);
-          } else if (ring < 1.8) {
-            // Transition : petit immeuble de 3 à 4 étages
-            const h = 4.4 - (ring - 1.2) * 1.2 + ((ix + iz) % 2) * 0.5;
-            makeBuilding(bx, bz, 4.2, h, 4.2, (ix + iz + 1) % 5);
-          } else {
-            // Périphérie : pavillon aligné, face à la rue
-            buildHouse(bx, bz, bz > 0 ? Math.PI : 0, ix + iz);
-          }
-
+          let floors: number;
+          if (ring < 1.2) floors = 4 - ((ix + iz) % 2);
+          else if (ring < 1.8) floors = 2 + ((ix + iz) % 2);
+          else floors = 1;
+          buildKenneyBuilding(bx, bz, 2, 2, floors, bz > 0 ? Math.PI : 0);
         });
       });
+
 
       // Arbres réguliers le long des trottoirs
       Z_STREETS.forEach((z, zi) => {
