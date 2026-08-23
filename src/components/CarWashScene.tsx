@@ -243,6 +243,8 @@ export default function CarWashScene() {
               cinema: cinemaStateRef.current,
               city: planIoRef.current.save(),
               economy: economyRef.current,
+              upgrades: upgradesRef.current,
+
 
             },
           },
