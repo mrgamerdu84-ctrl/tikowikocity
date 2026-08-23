@@ -10,7 +10,7 @@ import blueSuvAsset from "@/assets/blue_suv.glb.asset.json";
 import graySedanAsset from "@/assets/gray_sedan.glb.asset.json";
 import greenSportsAsset from "@/assets/green_sports.glb.asset.json";
 import yellowPickupAsset from "@/assets/yellow_pickup.glb.asset.json";
-import tunnelAsset from "@/assets/tunnel.glb.asset.json";
+
 
 const MESHY_CARS = [blueSuvAsset, graySedanAsset, greenSportsAsset, yellowPickupAsset];
 
@@ -378,8 +378,6 @@ export default function CarWashScene() {
       place(models["hRoof"]!, x, 2.4, z);
     };
 
-    let kenneyTunnel: THREE.Object3D | null = null;
-
     const buildScene = () => {
 
       for (let x = -13; x <= 13; x += 1) {
@@ -391,7 +389,6 @@ export default function CarWashScene() {
       tunnel.position.set(2, 0, 0);
       setShadow(tunnel);
       scene.add(tunnel);
-      kenneyTunnel = tunnel;
 
 
       // Tapis roulant
@@ -670,19 +667,9 @@ export default function CarWashScene() {
           );
         });
 
-      // Tunnel de lavage Meshy détaillé : posé sur la voie, aligné sur la route
-      load(tunnelAsset.url)
-        .then((raw) => {
-          if (disposed) return;
-          const tunnel = normalizeModel(raw, WASH_ZONE[1] - WASH_ZONE[0] + 1.5);
-          tunnel.position.set((WASH_ZONE[0] + WASH_ZONE[1]) / 2, 0, 0);
-          scene.add(tunnel);
-          if (kenneyTunnel) {
-            scene.remove(kenneyTunnel);
-            kenneyTunnel = null;
-          }
-        })
-        .catch((err: unknown) => console.error("tunnel Meshy", err));
+      // Le tunnel de lavage reste le modèle Kenney (le modèle Meshy est abîmé)
+
+
 
 
       // Véhicules : ajoutés au pool de spawn au fur et à mesure
