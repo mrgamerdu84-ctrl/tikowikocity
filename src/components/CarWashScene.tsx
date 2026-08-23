@@ -119,15 +119,30 @@ export default function CarWashScene() {
   const [economy, setEconomy] = useState({ money: 0, washes: 0 });
   const economyRef = useRef(economy);
   const [gain, setGain] = useState<{ id: number; amount: number } | null>(null);
+  /* Historique des lavages : date, montant gagné, solde après transaction. */
+  const [history, setHistory] = useState<WashEntry[]>([]);
+  const historyRef = useRef(history);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const registerWashRef = useRef<(amount: number) => void>(() => {});
   registerWashRef.current = (amount: number) => {
     setEconomy((prev) => {
       const next = { money: prev.money + amount, washes: prev.washes + 1 };
       economyRef.current = next;
+      const entry: WashEntry = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        at: new Date().toISOString(),
+        amount,
+        balance: next.money,
+        wash: next.washes,
+      };
+      const nextHistory = [entry, ...historyRef.current].slice(0, MAX_HISTORY);
+      historyRef.current = nextHistory;
+      setHistory(nextHistory);
       return next;
     });
     setGain({ id: Date.now() + Math.random(), amount });
   };
+
   useEffect(() => {
     if (!gain) return;
     const id = window.setTimeout(() => setGain(null), 1600);
