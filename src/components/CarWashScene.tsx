@@ -836,6 +836,19 @@ export default function CarWashScene() {
         scene.add(d);
       }
 
+      /* Rue de desserte est-ouest de la parcelle + raccords vers la voie de
+         lavage : les voitures suivent la route de bout en bout. */
+      const siteRoadW = STREET_W;
+      addSlab(sidewalkMat, 40, siteRoadW + 1.2, 0, SITE_ROAD_Z, 0.005);
+      addSlab(asphalt, 40, siteRoadW, 0, SITE_ROAD_Z, 0.02);
+      [WASH_IN_X, WASH_OUT_X].forEach((cx) => {
+        const len = SITE_ROAD_Z - WASH_SITE_Z + siteRoadW;
+        const cz = (SITE_ROAD_Z + WASH_SITE_Z) / 2;
+        addSlab(sidewalkMat, siteRoadW + 1.2, len, cx, cz, 0.005);
+        addSlab(asphalt, siteRoadW, len, cx, cz, 0.021);
+      });
+
+
       // Parking : 5 places marquées derrière la station
       const parkZ = WASH_SITE_Z + 8.5;
       addSlab(concreteMat, 26, 8, -2, parkZ, 0.016);
