@@ -203,6 +203,7 @@ export default function CarWashScene() {
               machines: machinesRef.current,
               cinema: cinemaStateRef.current,
               city: planIoRef.current.save(),
+              economy: economyRef.current,
 
             },
           },
