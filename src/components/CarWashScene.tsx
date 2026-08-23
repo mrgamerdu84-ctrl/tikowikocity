@@ -1793,7 +1793,7 @@ export default function CarWashScene() {
       </div>
 
 
-      <div className="pointer-events-none fixed bottom-4 left-4 z-30 rounded-2xl bg-white/70 px-3 py-2 text-[11.5px] text-ink shadow-[0_6px_20px_rgba(6,58,94,0.14)] backdrop-blur">
+      <div className="pointer-events-none fixed bottom-2 left-2 z-30 hidden max-w-[46vw] rounded-2xl bg-white/70 px-3 py-2 text-[11.5px] sm:bottom-4 sm:left-4 sm:block text-ink shadow-[0_6px_20px_rgba(6,58,94,0.14)] backdrop-blur">
         <p>🖱️ Glisser = tourner • Molette = zoomer • Clic droit = déplacer</p>
         <p className="mt-1 opacity-80">Modèles Kenney (kenney.nl) — licence CC0</p>
         <p className="mt-1 font-semibold opacity-90">© {new Date().getFullYear()} tikowikoFamily</p>
@@ -1801,7 +1801,7 @@ export default function CarWashScene() {
       </div>
 
 
-      <div className="fixed right-4 top-4 z-30 w-[190px] rounded-2xl bg-white/80 p-3 shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur">
+      <div className="fixed right-2 top-2 z-30 w-[124px] rounded-2xl bg-white/80 p-2 sm:right-4 sm:top-4 sm:w-[190px] sm:p-3 shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur">
         <p className="mb-2 text-[12px] font-bold uppercase tracking-wide text-ink opacity-80">
           Panneau de contrôle
         </p>
@@ -1819,7 +1819,7 @@ export default function CarWashScene() {
               type="button"
               onClick={() => toggleMachine(key)}
               aria-pressed={machines[key]}
-              className={`flex items-center justify-between rounded-xl px-3 py-2 text-[12.5px] font-semibold transition-colors ${
+              className={`flex items-center justify-between rounded-xl px-2 py-1.5 text-[11px] font-semibold transition-colors sm:px-3 sm:py-2 sm:text-[12.5px] ${
                 machines[key]
                   ? "bg-splash text-splash-foreground"
                   : "bg-ink/10 text-ink opacity-70"
