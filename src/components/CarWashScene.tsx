@@ -663,12 +663,18 @@ export default function CarWashScene() {
       });
     };
 
+    // File d'attente : de nouvelles voitures arrivent régulièrement
+    let queueTimer = 0;
+
     loadAll()
       .then(() => {
         if (disposed) return;
         buildScene();
         setLoading(false);
         animate();
+        queueTimer = window.setInterval(() => {
+          if (sedanCars.length < 5) spawnSedan();
+        }, 4000);
         void loadMeshy();
       })
       .catch((err: unknown) => {
@@ -680,11 +686,13 @@ export default function CarWashScene() {
     return () => {
       disposed = true;
       cancelAnimationFrame(frame);
+      window.clearInterval(queueTimer);
       window.removeEventListener("resize", onResize);
       controls.dispose();
       renderer.dispose();
       renderer.domElement.remove();
     };
+
   }, []);
 
   return (
