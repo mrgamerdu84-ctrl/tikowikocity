@@ -1192,7 +1192,7 @@ export default function CarWashScene() {
         const m = makeHouse(h.level);
         m.position.set(cx * TILE, 0, cz * TILE);
         // légère variation d'orientation pour casser la rigidité
-        m.rotation.y = ((cx * 7 + cz * 13) % 4) * 0.06;
+        m.rotation.y = ((h.rot ?? 0) * Math.PI) / 2 + ((cx * 7 + cz * 13) % 4) * 0.06;
         housesGroup.add(m);
       });
       cityStatsRef.current(plan.houseLevels());
@@ -2034,6 +2034,8 @@ export default function CarWashScene() {
       return { cx: worldToCell(hitPoint.x), cz: worldToCell(hitPoint.z) };
     };
 
+    /** dernière case survolée : sert de socle à l'aperçu 3D (utile au tactile) */
+    let lastCell = { cx: 0, cz: MAIN_CZ_START + 6 };
     let downAt: { x: number; y: number; id: number; type: string } | null = null;
     let roadDragLast: { cx: number; cz: number } | null = null;
     const isRoadTool = (t: BuildTool): t is RoadHint =>
@@ -2134,6 +2136,7 @@ export default function CarWashScene() {
         ghost.visible = false;
         return;
       }
+      lastCell = { ...c };
       ghost.visible = true;
       ghost.position.set(c.cx * TILE, 0.07, c.cz * TILE);
       const existing = plan.get(c.cx, c.cz);
@@ -2234,14 +2237,14 @@ export default function CarWashScene() {
           const target = Math.min(MAX_HOUSE_LEVEL, existingHouse.level + 1);
           if (target === existingHouse.level) return;
           if (!spendRef.current(houseDef(target).cost)) return;
-          plan.placeHouse(c.cx, c.cz, target);
+          plan.placeHouse(c.cx, c.cz, target, existingHouse.rot ?? 0);
           renderHouses();
           return;
         }
         if (!plan.canPlaceHouse(c.cx, c.cz)) return;
         const lvl = houseLevelRef.current;
         if (!spendRef.current(houseDef(lvl).cost)) return;
-        plan.placeHouse(c.cx, c.cz, lvl);
+        plan.placeHouse(c.cx, c.cz, lvl, rotRef.current);
         renderHouses();
         return;
       }
@@ -2294,6 +2297,9 @@ export default function CarWashScene() {
         renderDecor();
       },
     };
+    /* Restauration de la sauvegarde locale dès que la ville est prête. */
+    restoreLocalRef.current();
+    localReadyRef.current = true;
 
 
 
@@ -2303,6 +2309,19 @@ export default function CarWashScene() {
       frame = requestAnimationFrame(animate);
       const dt = Math.min(clock.getDelta(), 0.05);
       const t = clock.elapsedTime;
+
+      // aperçu 3D de l'objet à poser : suit la case visée et la rotation choisie
+      if (buildRef.current) {
+        buildPreview();
+        const show = previewGroup.children.length > 0;
+        previewGroup.visible = show;
+        if (show) {
+          previewGroup.position.set(lastCell.cx * TILE, 0, lastCell.cz * TILE);
+          previewGroup.rotation.y = (rotRef.current * Math.PI) / 2;
+        }
+      } else if (previewGroup.visible) {
+        previewGroup.visible = false;
+      }
 
       // léger clapotis sur les surfaces d'eau
       if (waterSurface) waterSurface.position.y = 0.05 + Math.sin(t * 0.8) * 0.03;
