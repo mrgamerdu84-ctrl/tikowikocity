@@ -779,6 +779,8 @@ export default function CarWashScene() {
       wheels: THREE.Object3D[];
       /* voiture du réseau empruntée : elle repart circuler après le lavage */
       origin: NetCar;
+      /* true dès que le lavage a été facturé (évite les doubles paiements) */
+      paid?: boolean;
 
     };
     const washCars: WashCar[] = [];
