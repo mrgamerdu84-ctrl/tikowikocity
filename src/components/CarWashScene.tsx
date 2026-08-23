@@ -753,13 +753,43 @@ export default function CarWashScene() {
         });
       }
 
-      // Circulation en ville : chaque voiture reste centrée dans sa voie
+      /* Circulation : chaque voiture reste centrée dans sa voie, garde ses
+         distances avec celle de devant et cède le passage aux carrefours. */
+      const CAR_GAP = 4.2;
       trafficCars.forEach((e) => {
-        if (ctl.traffic) {
-          e.s += dt * e.speed * e.dir;
-          if (e.s > CITY_MAX) e.s = CITY_MIN;
-          if (e.s < CITY_MIN) e.s = CITY_MAX;
+        if (!ctl.traffic) return;
+        const step = dt * e.speed;
+        const nextS = e.s + step * e.dir;
+        const nx = e.axis === "x" ? nextS : e.lane;
+        const nz = e.axis === "x" ? e.lane : nextS;
+
+        let blocked = false;
+        for (const o of trafficCars) {
+          if (o === e) continue;
+          const ox = o.axis === "x" ? o.s : o.lane;
+          const oz = o.axis === "x" ? o.lane : o.s;
+          const dx = ox - nx;
+          const dz = oz - nz;
+          if (Math.abs(dx) > CAR_GAP || Math.abs(dz) > CAR_GAP) continue;
+          // uniquement ce qui se trouve devant nous
+          const ahead = e.axis === "x" ? dx * e.dir : dz * e.dir;
+          if (ahead <= 0) continue;
+          if (o.axis === e.axis) {
+            // même rue : distance de sécurité dans la même voie
+            const lateral = Math.abs(o.lane - e.lane);
+            if (lateral < 1 && ahead < CAR_GAP) blocked = true;
+          } else if (Math.hypot(dx, dz) < CAR_GAP * 0.7) {
+            // carrefour occupé : on laisse passer
+            blocked = true;
+          }
         }
+        if (blocked) return;
+
+        e.s = nextS;
+        if (e.s > CITY_MAX) e.s = CITY_MIN;
+        if (e.s < CITY_MIN) e.s = CITY_MAX;
+      });
+      trafficCars.forEach((e) => {
         if (e.axis === "x") e.car.position.set(e.s, e.baseY, e.lane);
         else e.car.position.set(e.lane, e.baseY, e.s);
         e.car.rotation.y = e.heading + e.yaw;
