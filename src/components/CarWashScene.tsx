@@ -10,6 +10,7 @@ import blueSuvAsset from "@/assets/blue_suv.glb.asset.json";
 import graySedanAsset from "@/assets/gray_sedan.glb.asset.json";
 import greenSportsAsset from "@/assets/green_sports.glb.asset.json";
 import yellowPickupAsset from "@/assets/yellow_pickup.glb.asset.json";
+import tunnelAsset from "@/assets/tunnel.glb.asset.json";
 
 
 const MESHY_CARS = [blueSuvAsset, graySedanAsset, greenSportsAsset, yellowPickupAsset];
@@ -465,6 +466,9 @@ export default function CarWashScene() {
     const washSite = new THREE.Group();
     washSite.position.z = WASH_SITE_Z;
     scene.add(washSite);
+    /* Portique de lavage provisoire (Kenney) remplacé par le modèle Meshy
+       détaillé dès qu'il est chargé. */
+    let tunnelPlaceholder: THREE.Object3D | null = null;
 
 
 
@@ -748,6 +752,7 @@ export default function CarWashScene() {
       tunnel.position.set(2, 0, 0);
       setShadow(tunnel);
       washSite.add(tunnel);
+      tunnelPlaceholder = tunnel;
 
 
 
@@ -1332,7 +1337,25 @@ export default function CarWashScene() {
           );
         });
 
-      // Le tunnel de lavage reste le modèle Kenney (le modèle Meshy est abîmé)
+      // Tunnel de lavage : le modèle Meshy détaillé remplace le portique Kenney
+      await load(tunnelAsset.url)
+        .then((raw) => {
+          if (disposed) return;
+          const meshyTunnel = normalizeModel(raw, 11);
+          // On le contient sous la toiture du hall
+          const tb = new THREE.Box3().setFromObject(meshyTunnel);
+          const th = tb.max.y - tb.min.y;
+          const maxH = 4.6;
+          if (th > maxH) meshyTunnel.scale.multiplyScalar(maxH / th);
+          meshyTunnel.position.set(2, 0, 0);
+          setShadow(meshyTunnel);
+          washSite.add(meshyTunnel);
+          if (tunnelPlaceholder) {
+            washSite.remove(tunnelPlaceholder);
+            tunnelPlaceholder = null;
+          }
+        })
+        .catch((err: unknown) => console.error("tunnel Meshy", err));
 
 
 
