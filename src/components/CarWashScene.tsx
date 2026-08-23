@@ -1979,17 +1979,17 @@ export default function CarWashScene() {
 
 
     const traceRoadTo = (target: { cx: number; cz: number }) => {
-      let changed = false;
       if (!roadDragLast) {
-        changed = applyAt(target.cx, target.cz);
+        applyAt(target.cx, target.cz);
         roadDragLast = { ...target };
-        if (changed) renderPlan();
+        flushRender();
         return;
       }
 
       let cx = roadDragLast.cx;
       let cz = roadDragLast.cz;
       let guard = 0;
+      const destructive = toolRef.current === "bulldoze" || toolRef.current === "erase";
       while ((cx !== target.cx || cz !== target.cz) && guard++ < 80) {
         const dx = target.cx - cx;
         const dz = target.cz - cz;
@@ -1998,10 +1998,10 @@ export default function CarWashScene() {
         else if (dz !== 0) cz += Math.sign(dz);
 
         roadDragLast = { cx, cz };
-        if (toolRef.current !== "bulldoze" && !canBuild(cx, cz)) break;
-        if (applyAt(cx, cz)) changed = true;
+        if (!destructive && !canBuild(cx, cz)) break;
+        applyAt(cx, cz);
       }
-      if (changed) renderPlan();
+      flushRender();
     };
 
     const onPointerMove = (ev: PointerEvent) => {
