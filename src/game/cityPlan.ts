@@ -16,13 +16,13 @@ export type SerializedPlan = Array<
   [number, number, RoadHint, number, boolean, boolean]
 >;
 
-export type SerializedHouses = Array<[number, number, number]>;
+export type SerializedHouses = Array<[number, number, number, number?]>;
 
 export type SerializedDecor = Array<[number, number, DecorKind, number]>;
 
 export type DecorCell = { kind: DecorKind; rot: number };
 
-export type HouseCell = { level: number };
+export type HouseCell = { level: number; rot: number };
 
 /** Plan de ville du joueur : uniquement des données, aucun objet Three.js. */
 export class CityPlan {
@@ -155,8 +155,8 @@ export class CityPlan {
     return this.maskAt(cx, cz) !== 0;
   }
 
-  placeHouse(cx: number, cz: number, level = 1) {
-    this.houses.set(key(cx, cz), { level });
+  placeHouse(cx: number, cz: number, level = 1, rot = 0) {
+    this.houses.set(key(cx, cz), { level, rot });
   }
 
   removeHouse(cx: number, cz: number) {
@@ -171,14 +171,16 @@ export class CityPlan {
     const out: SerializedHouses = [];
     this.houses.forEach((h, k) => {
       const [cx, cz] = k.split(",").map(Number);
-      out.push([cx!, cz!, h.level]);
+      out.push([cx!, cz!, h.level, h.rot ?? 0]);
     });
     return out;
   }
 
   loadHouses(data: SerializedHouses) {
     this.houses.clear();
-    data.forEach(([cx, cz, level]) => this.houses.set(key(cx, cz), { level }));
+    data.forEach(([cx, cz, level, rot]) =>
+      this.houses.set(key(cx, cz), { level, rot: typeof rot === "number" ? rot : 0 }),
+    );
   }
 
   serialize(): SerializedPlan {
