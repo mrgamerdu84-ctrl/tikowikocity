@@ -23,7 +23,7 @@ export const HINT_MODEL: Record<RoadHint, string> = {
 };
 
 export const TOOL_LABEL: Record<BuildTool, string> = {
-  straight: "🛣️ Droite",
+  straight: "🛣️ Tracer route",
   bend: "↩️ Virage",
   intersection: "⊣ Carrefour T",
   crossroad: "✚ Carrefour",

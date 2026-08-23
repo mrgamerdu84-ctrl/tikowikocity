@@ -1570,6 +1570,41 @@ export default function CarWashScene() {
     };
 
     let downAt: { x: number; y: number; id: number; type: string } | null = null;
+    let roadDragLast: { cx: number; cz: number } | null = null;
+    const isRoadTool = (t: BuildTool): t is RoadHint =>
+      t === "straight" || t === "bend" || t === "intersection" || t === "crossroad";
+    const traceRoadTo = (target: { cx: number; cz: number }) => {
+      let changed = false;
+      if (!roadDragLast) {
+        if (canBuild(target.cx, target.cz)) {
+          plan.place(target.cx, target.cz, "straight", rotRef.current);
+          changed = true;
+        }
+        roadDragLast = { ...target };
+        if (changed) renderPlan();
+        return;
+      }
+
+      let cx = roadDragLast.cx;
+      let cz = roadDragLast.cz;
+      let guard = 0;
+      while ((cx !== target.cx || cz !== target.cz) && guard++ < 80) {
+        const dx = target.cx - cx;
+        const dz = target.cz - cz;
+        // On avance case par case : le changement d'axe crée le virage automatiquement.
+        if (Math.abs(dx) >= Math.abs(dz) && dx !== 0) cx += Math.sign(dx);
+        else if (dz !== 0) cz += Math.sign(dz);
+
+        if (!canBuild(cx, cz)) {
+          roadDragLast = { cx, cz };
+          break;
+        }
+        plan.place(cx, cz, "straight", 0);
+        changed = true;
+        roadDragLast = { cx, cz };
+      }
+      if (changed) renderPlan();
+    };
     const onPointerMove = (ev: PointerEvent) => {
       if (!buildRef.current) {
         ghost.visible = false;
@@ -1593,6 +1628,10 @@ export default function CarWashScene() {
               ? plan.canPlaceHouse(c.cx, c.cz) || !!plan.house(c.cx, c.cz)
               : canBuild(c.cx, c.cz);
       (ghost.material as THREE.MeshBasicMaterial).color.set(ok ? 0x2bd07c : 0xe05252);
+      if (downAt?.id === ev.pointerId && isRoadTool(toolRef.current)) {
+        ev.preventDefault();
+        traceRoadTo(c);
+      }
     };
     const releasePointer = (ev: PointerEvent) => {
       try {
@@ -1618,6 +1657,7 @@ export default function CarWashScene() {
       } catch {
         // Certains WebView ne prennent pas en charge la capture de pointeur.
       }
+      roadDragLast = null;
       onPointerMove(ev);
     };
     const onPointerUp = (ev: PointerEvent) => {
@@ -1627,11 +1667,16 @@ export default function CarWashScene() {
       releasePointer(ev);
       if (!buildRef.current) return;
       if (ev.pointerType === "mouse" && ev.button !== 0) return;
+      const tool = toolRef.current;
+      const c = cellUnderPointer(ev);
+      if (isRoadTool(tool)) {
+        if (c) traceRoadTo(c);
+        roadDragLast = null;
+        return;
+      }
       const tapTolerance = start.type === "touch" || start.type === "pen" ? 24 : 8;
       if (Math.hypot(ev.clientX - start.x, ev.clientY - start.y) > tapTolerance) return;
-      const c = cellUnderPointer(ev);
       if (!c) return;
-      const tool = toolRef.current;
       if (tool === "erase") {
         if (plan.removeHouse(c.cx, c.cz)) {
           renderHouses();
@@ -1671,6 +1716,7 @@ export default function CarWashScene() {
     };
     const onPointerCancel = (ev: PointerEvent) => {
       if (downAt?.id === ev.pointerId) downAt = null;
+      roadDragLast = null;
       releasePointer(ev);
     };
     renderer.domElement.addEventListener("pointermove", onPointerMove);
@@ -1685,6 +1731,7 @@ export default function CarWashScene() {
       if (!on) {
         ghost.visible = false;
         downAt = null;
+        roadDragLast = null;
       }
     };
     planIoRef.current = {
