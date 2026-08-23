@@ -465,6 +465,9 @@ export default function CarWashScene() {
     const washSite = new THREE.Group();
     washSite.position.z = WASH_SITE_Z;
     scene.add(washSite);
+    /* Portique de lavage provisoire (Kenney) remplacé par le modèle Meshy
+       détaillé dès qu'il est chargé. */
+    let tunnelPlaceholder: THREE.Object3D | null = null;
 
 
 
