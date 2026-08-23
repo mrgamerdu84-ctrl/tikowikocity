@@ -410,7 +410,7 @@ export default function CarWashScene() {
         pivot.add(spin);
         pivot.position.set(x, ROAD_Y + 2.1, 0);
         scene.add(pivot);
-        brushes.push({ pivot, spin, dir: i % 2 === 0 ? -1 : 1 });
+        brushes.push({ pivot, spin, dir: i % 2 === 0 ? -1 : 1, kind: "brush" });
       });
 
       for (let i = 0; i < 2; i++) {
