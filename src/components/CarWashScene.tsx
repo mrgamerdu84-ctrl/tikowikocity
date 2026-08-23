@@ -65,6 +65,7 @@ import {
   type WashEntry,
 } from "@/game/history";
 import { HOUSE_LEVELS, MAX_HOUSE_LEVEL, houseDef, totalCapacity } from "@/game/houses";
+import { readLocalCity, saveLocalCity } from "@/game/save";
 
 
 /* Catégories de la barre de construction : un seul onglet visible à la fois
@@ -366,6 +367,128 @@ export default function CarWashScene() {
   const cinemaStateRef = useRef(cinema);
   cinemaStateRef.current = cinema;
 
+  /** Photographie complète de la partie (ville + progression). */
+  const collectState = () => ({
+    machines: machinesRef.current,
+    cinema: cinemaStateRef.current,
+    city: planIoRef.current.save(),
+    houses: planIoRef.current.saveHouses(),
+    decor: planIoRef.current.saveDecor(),
+    washStyle: washStyleRef.current,
+    residents: residentsRef.current,
+    economy: economyRef.current,
+    history: historyRef.current,
+    upgrades: upgradesRef.current,
+  });
+
+  type SavedState = {
+    machines?: Partial<typeof machines>;
+    cinema?: unknown;
+    city?: SerializedPlan;
+    houses?: SerializedHouses;
+    decor?: SerializedDecor;
+    washStyle?: unknown;
+    residents?: unknown;
+    economy?: { money?: unknown; washes?: unknown };
+    history?: unknown;
+    upgrades?: unknown;
+  };
+
+  /** Réapplique une sauvegarde (locale ou Drive) à la partie en cours. */
+  const applySavedStateRef = useRef<(state: SavedState, withCinema?: boolean) => void>(
+    () => {},
+  );
+  applySavedStateRef.current = (state: SavedState, withCinema = true) => {
+    if (state.machines && typeof state.machines === "object") {
+      setMachines((prev) => {
+        const next = { ...prev };
+        (Object.keys(prev) as Array<keyof typeof prev>).forEach((k) => {
+          const v = state.machines?.[k];
+          if (typeof v === "boolean") next[k] = v;
+        });
+        machinesRef.current = next;
+        return next;
+      });
+    }
+    if (Array.isArray(state.city)) planIoRef.current.load(state.city);
+    if (Array.isArray(state.houses)) planIoRef.current.loadHouses(state.houses);
+    if (Array.isArray(state.decor)) planIoRef.current.loadDecor(state.decor);
+    if (state.washStyle) {
+      const s = sanitizeWashStyle(state.washStyle);
+      washStyleRef.current = s;
+      setWashStyle(s);
+      washApplyRef.current(s);
+    }
+    if (typeof state.residents === "number" && Number.isFinite(state.residents)) {
+      const r = Math.max(0, Math.round(state.residents));
+      residentsRef.current = r;
+      setResidents(r);
+    }
+    if (state.economy && typeof state.economy === "object") {
+      const money = state.economy.money;
+      const washes = state.economy.washes;
+      const next = {
+        money: typeof money === "number" && Number.isFinite(money) ? money : 0,
+        washes: typeof washes === "number" && Number.isFinite(washes) ? washes : 0,
+      };
+      economyRef.current = next;
+      setEconomy(next);
+    }
+    if (state.history !== undefined) {
+      const h = sanitizeHistory(state.history);
+      historyRef.current = h;
+      setHistory(h);
+    }
+    if (state.upgrades) {
+      const up = sanitizeUpgrades(state.upgrades);
+      upgradesRef.current = up;
+      setUpgrades(up);
+    }
+    if (
+      withCinema &&
+      typeof state.cinema === "boolean" &&
+      state.cinema !== cinemaStateRef.current
+    ) {
+      cinemaRef.current();
+    }
+  };
+
+  /* Sauvegarde locale automatique : la création du joueur est restaurée
+     telle quelle au prochain lancement, sans action de sa part. */
+  const localReadyRef = useRef(false);
+  const restoreLocalRef = useRef<() => void>(() => {});
+  restoreLocalRef.current = () => {
+    const saved = readLocalCity();
+    if (!saved) return;
+    try {
+      applySavedStateRef.current(saved.state as SavedState, false);
+      localReadyRef.current = true;
+      toast.success("Ville restaurée", {
+        description: "Ta dernière création a été rechargée automatiquement.",
+      });
+    } catch (err) {
+      console.error(err);
+      localReadyRef.current = true;
+    }
+  };
+
+  useEffect(() => {
+    const flush = () => {
+      if (!localReadyRef.current) return;
+      saveLocalCity(collectState(), SAVE_VERSION);
+    };
+    const timer = window.setInterval(flush, 4000);
+    window.addEventListener("pagehide", flush);
+    window.addEventListener("beforeunload", flush);
+    return () => {
+      flush();
+      window.clearInterval(timer);
+      window.removeEventListener("pagehide", flush);
+      window.removeEventListener("beforeunload", flush);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleSaveToDrive = async () => {
     setDriveState("saving");
     try {
@@ -379,20 +502,7 @@ export default function CarWashScene() {
             savedAt: new Date().toISOString(),
             // Extensible: new progression fields can be added here without
             // breaking older saves (loader applies only known keys).
-            state: {
-              machines: machinesRef.current,
-              cinema: cinemaStateRef.current,
-              city: planIoRef.current.save(),
-              houses: planIoRef.current.saveHouses(),
-              decor: planIoRef.current.saveDecor(),
-              washStyle: washStyleRef.current,
-              residents: residentsRef.current,
-              economy: economyRef.current,
-              history: historyRef.current,
-              upgrades: upgradesRef.current,
-
-
-            },
+            state: collectState(),
           },
         },
       });
@@ -421,68 +531,9 @@ export default function CarWashScene() {
         toast.info("Aucune sauvegarde trouvée dans le dossier TikowikoCity.");
         return;
       }
-      const state = JSON.parse(res.stateJson || "{}") as {
-        machines?: Partial<typeof machines>;
-        cinema?: unknown;
-        city?: SerializedPlan;
-        houses?: SerializedHouses;
-        decor?: SerializedDecor;
-        washStyle?: unknown;
-        residents?: unknown;
-        economy?: { money?: unknown; washes?: unknown };
-        history?: unknown;
-        upgrades?: unknown;
-
-      };
-      if (state.machines && typeof state.machines === "object") {
-        setMachines((prev) => {
-          const next = { ...prev };
-          (Object.keys(prev) as Array<keyof typeof prev>).forEach((k) => {
-            const v = state.machines?.[k];
-            if (typeof v === "boolean") next[k] = v;
-          });
-          machinesRef.current = next;
-          return next;
-        });
-      }
-      if (Array.isArray(state.city)) planIoRef.current.load(state.city);
-      if (Array.isArray(state.houses)) planIoRef.current.loadHouses(state.houses);
-      if (Array.isArray(state.decor)) planIoRef.current.loadDecor(state.decor);
-      if (state.washStyle) {
-        const s = sanitizeWashStyle(state.washStyle);
-        washStyleRef.current = s;
-        setWashStyle(s);
-        washApplyRef.current(s);
-      }
-      if (typeof state.residents === "number" && Number.isFinite(state.residents)) {
-        const r = Math.max(0, Math.round(state.residents));
-        residentsRef.current = r;
-        setResidents(r);
-      }
-      if (state.economy && typeof state.economy === "object") {
-        const money = state.economy.money;
-        const washes = state.economy.washes;
-        const next = {
-          money: typeof money === "number" && Number.isFinite(money) ? money : 0,
-          washes: typeof washes === "number" && Number.isFinite(washes) ? washes : 0,
-        };
-        economyRef.current = next;
-        setEconomy(next);
-      }
-      if (state.history !== undefined) {
-        const h = sanitizeHistory(state.history);
-        historyRef.current = h;
-        setHistory(h);
-      }
-      if (state.upgrades) {
-        const up = sanitizeUpgrades(state.upgrades);
-        upgradesRef.current = up;
-        setUpgrades(up);
-      }
-
-      if (typeof state.cinema === "boolean" && state.cinema !== cinemaStateRef.current) {
-        cinemaRef.current();
-      }
+      const state = JSON.parse(res.stateJson || "{}") as SavedState;
+      applySavedStateRef.current(state);
+      saveLocalCity(collectState(), SAVE_VERSION);
 
       setLoadState("done");
       setDriveMenuOpen(false);
@@ -1141,7 +1192,7 @@ export default function CarWashScene() {
         const m = makeHouse(h.level);
         m.position.set(cx * TILE, 0, cz * TILE);
         // légère variation d'orientation pour casser la rigidité
-        m.rotation.y = ((cx * 7 + cz * 13) % 4) * 0.06;
+        m.rotation.y = ((h.rot ?? 0) * Math.PI) / 2 + ((cx * 7 + cz * 13) % 4) * 0.06;
         housesGroup.add(m);
       });
       cityStatsRef.current(plan.houseLevels());
@@ -1915,6 +1966,52 @@ export default function CarWashScene() {
     ghost.visible = false;
     scene.add(ghost);
 
+    /* Aperçu 3D translucide de l'objet sélectionné : il suit le curseur et
+       tourne en direct avec le bouton de rotation, avant la pose. */
+    const previewGroup = new THREE.Group();
+    previewGroup.visible = false;
+    scene.add(previewGroup);
+    let previewKey = "";
+    const makeTranslucent = (obj: THREE.Object3D) => {
+      obj.traverse((o) => {
+        const mesh = o as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        mesh.castShadow = false;
+        mesh.receiveShadow = false;
+        const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        mesh.material = mats.map((m) => {
+          const c = (m as THREE.Material).clone() as THREE.MeshStandardMaterial;
+          c.transparent = true;
+          c.opacity = 0.55;
+          c.depthWrite = false;
+          return c;
+        }) as unknown as THREE.Material;
+        if (Array.isArray(mesh.material) && (mesh.material as THREE.Material[]).length === 1) {
+          mesh.material = (mesh.material as THREE.Material[])[0]!;
+        }
+      });
+    };
+    /** Modèle d'aperçu pour l'outil courant (null si l'outil n'en a pas). */
+    const buildPreview = () => {
+      const tool = toolRef.current;
+      const key =
+        tool === "house"
+          ? `house:${houseLevelRef.current}`
+          : tool === "park" || tool === "parking"
+            ? `decor:${decorKindRef.current}`
+            : "";
+      if (key === previewKey) return;
+      previewKey = key;
+      [...previewGroup.children].forEach((c) => previewGroup.remove(c));
+      if (!key) return;
+      const obj = key.startsWith("house")
+        ? makeHouse(houseLevelRef.current)
+        : makeDecor(decorKindRef.current, 7);
+      makeTranslucent(obj);
+      previewGroup.add(obj);
+    };
+
+
     const BUILD_MIN_CZ = MAIN_CZ_START + 1;
     const BUILD_MAX_CZ = MAIN_CZ_END + 2;
     const BUILD_MAX_CX = 12;
@@ -1937,6 +2034,8 @@ export default function CarWashScene() {
       return { cx: worldToCell(hitPoint.x), cz: worldToCell(hitPoint.z) };
     };
 
+    /** dernière case survolée : sert de socle à l'aperçu 3D (utile au tactile) */
+    let lastCell = { cx: 0, cz: MAIN_CZ_START + 6 };
     let downAt: { x: number; y: number; id: number; type: string } | null = null;
     let roadDragLast: { cx: number; cz: number } | null = null;
     const isRoadTool = (t: BuildTool): t is RoadHint =>
@@ -2037,6 +2136,7 @@ export default function CarWashScene() {
         ghost.visible = false;
         return;
       }
+      lastCell = { ...c };
       ghost.visible = true;
       ghost.position.set(c.cx * TILE, 0.07, c.cz * TILE);
       const existing = plan.get(c.cx, c.cz);
@@ -2137,14 +2237,14 @@ export default function CarWashScene() {
           const target = Math.min(MAX_HOUSE_LEVEL, existingHouse.level + 1);
           if (target === existingHouse.level) return;
           if (!spendRef.current(houseDef(target).cost)) return;
-          plan.placeHouse(c.cx, c.cz, target);
+          plan.placeHouse(c.cx, c.cz, target, existingHouse.rot ?? 0);
           renderHouses();
           return;
         }
         if (!plan.canPlaceHouse(c.cx, c.cz)) return;
         const lvl = houseLevelRef.current;
         if (!spendRef.current(houseDef(lvl).cost)) return;
-        plan.placeHouse(c.cx, c.cz, lvl);
+        plan.placeHouse(c.cx, c.cz, lvl, rotRef.current);
         renderHouses();
         return;
       }
@@ -2201,11 +2301,25 @@ export default function CarWashScene() {
 
 
 
+
     const clock = new THREE.Clock();
     const animate = () => {
       frame = requestAnimationFrame(animate);
       const dt = Math.min(clock.getDelta(), 0.05);
       const t = clock.elapsedTime;
+
+      // aperçu 3D de l'objet à poser : suit la case visée et la rotation choisie
+      if (buildRef.current) {
+        buildPreview();
+        const show = previewGroup.children.length > 0;
+        previewGroup.visible = show;
+        if (show) {
+          previewGroup.position.set(lastCell.cx * TILE, 0, lastCell.cz * TILE);
+          previewGroup.rotation.y = (rotRef.current * Math.PI) / 2;
+        }
+      } else if (previewGroup.visible) {
+        previewGroup.visible = false;
+      }
 
       // léger clapotis sur les surfaces d'eau
       if (waterSurface) waterSurface.position.y = 0.05 + Math.sin(t * 0.8) * 0.03;
@@ -2519,6 +2633,9 @@ export default function CarWashScene() {
       .then(() => {
         if (disposed) return;
         buildScene();
+        /* Restauration de la sauvegarde locale une fois la ville prête. */
+        restoreLocalRef.current();
+        localReadyRef.current = true;
         setLoading(false);
         animate();
 
