@@ -751,6 +751,7 @@ export default function CarWashScene() {
       tunnel.position.set(2, 0, 0);
       setShadow(tunnel);
       washSite.add(tunnel);
+      tunnelPlaceholder = tunnel;
 
 
 
