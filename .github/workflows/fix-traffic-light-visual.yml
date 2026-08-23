@@ -23,8 +23,6 @@ jobs:
       }'''
           new = '''      if (model) {
         const inst = model.clone(true);
-        /* Le modèle Kenney doit rester parfaitement vertical quelle que soit
-           l'orientation enregistrée dans le GLB. */
         inst.rotation.x = 0;
         inst.rotation.z = 0;
         inst.position.y = 0;
@@ -60,3 +58,4 @@ jobs:
           git commit -m "Redresse et replace les feux tricolores"
           git pull --rebase origin main
           git push origin HEAD:main
+# relance 2026-08-23
