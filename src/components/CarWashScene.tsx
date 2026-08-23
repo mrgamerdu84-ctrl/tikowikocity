@@ -1578,13 +1578,17 @@ export default function CarWashScene() {
 
     /** Applique l'outil courant sur une case (pose ou démolition). */
     const applyAt = (cx: number, cz: number) => {
-      if (toolRef.current === "bulldoze") {
-        return plan.removeForce(cx, cz);
+      const tool = toolRef.current;
+      if (tool === "bulldoze") {
+        const done = plan.removeForce(cx, cz);
+        if (done) plan.removeHouse(cx, cz);
+        return done;
       }
       if (!canBuild(cx, cz)) return false;
-      plan.place(cx, cz, "straight", rotRef.current);
+      plan.place(cx, cz, isRoadTool(tool) ? tool : "straight", rotRef.current);
       return true;
     };
+
 
     const traceRoadTo = (target: { cx: number; cz: number }) => {
       let changed = false;
