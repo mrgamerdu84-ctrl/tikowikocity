@@ -30,7 +30,7 @@ export default function PlayerSetup({ onDone }: { onDone?: () => void }) {
           Nouvelle partie
         </p>
         <h2 className="mt-1 text-2xl font-black tracking-tight sm:text-3xl">
-          🫧 TikowikoCarWash
+          🫧 TikowikoCity
         </h2>
         <p className="mt-2 text-[13.5px] leading-relaxed opacity-80">
           Tu débarques dans une petite ville paumée où un car wash à l'abandon n'attend que toi.

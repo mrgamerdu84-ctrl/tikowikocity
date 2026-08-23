@@ -29,6 +29,19 @@ import {
   type Dir,
 } from "@/game/grid";
 import { TOOL_LABEL, type BuildTool, type RoadHint } from "@/game/catalog";
+import {
+  UPGRADES,
+  DEFAULT_UPGRADES,
+  MAX_LEVEL,
+  capacityOf,
+  beltFactor,
+  washInterval,
+  rollReward,
+  upgradeCost,
+  sanitizeUpgrades,
+  type UpgradeKey,
+  type UpgradeLevels,
+} from "@/game/upgrades";
 
 
 /* Modèles issus des kits Kenney (car-kit, city-kit-roads, building-kit),
@@ -120,6 +133,32 @@ export default function CarWashScene() {
     return () => window.clearTimeout(id);
   }, [gain]);
 
+  /* ----- Boutique d'améliorations ----- */
+  const [upgrades, setUpgrades] = useState<UpgradeLevels>(DEFAULT_UPGRADES);
+  const upgradesRef = useRef(upgrades);
+  const [shopOpen, setShopOpen] = useState(false);
+
+  const buyUpgrade = (key: UpgradeKey) => {
+    const level = upgradesRef.current[key];
+    if (level >= MAX_LEVEL) return;
+    const cost = upgradeCost(key, level);
+    if (economyRef.current.money < cost) {
+      toast.error(`Il manque ${(cost - economyRef.current.money).toLocaleString("fr-FR")} €`);
+      return;
+    }
+    const nextEco = { ...economyRef.current, money: economyRef.current.money - cost };
+    economyRef.current = nextEco;
+    setEconomy(nextEco);
+    const nextUp = { ...upgradesRef.current, [key]: level + 1 };
+    upgradesRef.current = nextUp;
+    setUpgrades(nextUp);
+    const def = UPGRADES.find((u) => u.key === key)!;
+    toast.success(`${def.icon} ${def.label} niveau ${level + 1}`, {
+      description: def.effect(level + 1),
+    });
+  };
+
+
   const toggleMachine = (key: keyof typeof machines) => {
     setMachines((prev) => {
       const next = { ...prev, [key]: !prev[key] };
@@ -192,10 +231,10 @@ export default function CarWashScene() {
       const stamp = new Date().toISOString().replace(/[:.]/g, "-");
       const res = await saveFn({
         data: {
-          fileName: `tikowikocarwash-${stamp}.json`,
+          fileName: `tikowikocity-${stamp}.json`,
           payload: {
             version: SAVE_VERSION,
-            app: "TikowikoCarWash",
+            app: "TikowikoCity",
             savedAt: new Date().toISOString(),
             // Extensible: new progression fields can be added here without
             // breaking older saves (loader applies only known keys).
@@ -204,6 +243,8 @@ export default function CarWashScene() {
               cinema: cinemaStateRef.current,
               city: planIoRef.current.save(),
               economy: economyRef.current,
+              upgrades: upgradesRef.current,
+
 
             },
           },
@@ -231,7 +272,7 @@ export default function CarWashScene() {
       const res = await loadFn({ data: undefined });
       if (!res.found) {
         setLoadState("idle");
-        toast.info("Aucune sauvegarde trouvée dans le dossier TikowikoCarWash.");
+        toast.info("Aucune sauvegarde trouvée dans le dossier TikowikoCity.");
         return;
       }
       const state = JSON.parse(res.stateJson || "{}") as {
@@ -239,6 +280,8 @@ export default function CarWashScene() {
         cinema?: unknown;
         city?: SerializedPlan;
         economy?: { money?: unknown; washes?: unknown };
+        upgrades?: unknown;
+
       };
       if (state.machines && typeof state.machines === "object") {
         setMachines((prev) => {
@@ -262,6 +305,12 @@ export default function CarWashScene() {
         economyRef.current = next;
         setEconomy(next);
       }
+      if (state.upgrades) {
+        const up = sanitizeUpgrades(state.upgrades);
+        upgradesRef.current = up;
+        setUpgrades(up);
+      }
+
       if (typeof state.cinema === "boolean" && state.cinema !== cinemaStateRef.current) {
         cinemaRef.current();
       }
@@ -1459,10 +1508,12 @@ export default function CarWashScene() {
 
 
       const ctl = machinesRef.current;
+      const up = upgradesRef.current;
+      const beltBoost = beltFactor(up.speed);
       const SPEED = 2.6;
       /* même tapis à l'arrêt, la voiture avance lentement pour ne jamais
          rester bloquée dans le portique */
-      const BELT_SPEED = ctl.belt ? 1.1 : 0.45;
+      const BELT_SPEED = (ctl.belt ? 1.1 : 0.45) * beltBoost;
       const GAP = 3.2;
       const [zoneStart, zoneEnd] = WASH_ZONE;
 
@@ -1490,7 +1541,7 @@ export default function CarWashScene() {
         /* Lavage terminé : la voiture sort du tunnel et paye la prestation. */
         if (!e.paid && e.d >= WASH_D1) {
           e.paid = true;
-          registerWashRef.current(6 + Math.floor(Math.random() * 7));
+          registerWashRef.current(rollReward(up.quality));
         }
 
         e.wheels.forEach((w) => {
@@ -1540,8 +1591,9 @@ export default function CarWashScene() {
       /* De temps en temps, une voiture de la ville part au lavage. */
       washCooldown -= dt;
       if (washCooldown <= 0) {
-        washCooldown = 9 + Math.random() * 12;
-        if (ctl.traffic && washCars.length < 3) sendCityCarToWash();
+        const [lo, hi] = washInterval(up.speed);
+        washCooldown = lo + Math.random() * (hi - lo + 3);
+        if (ctl.traffic && washCars.length < capacityOf(up.capacity)) sendCityCarToWash();
       }
 
       const carInWash = washCars.some((c) => c.d > WASH_D0 && c.d < WASH_D1);
@@ -1851,6 +1903,90 @@ export default function CarWashScene() {
         <p className="mt-1 font-semibold opacity-90">© {new Date().getFullYear()} tikowikoFamily</p>
 
       </div>
+
+      {/* Boutique d'améliorations */}
+      <button
+        type="button"
+        onClick={() => setShopOpen((v) => !v)}
+        aria-expanded={shopOpen}
+        className="fixed left-2 top-[132px] z-40 rounded-full bg-sunny px-3 py-2 text-[12.5px] font-bold text-sunny-foreground shadow-[0_3px_0_var(--sunny-shadow)] transition-transform active:translate-y-0.5 sm:left-4 sm:top-[168px]"
+      >
+        🛠️ Améliorations
+      </button>
+
+      {shopOpen && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 p-3 backdrop-blur-sm sm:items-center">
+          <div className="w-full max-w-[420px] rounded-3xl bg-white p-4 text-ink shadow-[0_12px_40px_rgba(6,58,94,0.35)]">
+            <div className="flex items-center gap-2">
+              <h2 className="text-[18px] font-extrabold">🛠️ Boutique du car wash</h2>
+              <span className="ml-auto rounded-full bg-sunny/30 px-2 py-1 text-[13px] font-extrabold tabular-nums">
+                {economy.money.toLocaleString("fr-FR")} €
+              </span>
+              <button
+                type="button"
+                onClick={() => setShopOpen(false)}
+                aria-label="Fermer la boutique"
+                className="rounded-full bg-ink/10 px-2 py-1 text-[13px] font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <ul className="mt-3 flex flex-col gap-2">
+              {UPGRADES.map((u) => {
+                const level = upgrades[u.key];
+                const maxed = level >= MAX_LEVEL;
+                const cost = maxed ? 0 : upgradeCost(u.key, level);
+                const affordable = !maxed && economy.money >= cost;
+                return (
+                  <li
+                    key={u.key}
+                    className="rounded-2xl bg-splash/10 px-3 py-2 ring-1 ring-ink/10"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span aria-hidden className="text-[18px]">
+                        {u.icon}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-[14px] font-bold">
+                          {u.label}{" "}
+                          <span className="opacity-60">
+                            niv. {level}/{MAX_LEVEL}
+                          </span>
+                        </p>
+                        <p className="text-[11.5px] opacity-75">{u.desc}</p>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={maxed || !affordable}
+                        onClick={() => buyUpgrade(u.key)}
+                        className={`ml-auto shrink-0 rounded-full px-3 py-2 text-[12px] font-bold transition-transform active:translate-y-0.5 ${
+                          maxed
+                            ? "bg-ink/10 opacity-60"
+                            : affordable
+                              ? "bg-splash text-splash-foreground"
+                              : "bg-ink/10 opacity-60"
+                        }`}
+                      >
+                        {maxed ? "MAX" : `${cost.toLocaleString("fr-FR")} €`}
+                      </button>
+                    </div>
+                    <p className="mt-1 text-[11.5px] font-semibold opacity-80">
+                      Actuel : {u.effect(level)}
+                      {!maxed && <> → {u.effect(level + 1)}</>}
+                    </p>
+                  </li>
+                );
+              })}
+            </ul>
+
+            <p className="mt-3 text-[11.5px] opacity-70">
+              Les routes et bâtiments restent gratuits : l'argent sert uniquement aux
+              améliorations du lavage.
+            </p>
+          </div>
+        </div>
+      )}
 
 
       <div className="fixed right-2 top-2 z-40 w-[118px] rounded-2xl bg-white/90 ring-1 ring-ink/10 p-2 sm:right-4 sm:top-4 sm:w-[190px] sm:p-3 shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur">
