@@ -752,28 +752,28 @@ export default function CarWashScene() {
       return { x, z, heading };
     };
 
-    let spawnIndex = 0;
-    const spawnSedan = () => {
-      const template = kitCar(spawnIndex++ * 3 + 1);
-      if (!template) return;
-      const sedan = template.clone(true);
-      setShadow(sedan);
-      const baseY = 0;
+    /* Une voiture de la ville décide spontanément d'aller au lavage : elle
+       quitte la circulation, suit l'itinéraire jusqu'au tunnel, puis revient
+       rouler en ville une fois propre. */
+    const sendCityCarToWash = () => {
+      if (trafficCars.length <= 4) return;
+      const idx = Math.floor(Math.random() * trafficCars.length);
+      const origin = trafficCars.splice(idx, 1)[0];
+      if (!origin) return;
       const start = posAt(0);
-      sedan.position.set(start.x, baseY, start.z);
-      tintCar(sedan, 1);
-      scene.add(sedan);
+      origin.car.position.set(start.x, origin.baseY, start.z);
+      tintCar(origin.car, 1);
       washCars.push({
-        car: sedan,
+        car: origin.car,
         d: 0,
         speed: 5.2,
-        yaw: 0,
-        baseY,
-        wheels: findWheels(sedan),
+        yaw: origin.yaw,
+        baseY: origin.baseY,
+        wheels: origin.wheels,
+        origin,
       });
     };
 
-    spawnRef.current = spawnSedan;
 
 
 
