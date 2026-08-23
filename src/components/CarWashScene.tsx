@@ -1467,53 +1467,117 @@ export default function CarWashScene() {
       }
 
 
-      // ----- Circulation : deux voies par rue, sens opposés, bien centrées -----
-      let ti = 0;
-      const addTraffic = (
-        axis: "x" | "z",
-        lane: number,
-        dir: number,
-        s: number,
-      ) => {
-        const car = kitCar(ti).clone(true);
-        setShadow(car);
-        scene.add(car);
-        // modèles Kenney : le nez pointe vers +Z
-        const heading =
-          axis === "x" ? (dir > 0 ? Math.PI / 2 : -Math.PI / 2) : dir > 0 ? 0 : Math.PI;
-        /* on ne circule que sur la chaussée : bornes = extrémités de la rue */
-        const sMin = axis === "x" ? xMin : zMin;
-        const sMax = axis === "x" ? xMax : zMax;
-        trafficCars.push({
-          car,
-          axis,
-          lane,
-          s: Math.min(Math.max(s, sMin), sMax),
-          dir,
-          speed: 3.4 + (ti % 3) * 0.5,
-          heading,
-          yaw: 0,
-          baseY: 0,
-          wheels: findWheels(car),
-          sMin,
-          sMax,
-        });
-
-
-
-        ti++;
-      };
-
-      Z_STREETS.forEach((z, i) => {
-        addTraffic("x", z + LANE, 1, xMin + ((i * 11) % 40));
-        addTraffic("x", z - LANE, -1, xMin + ((i * 17) % 40));
-      });
-      X_STREETS.forEach((x, i) => {
-        if (i % 2 !== 0) return;
-        addTraffic("z", x - LANE, 1, zMin + ((i * 13) % 34));
-        addTraffic("z", x + LANE, -1, zMin + ((i * 7) % 34));
-      });
+      // ----- Trafic initial : quelques voitures sur la route principale -----
+      for (let i = 0; i < 6; i++) {
+        spawnNetCar(MAIN_CX, MAIN_CZ_START + 2 + i * 2);
+      }
     };
+
+    /* ---------- Mode construction : le joueur pose son réseau ---------- */
+    const gridHelper = new THREE.GridHelper(TILE * 30, 30, 0x2b6cb0, 0x9ec5e8);
+    (gridHelper.material as THREE.Material).transparent = true;
+    (gridHelper.material as THREE.Material).opacity = 0.3;
+    gridHelper.position.y = 0.04;
+    gridHelper.visible = false;
+    scene.add(gridHelper);
+
+    const ghost = new THREE.Mesh(
+      new THREE.PlaneGeometry(TILE * 0.94, TILE * 0.94),
+      new THREE.MeshBasicMaterial({ color: 0x2bd07c, transparent: true, opacity: 0.45 }),
+    );
+    ghost.rotation.x = -Math.PI / 2;
+    ghost.position.y = 0.07;
+    ghost.visible = false;
+    scene.add(ghost);
+
+    const BUILD_MIN_CZ = MAIN_CZ_START + 1;
+    const BUILD_MAX_CZ = MAIN_CZ_END + 2;
+    const BUILD_MAX_CX = 12;
+    const canBuild = (cx: number, cz: number) =>
+      Math.abs(cx) <= BUILD_MAX_CX &&
+      cz >= BUILD_MIN_CZ &&
+      cz <= BUILD_MAX_CZ &&
+      !plan.get(cx, cz)?.locked;
+
+    const ray = new THREE.Raycaster();
+    const ndc = new THREE.Vector2();
+    const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    const hitPoint = new THREE.Vector3();
+    const cellUnderPointer = (ev: PointerEvent) => {
+      const rect = renderer.domElement.getBoundingClientRect();
+      ndc.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+      ndc.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
+      ray.setFromCamera(ndc, camera);
+      if (!ray.ray.intersectPlane(groundPlane, hitPoint)) return null;
+      return { cx: worldToCell(hitPoint.x), cz: worldToCell(hitPoint.z) };
+    };
+
+    let downAt: { x: number; y: number } | null = null;
+    const onPointerMove = (ev: PointerEvent) => {
+      if (!buildRef.current) {
+        ghost.visible = false;
+        return;
+      }
+      const c = cellUnderPointer(ev);
+      if (!c) {
+        ghost.visible = false;
+        return;
+      }
+      ghost.visible = true;
+      ghost.position.set(c.cx * TILE, 0.07, c.cz * TILE);
+      const existing = plan.get(c.cx, c.cz);
+      const tool = toolRef.current;
+      const ok =
+        tool === "erase"
+          ? !!existing && !existing.locked
+          : tool === "light" || tool === "lamp"
+            ? !!existing
+            : canBuild(c.cx, c.cz);
+      (ghost.material as THREE.MeshBasicMaterial).color.set(ok ? 0x2bd07c : 0xe05252);
+    };
+    const onPointerDown = (ev: PointerEvent) => {
+      downAt = { x: ev.clientX, y: ev.clientY };
+    };
+    const onPointerUp = (ev: PointerEvent) => {
+      const start = downAt;
+      downAt = null;
+      if (!buildRef.current || !start) return;
+      if (Math.hypot(ev.clientX - start.x, ev.clientY - start.y) > 6) return;
+      const c = cellUnderPointer(ev);
+      if (!c) return;
+      const tool = toolRef.current;
+      if (tool === "erase") {
+        if (plan.remove(c.cx, c.cz)) renderPlan();
+        return;
+      }
+      if (tool === "light" || tool === "lamp") {
+        const cell = plan.get(c.cx, c.cz);
+        if (!cell) return;
+        plan.setProp(c.cx, c.cz, tool, !cell[tool]);
+        renderPlan();
+        return;
+      }
+      if (!canBuild(c.cx, c.cz)) return;
+      plan.place(c.cx, c.cz, tool, rotRef.current);
+      renderPlan();
+    };
+    renderer.domElement.addEventListener("pointermove", onPointerMove);
+    renderer.domElement.addEventListener("pointerdown", onPointerDown);
+    renderer.domElement.addEventListener("pointerup", onPointerUp);
+
+    buildApplyRef.current = (on: boolean) => {
+      gridHelper.visible = on;
+      controls.enableRotate = !on;
+      if (!on) ghost.visible = false;
+    };
+    planIoRef.current = {
+      save: () => plan.serialize(),
+      load: (data) => {
+        plan.load(data);
+        renderPlan();
+      },
+    };
+
 
 
 
@@ -1583,29 +1647,22 @@ export default function CarWashScene() {
         aheadD = e.d;
       }
 
-      /* Fin de l'itinéraire : la voiture, propre, reprend sa vie en ville */
+      /* Fin de l'itinéraire : la voiture, propre, reprend la route principale */
       for (let i = washCars.length - 1; i >= 0; i--) {
         const e = washCars[i]!;
         if (e.d >= ROUTE_LEN - 0.05) {
           const o = e.origin;
           tintCar(o.car, 0);
-          /* on la réinjecte sur sa rue, à une place libre */
-          let s = o.sMin + Math.random() * (o.sMax - o.sMin);
-          for (let k = 0; k < 12; k++) {
-            const clash = trafficCars.some(
-              (c) =>
-                c.axis === o.axis &&
-                Math.abs(c.lane - o.lane) < 0.5 &&
-                Math.abs(c.s - s) < 6,
-            );
-            if (!clash) break;
-            s = o.sMin + Math.random() * (o.sMax - o.sMin);
-          }
-          o.s = s;
-          trafficCars.push(o);
+          o.cx = MAIN_CX;
+          o.cz = MAIN_CZ_START;
+          o.dirIn = 0;
+          o.dirOut = 0; // repart vers le nord
+          o.t = 0.1;
+          netCars.push(o);
           washCars.splice(i, 1);
         }
       }
+
 
 
       /* De temps en temps, une voiture de la ville part au lavage. */
@@ -1645,63 +1702,69 @@ export default function CarWashScene() {
         });
       }
 
-      /* Circulation : voitures strictement sur la chaussée, à distance de la
-         voiture de devant, et cycle de feux rouge/vert aux carrefours.
-         Phase 0 : rues Est-Ouest au vert. Phase 1 : rues Nord-Sud au vert. */
-      const CAR_GAP = 4.2;
+      /* Circulation sur le réseau construit par le joueur : chaque voiture
+         traverse une case, choisit une sortie au carrefour et s'arrête aux
+         feux posés par le joueur. */
       const LIGHT_CYCLE = 9; // secondes par phase
       const phase = Math.floor(t / LIGHT_CYCLE) % 2;
       const greenAxis: "x" | "z" = phase === 0 ? "x" : "z";
-      const HALF_CROSS = STREET_W / 2 + 0.6;
-      trafficCars.forEach((e) => {
+
+      netCars.forEach((e) => {
         if (!ctl.traffic) return;
         const step = dt * e.speed;
-        const nextS = e.s + step * e.dir;
+        const nt = e.t + step / TILE;
 
-        // 1) distance de sécurité avec la voiture devant, même rue même voie
-        let blocked = false;
-        for (const o of trafficCars) {
-          if (o === e || o.axis !== e.axis) continue;
-          if (Math.abs(o.lane - e.lane) > 0.5) continue;
-          const ahead = (o.s - nextS) * e.dir;
-          if (ahead > 0 && ahead < CAR_GAP) {
-            blocked = true;
-            break;
-          }
-        }
+        // distance de sécurité avec la voiture devant, dans la même case
+        const tooClose = netCars.some(
+          (o) =>
+            o !== e && o.cx === e.cx && o.cz === e.cz && o.t > e.t && o.t - e.t < 0.4,
+        );
+        if (tooClose) return;
 
-        // 2) feu rouge : on s'arrête AVANT le carrefour, jamais dedans
-        if (!blocked && e.axis !== greenAxis) {
-          const crossings = e.axis === "x" ? X_STREETS : Z_STREETS;
-          for (const c of crossings) {
-            const distNow = (c - e.s) * e.dir;
-            const distNext = (c - nextS) * e.dir;
-            // déjà engagé dans le carrefour : on le dégage toujours
-            if (Math.abs(e.s - c) <= HALF_CROSS) continue;
-            // la ligne d'arrêt est à HALF_CROSS avant le centre du carrefour
-            if (distNow > HALF_CROSS && distNext <= HALF_CROSS) {
-              blocked = true;
-              break;
+        if (nt < 1) {
+          e.t = nt;
+        } else {
+          const [dx, dz] = DIR_VEC[e.dirOut]!;
+          const nx = e.cx + dx;
+          const nz = e.cz + dz;
+          const next = plan.get(nx, nz);
+          if (!next) {
+            // cul-de-sac : demi-tour sans quitter la chaussée
+            e.dirIn = e.dirOut;
+            e.dirOut = opposite(e.dirIn);
+            e.t = 0;
+          } else {
+            const busy =
+              netCars.filter((o) => o !== e && o.cx === nx && o.cz === nz).length >= 2;
+            const red = next.light && axisOf(e.dirOut) !== greenAxis;
+            if (busy || red) {
+              e.t = 0.97;
+              return;
             }
+            e.cx = nx;
+            e.cz = nz;
+            e.dirIn = e.dirOut;
+            e.t = Math.min(nt - 1, 0.5);
+            const exits = plan.exitsFrom(nx, nz, e.dirIn);
+            e.dirOut =
+              exits.includes(e.dirIn) && Math.random() < 0.65
+                ? e.dirIn
+                : exits[Math.floor(Math.random() * exits.length)]!;
           }
         }
 
-        if (blocked) return;
-
-        e.s = nextS;
-        // bouclage strictement dans les limites de la chaussée
-        if (e.s > e.sMax) e.s = e.sMin;
-        if (e.s < e.sMin) e.s = e.sMax;
-        // roues qui tournent proportionnellement à la distance parcourue
         e.wheels.forEach((w) => {
           w.rotation.x -= ((w.userData['spinSign'] as number) ?? 1) * (step / 0.35) * 2;
         });
       });
 
-      trafficCars.forEach((e) => {
-        if (e.axis === "x") e.car.position.set(e.s, e.baseY, e.lane);
-        else e.car.position.set(e.lane, e.baseY, e.s);
-        e.car.rotation.y = e.heading + e.yaw;
+      netCars.forEach((e) => {
+        const p = netPose(e);
+        e.car.position.set(p.x, e.baseY, p.z);
+        let delta = p.heading + e.yaw - e.car.rotation.y;
+        while (delta > Math.PI) delta -= Math.PI * 2;
+        while (delta < -Math.PI) delta += Math.PI * 2;
+        e.car.rotation.y += delta * Math.min(dt * 8, 1);
       });
 
       // Feux : vert sur l'axe qui passe, rouge sur l'autre
@@ -1710,6 +1773,7 @@ export default function CarWashScene() {
         (l.green.material as THREE.MeshStandardMaterial).emissiveIntensity = green ? 1.4 : 0.06;
         (l.red.material as THREE.MeshStandardMaterial).emissiveIntensity = green ? 0.06 : 1.4;
       });
+
 
 
 
@@ -1839,12 +1903,16 @@ export default function CarWashScene() {
     return () => {
       disposed = true;
       cancelAnimationFrame(frame);
-      
+
       window.removeEventListener("resize", onResize);
+      renderer.domElement.removeEventListener("pointermove", onPointerMove);
+      renderer.domElement.removeEventListener("pointerdown", onPointerDown);
+      renderer.domElement.removeEventListener("pointerup", onPointerUp);
       controls.dispose();
       renderer.dispose();
       renderer.domElement.remove();
     };
+
 
   }, []);
 
