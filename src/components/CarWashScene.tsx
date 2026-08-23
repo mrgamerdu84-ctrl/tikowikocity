@@ -42,6 +42,12 @@ import {
   type UpgradeKey,
   type UpgradeLevels,
 } from "@/game/upgrades";
+import {
+  MAX_HISTORY,
+  formatWashDate,
+  sanitizeHistory,
+  type WashEntry,
+} from "@/game/history";
 import { HOUSE_LEVELS, MAX_HOUSE_LEVEL, houseDef, totalCapacity } from "@/game/houses";
 
 
