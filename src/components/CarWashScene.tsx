@@ -14,9 +14,9 @@ import yellowPickupAsset from "@/assets/yellow_pickup.glb.asset.json";
 
 const MESHY_CARS = [blueSuvAsset, graySedanAsset, greenSportsAsset, yellowPickupAsset];
 
-/* Les voitures Meshy sont normalisées face à +X : décalage pour aligner
-   l'avant sur le sens de circulation (convention modèle Kenney = +Z). */
-const MESHY_YAW = -Math.PI / 2;
+/* Les voitures Meshy sont normalisées le long de +X ; ce décalage aligne
+   l'avant (capot) sur le sens de marche. */
+const MESHY_YAW = Math.PI / 2;
 
 
 
@@ -372,7 +372,8 @@ export default function CarWashScene() {
       const sedan = template.clone(true);
       setShadow(sedan);
       const isKenney = template === models["sedan"];
-      if (isKenney) sedan.rotation.y = Math.PI / 2;
+      // la voiture roule vers +X : on oriente le capot dans ce sens
+      sedan.rotation.y = Math.PI / 2 + (isKenney ? 0 : MESHY_YAW);
       const baseY = isKenney ? CAR_Y : 0.06;
       sedan.userData["baseY"] = baseY;
       sedan.position.set(PATH_START, baseY, 0);
@@ -394,67 +395,87 @@ export default function CarWashScene() {
       setCinema(cinemaMode);
     };
 
-    /* Maison procédurale : 4 murs pleins + toit à deux pentes posé dessus. */
-    const houseWallMats = [0xf6ece0, 0xe8dcc8, 0xf1e3d3, 0xe3ead9].map(
-      (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.9 }),
-    );
-    const roofMats = [0xc1543f, 0xa9563f, 0x8f4f6b, 0x4f6f8f].map(
-      (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.85 }),
-    );
-    const doorMat = new THREE.MeshStandardMaterial({ color: 0x6b4a2f, roughness: 0.8 });
-    const houseWinMat = new THREE.MeshStandardMaterial({
-      color: 0x9ad8ff,
-      roughness: 0.3,
-    });
+    /* Bâtiments assemblés avec le kit maison Kenney (dalles, murs à fenêtres,
+       toitures) : ils gardent la texture « colormap » d'origine. */
+    const CELL = 2; // taille d'une dalle hFloor
+    const FLOOR_H = 2.4; // hauteur d'un mur hWallWindow
 
-    const buildHouse = (x: number, z: number, rotY = 0, variant = 0) => {
+    const buildKenneyBuilding = (
+      x: number,
+      z: number,
+      cols: number,
+      rows: number,
+      floors: number,
+      rotY = 0,
+    ) => {
       const g = new THREE.Group();
-      const w = 3.4;
-      const d = 3;
-      const h = 2.2;
-      const body = new THREE.Mesh(
-        new THREE.BoxGeometry(w, h, d),
-        houseWallMats[variant % houseWallMats.length]!,
+      const floorTpl = models["hFloor"]!;
+      const wallTpl = models["hWallWindow"]!;
+      const ox = (-(cols - 1) * CELL) / 2;
+      const oz = (-(rows - 1) * CELL) / 2;
+
+      for (let f = 0; f < floors; f++) {
+        const y = f * FLOOR_H;
+        for (let i = 0; i < cols; i++) {
+          for (let j = 0; j < rows; j++) {
+            const cx = ox + i * CELL;
+            const cz = oz + j * CELL;
+            const slab = floorTpl.clone(true);
+            slab.position.set(cx, y, cz);
+            g.add(slab);
+
+            const wall = (wx: number, wz: number, wr: number) => {
+              const w = wallTpl.clone(true);
+              w.position.set(wx, y, wz);
+              w.rotation.y = wr;
+              g.add(w);
+            };
+            if (i === 0) wall(cx - CELL / 2, cz, 0);
+            if (i === cols - 1) wall(cx + CELL / 2, cz, 0);
+            if (j === 0) wall(cx, cz - CELL / 2, Math.PI / 2);
+            if (j === rows - 1) wall(cx, cz + CELL / 2, Math.PI / 2);
+          }
+        }
+      }
+
+      // Toiture : dalles pleines, sans trou
+      const top = floors * FLOOR_H;
+      for (let i = 0; i < cols; i++) {
+        for (let j = 0; j < rows; j++) {
+          const deck = floorTpl.clone(true);
+          deck.position.set(ox + i * CELL, top, oz + j * CELL);
+          g.add(deck);
+        }
+      }
+
+      // Légère variation de teinte pour éviter des immeubles tous identiques
+      const tint = new THREE.Color().setHSL(
+        (Math.abs(x * 7 + z * 13) % 100) / 100,
+        0.18,
+        0.62,
       );
-      body.position.y = h / 2;
-      g.add(body);
-
-      // Toit à deux pentes : prisme triangulaire qui repose exactement sur les murs
-      const rh = 1.1;
-      const overhang = 0.22;
-      const rw = w / 2 + overhang;
-      const shape = new THREE.Shape();
-      shape.moveTo(-rw, 0);
-      shape.lineTo(rw, 0);
-      shape.lineTo(0, rh);
-      shape.closePath();
-      const roofGeo = new THREE.ExtrudeGeometry(shape, {
-        depth: d + overhang * 2,
-        bevelEnabled: false,
+      const tinted = new Map<THREE.Material, THREE.MeshStandardMaterial>();
+      g.traverse((n) => {
+        const mesh = n as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        const mat = mesh.material as THREE.MeshStandardMaterial;
+        if (mat.transparent || mat.name === "glass") return;
+        let cloned = tinted.get(mat);
+        if (!cloned) {
+          cloned = mat.clone();
+          cloned.color.multiply(tint).multiplyScalar(1.5);
+          tinted.set(mat, cloned);
+        }
+        mesh.material = cloned;
       });
-      roofGeo.translate(0, 0, -(d / 2 + overhang));
-      const roof = new THREE.Mesh(roofGeo, roofMats[variant % roofMats.length]!);
-      roof.position.y = h;
-      g.add(roof);
 
-
-      const door = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.1, 0.08), doorMat);
-      door.position.set(0, 0.55, d / 2 + 0.04);
-      g.add(door);
-      [-1, 1].forEach((sx) => {
-        const win = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.55, 0.08), houseWinMat);
-        win.position.set(sx * 1.1, 1.3, d / 2 + 0.04);
-        g.add(win);
-        const back = win.clone();
-        back.position.z = -d / 2 - 0.04;
-        g.add(back);
-      });
 
       g.position.set(x, 0, z);
       g.rotation.y = rotY;
       setShadow(g);
       scene.add(g);
     };
+
 
     // Grille de rues régulière (rues nord-sud et est-ouest)
     const X_STREETS = [-30, -18, -6, 6, 18, 30];
@@ -477,13 +498,15 @@ export default function CarWashScene() {
       scene.add(conveyor.group);
       conveyorSlats.push(...conveyor.slats);
 
-      // Brosses verticales de chaque côté
+      /* Rouleaux verticaux : deux paires à l'entrée (bien visibles depuis
+         l'extérieur) et deux paires à l'intérieur du portique. */
       [-1, 1].forEach((zSide, si) => {
-        [0, 2.5].forEach((offset, oi) => {
+        [-1.1, 1.2, 3.4].forEach((offset, oi) => {
           const pivot = new THREE.Group();
           const spin = makeBrush();
+          spin.scale.set(1.25, 1.15, 1.25);
           pivot.add(spin);
-          pivot.position.set(WASH_ZONE[0] + 1.2 + offset, ROAD_Y + 1.05, zSide * 1.5);
+          pivot.position.set(WASH_ZONE[0] + offset, ROAD_Y + 1.1, zSide * 1.45);
           scene.add(pivot);
           brushes.push({
             pivot,
@@ -494,16 +517,18 @@ export default function CarWashScene() {
         });
       });
 
-      // Brosse horizontale au-dessus du tapis
-      [1.2, 3.8].forEach((x, i) => {
+      // Brosses horizontales au-dessus du tapis (elles descendent sur la voiture)
+      [-0.4, 2.2, 4.6].forEach((x, i) => {
         const pivot = new THREE.Group();
         pivot.rotation.x = Math.PI / 2;
         const spin = makeBrush();
+        spin.scale.set(1.1, 1.5, 1.1);
         pivot.add(spin);
         pivot.position.set(x, ROAD_Y + 2.1, 0);
         scene.add(pivot);
         brushes.push({ pivot, spin, dir: i % 2 === 0 ? -1 : 1, kind: "brush" });
       });
+
 
       for (let i = 0; i < 2; i++) {
         const foam = makeFoamVeil();
@@ -589,63 +614,7 @@ export default function CarWashScene() {
         }
       });
 
-      // ----- Bâtiments : un par parcelle, hauteurs cohérentes par quartier -----
-      const buildingMats = [0xdfe6ee, 0xf3d6a8, 0xcfe3d0, 0xefc4c4, 0xd8d2ef].map(
-        (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.85 }),
-      );
-      const windowMat = new THREE.MeshStandardMaterial({
-        color: 0x8fd3ff,
-        roughness: 0.25,
-        metalness: 0.1,
-      });
-      const makeBuilding = (
-        x: number,
-        z: number,
-        w: number,
-        h: number,
-        d: number,
-        mi: number,
-      ) => {
-        const g = new THREE.Group();
-        const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), buildingMats[mi]!);
-        body.position.y = h / 2;
-        g.add(body);
-        // toit plat avec acrotère : pas de trou visible
-        const cap = new THREE.Mesh(
-          new THREE.BoxGeometry(w + 0.18, 0.25, d + 0.18),
-          buildingMats[(mi + 2) % buildingMats.length]!,
-        );
-        cap.position.y = h + 0.1;
-        g.add(cap);
-        for (let fy = 0.9; fy < h - 0.7; fy += 1.2) {
-          for (let fx = -w / 2 + 0.6; fx <= w / 2 - 0.6; fx += 1.1) {
-            const win = new THREE.Mesh(
-              new THREE.BoxGeometry(0.5, 0.6, 0.06),
-              windowMat,
-            );
-            win.position.set(fx, fy, d / 2 + 0.03);
-            g.add(win);
-            const back = win.clone();
-            back.position.z = -d / 2 - 0.03;
-            g.add(back);
-          }
-          for (let fz = -d / 2 + 0.6; fz <= d / 2 - 0.6; fz += 1.1) {
-            const win = new THREE.Mesh(
-              new THREE.BoxGeometry(0.06, 0.6, 0.5),
-              windowMat,
-            );
-            win.position.set(w / 2 + 0.03, fy, fz);
-            g.add(win);
-            const back = win.clone();
-            back.position.x = -w / 2 - 0.03;
-            g.add(back);
-          }
-        }
-        g.position.set(x, 0, z);
-        setShadow(g);
-        scene.add(g);
-      };
-
+      // ----- Bâtiments Kenney : un par parcelle, hauteurs cohérentes -----
       const blockCentersX: number[] = [];
       for (let i = 0; i < X_STREETS.length - 1; i++) {
         blockCentersX.push((X_STREETS[i]! + X_STREETS[i + 1]!) / 2);
@@ -660,24 +629,17 @@ export default function CarWashScene() {
         blockCentersZ.forEach((bz, iz) => {
           // pelouse du pâté de maisons (entre les trottoirs)
           addSlab(lawnMat, 12 - STREET_W - 1.2, 12 - STREET_W - 1.2, bx, bz, 0.01);
+
           // anneau : 0 = centre-ville, 2 = périphérie pavillonnaire
-
           const ring = Math.max(Math.abs(bx) / 12, Math.abs(bz) / 12);
-          if (ring < 1.2) {
-            // Centre : immeuble unique, hauteur qui décroît doucement vers l'extérieur
-            const h = 8.5 - ring * 3 + ((ix + iz) % 2) * 0.8;
-            makeBuilding(bx, bz, 4.2, h, 4.2, (ix + iz) % 5);
-          } else if (ring < 1.8) {
-            // Transition : petit immeuble de 3 à 4 étages
-            const h = 4.4 - (ring - 1.2) * 1.2 + ((ix + iz) % 2) * 0.5;
-            makeBuilding(bx, bz, 4.2, h, 4.2, (ix + iz + 1) % 5);
-          } else {
-            // Périphérie : pavillon aligné, face à la rue
-            buildHouse(bx, bz, bz > 0 ? Math.PI : 0, ix + iz);
-          }
-
+          let floors: number;
+          if (ring < 1.2) floors = 4 - ((ix + iz) % 2);
+          else if (ring < 1.8) floors = 2 + ((ix + iz) % 2);
+          else floors = 1;
+          buildKenneyBuilding(bx, bz, 2, 2, floors, bz > 0 ? Math.PI : 0);
         });
       });
+
 
       // Arbres réguliers le long des trottoirs
       Z_STREETS.forEach((z, zi) => {
@@ -799,12 +761,22 @@ export default function CarWashScene() {
         (c) => c.position.x > zoneStart && c.position.x < zoneEnd,
       );
 
-      // Rouleaux : ils tournent en continu, plus vite quand une voiture passe
-      const brushSpeed = carInWash ? 9 : 2;
-      brushes.forEach((b) => {
+      /* Rouleaux et brosses : rotation continue, accélérée au passage d'une
+         voiture ; ils se resserrent et descendent sur la carrosserie. */
+      const brushSpeed = carInWash ? 11 : 2.5;
+      brushes.forEach((b, i) => {
         const on = b.kind === "roller" ? ctl.rollers : ctl.brushes;
-        if (!on) return;
-        b.spin.rotation.y += dt * brushSpeed * b.dir;
+        if (on) b.spin.rotation.y += dt * brushSpeed * b.dir;
+        const engage = carInWash ? 1 : 0;
+        const wobble = carInWash ? Math.sin(t * 6 + i) * 0.06 : 0;
+        if (b.kind === "roller") {
+          const side = Math.sign(b.pivot.position.z) || 1;
+          const target = side * (1.45 - engage * 0.32 + wobble);
+          b.pivot.position.z += (target - b.pivot.position.z) * Math.min(dt * 4, 1);
+        } else {
+          const target = ROAD_Y + 2.1 - engage * 0.42 + wobble;
+          b.pivot.position.y += (target - b.pivot.position.y) * Math.min(dt * 4, 1);
+        }
       });
 
       // Tapis roulant : les lattes défilent en boucle
@@ -816,13 +788,43 @@ export default function CarWashScene() {
         });
       }
 
-      // Circulation en ville : chaque voiture reste centrée dans sa voie
+      /* Circulation : chaque voiture reste centrée dans sa voie, garde ses
+         distances avec celle de devant et cède le passage aux carrefours. */
+      const CAR_GAP = 4.2;
       trafficCars.forEach((e) => {
-        if (ctl.traffic) {
-          e.s += dt * e.speed * e.dir;
-          if (e.s > CITY_MAX) e.s = CITY_MIN;
-          if (e.s < CITY_MIN) e.s = CITY_MAX;
+        if (!ctl.traffic) return;
+        const step = dt * e.speed;
+        const nextS = e.s + step * e.dir;
+        const nx = e.axis === "x" ? nextS : e.lane;
+        const nz = e.axis === "x" ? e.lane : nextS;
+
+        let blocked = false;
+        for (const o of trafficCars) {
+          if (o === e) continue;
+          const ox = o.axis === "x" ? o.s : o.lane;
+          const oz = o.axis === "x" ? o.lane : o.s;
+          const dx = ox - nx;
+          const dz = oz - nz;
+          if (Math.abs(dx) > CAR_GAP || Math.abs(dz) > CAR_GAP) continue;
+          // uniquement ce qui se trouve devant nous
+          const ahead = e.axis === "x" ? dx * e.dir : dz * e.dir;
+          if (ahead <= 0) continue;
+          if (o.axis === e.axis) {
+            // même rue : distance de sécurité dans la même voie
+            const lateral = Math.abs(o.lane - e.lane);
+            if (lateral < 1 && ahead < CAR_GAP) blocked = true;
+          } else if (Math.hypot(dx, dz) < CAR_GAP * 0.7) {
+            // carrefour occupé : on laisse passer
+            blocked = true;
+          }
         }
+        if (blocked) return;
+
+        e.s = nextS;
+        if (e.s > CITY_MAX) e.s = CITY_MIN;
+        if (e.s < CITY_MIN) e.s = CITY_MAX;
+      });
+      trafficCars.forEach((e) => {
         if (e.axis === "x") e.car.position.set(e.s, e.baseY, e.lane);
         else e.car.position.set(e.lane, e.baseY, e.s);
         e.car.rotation.y = e.heading + e.yaw;
