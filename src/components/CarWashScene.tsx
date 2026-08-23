@@ -2763,9 +2763,9 @@ export default function CarWashScene() {
 
 
         <p className="mt-1 hidden text-[12.5px] leading-relaxed opacity-80 sm:block">
-          Construit avec les kits Kenney (voitures, routes, bâtiments). Glisse pour tourner la
-          caméra, molette pour zoomer.
+          Glisse pour tourner la caméra, molette pour zoomer.
         </p>
+
       </div>
 
 
@@ -2774,7 +2774,7 @@ export default function CarWashScene() {
         className={`pointer-events-none fixed bottom-2 left-2 z-30 hidden max-w-[46vw] rounded-2xl bg-white/70 px-3 py-2 text-[11.5px] sm:bottom-4 sm:left-4 text-ink shadow-[0_6px_20px_rgba(6,58,94,0.14)] backdrop-blur ${buildMode ? "" : "sm:block"}`}
       >
         <p>🖱️ Glisser = tourner • Molette = zoomer • Clic droit = déplacer</p>
-        <p className="mt-1 opacity-80">Modèles Kenney (kenney.nl) — licence CC0</p>
+        
         <p className="mt-1 font-semibold opacity-90">© {new Date().getFullYear()} tikowikoFamily</p>
 
       </div>
