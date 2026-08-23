@@ -1859,6 +1859,58 @@ export default function CarWashScene() {
 
       </div>
 
+      {/* Mode construction : palette de pièces à poser sur la grille */}
+      <div className="fixed bottom-4 left-1/2 z-40 flex w-[min(94vw,560px)] -translate-x-1/2 flex-col items-center gap-2">
+        <button
+          type="button"
+          onClick={toggleBuild}
+          aria-pressed={buildMode}
+          className={`rounded-full px-4 py-2.5 text-[12.5px] font-bold shadow-[0_6px_20px_rgba(6,58,94,0.18)] transition-transform active:translate-y-0.5 ${
+            buildMode ? "bg-splash text-splash-foreground" : "bg-white/90 text-ink"
+          }`}
+        >
+          🏗️ {buildMode ? "Quitter la construction" : "Construire"}
+        </button>
+        {buildMode && (
+          <div className="flex w-full flex-wrap items-center justify-center gap-1.5 rounded-2xl bg-white/90 p-2 shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur">
+            {(
+              [
+                "straight",
+                "bend",
+                "intersection",
+                "crossroad",
+                "light",
+                "lamp",
+                "erase",
+              ] as BuildTool[]
+            ).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => chooseTool(t)}
+                aria-pressed={tool === t}
+                className={`rounded-xl px-2.5 py-1.5 text-[11.5px] font-semibold transition-colors ${
+                  tool === t ? "bg-splash text-splash-foreground" : "bg-ink/10 text-ink"
+                }`}
+              >
+                {TOOL_LABEL[t]}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => {
+                const next = (rotRef.current + 1) % 4;
+                rotRef.current = next;
+                setRot(next);
+              }}
+              className="rounded-xl bg-sunny px-2.5 py-1.5 text-[11.5px] font-bold text-sunny-foreground"
+            >
+              🔄 {rot * 90}°
+            </button>
+          </div>
+        )}
+      </div>
     </>
+
   );
 }
