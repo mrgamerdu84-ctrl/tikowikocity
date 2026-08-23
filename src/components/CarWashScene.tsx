@@ -863,42 +863,55 @@ export default function CarWashScene() {
         });
       }
 
-      /* Circulation : chaque voiture reste centrée dans sa voie, garde ses
-         distances avec celle de devant et cède le passage aux carrefours. */
+      /* Circulation : voitures strictement sur la chaussée, à distance de la
+         voiture de devant, et cycle de feux rouge/vert aux carrefours.
+         Phase 0 : rues Est-Ouest au vert. Phase 1 : rues Nord-Sud au vert. */
       const CAR_GAP = 4.2;
+      const LIGHT_CYCLE = 9; // secondes par phase
+      const phase = Math.floor(t / LIGHT_CYCLE) % 2;
+      const greenAxis: "x" | "z" = phase === 0 ? "x" : "z";
+      const HALF_CROSS = STREET_W / 2 + 0.6;
       trafficCars.forEach((e) => {
         if (!ctl.traffic) return;
         const step = dt * e.speed;
         const nextS = e.s + step * e.dir;
-        const nx = e.axis === "x" ? nextS : e.lane;
-        const nz = e.axis === "x" ? e.lane : nextS;
 
+        // 1) distance de sécurité avec la voiture devant, même rue même voie
         let blocked = false;
         for (const o of trafficCars) {
-          if (o === e) continue;
-          const ox = o.axis === "x" ? o.s : o.lane;
-          const oz = o.axis === "x" ? o.lane : o.s;
-          const dx = ox - nx;
-          const dz = oz - nz;
-          if (Math.abs(dx) > CAR_GAP || Math.abs(dz) > CAR_GAP) continue;
-          // uniquement ce qui se trouve devant nous
-          const ahead = e.axis === "x" ? dx * e.dir : dz * e.dir;
-          if (ahead <= 0) continue;
-          if (o.axis === e.axis) {
-            // même rue : distance de sécurité dans la même voie
-            const lateral = Math.abs(o.lane - e.lane);
-            if (lateral < 1 && ahead < CAR_GAP) blocked = true;
-          } else if (Math.hypot(dx, dz) < CAR_GAP * 0.7) {
-            // carrefour occupé : on laisse passer
+          if (o === e || o.axis !== e.axis) continue;
+          if (Math.abs(o.lane - e.lane) > 0.5) continue;
+          const ahead = (o.s - nextS) * e.dir;
+          if (ahead > 0 && ahead < CAR_GAP) {
             blocked = true;
+            break;
           }
         }
+
+        // 2) feu rouge : on s'arrête AVANT le carrefour, jamais dedans
+        if (!blocked && e.axis !== greenAxis) {
+          const crossings = e.axis === "x" ? X_STREETS : Z_STREETS;
+          for (const c of crossings) {
+            const distNow = (c - e.s) * e.dir;
+            const distNext = (c - nextS) * e.dir;
+            // déjà engagé dans le carrefour : on le dégage toujours
+            if (Math.abs(e.s - c) <= HALF_CROSS) continue;
+            // la ligne d'arrêt est à HALF_CROSS avant le centre du carrefour
+            if (distNow > HALF_CROSS && distNext <= HALF_CROSS) {
+              blocked = true;
+              break;
+            }
+          }
+        }
+
         if (blocked) return;
 
         e.s = nextS;
-        if (e.s > CITY_MAX) e.s = CITY_MIN;
-        if (e.s < CITY_MIN) e.s = CITY_MAX;
+        // bouclage strictement dans les limites de la chaussée
+        if (e.s > e.sMax) e.s = e.sMin;
+        if (e.s < e.sMin) e.s = e.sMax;
       });
+
       trafficCars.forEach((e) => {
         if (e.axis === "x") e.car.position.set(e.s, e.baseY, e.lane);
         else e.car.position.set(e.lane, e.baseY, e.s);
