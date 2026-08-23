@@ -2083,19 +2083,28 @@ export default function CarWashScene() {
       if (isDragTool(tool)) {
         if (c) traceRoadTo(c);
         roadDragLast = null;
-        renderHouses();
+        flushRender();
         return;
       }
+      if (tool === "wash") return;
 
       const tapTolerance = start.type === "touch" || start.type === "pen" ? 24 : 8;
       if (Math.hypot(ev.clientX - start.x, ev.clientY - start.y) > tapTolerance) return;
       if (!c) return;
-      if (tool === "erase") {
-        if (plan.removeHouse(c.cx, c.cz)) {
-          renderHouses();
+      if (tool === "park" || tool === "parking") {
+        const kind = decorKindRef.current;
+        const def = decorDef(kind);
+        const existingDecor = plan.decorAt(c.cx, c.cz);
+        if (existingDecor) {
+          // reclic sur un décor : rotation d'un quart de tour
+          plan.placeDecor(c.cx, c.cz, existingDecor.kind, (existingDecor.rot + 1) % 4);
+          renderDecor();
           return;
         }
-        if (plan.remove(c.cx, c.cz)) renderPlan();
+        if (!canBuild(c.cx, c.cz) || !plan.canPlaceDecor(c.cx, c.cz)) return;
+        if (!spendRef.current(def.cost)) return;
+        plan.placeDecor(c.cx, c.cz, kind, rotRef.current);
+        renderDecor();
         return;
       }
       if (tool === "house") {
@@ -2124,6 +2133,7 @@ export default function CarWashScene() {
         return;
       }
       if (!canBuild(c.cx, c.cz)) return;
+      if (plan.decorAt(c.cx, c.cz) || plan.house(c.cx, c.cz)) return;
       plan.place(c.cx, c.cz, tool, rotRef.current);
       renderPlan();
     };
