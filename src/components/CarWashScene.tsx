@@ -47,7 +47,6 @@ const MODEL_KEYS = [
 ] as const;
 
 const ROAD_Y = 0;
-const CAR_Y = 0.3;
 const PATH_START = -13;
 const PATH_END = 13;
 const WASH_ZONE: [number, number] = [-1.5, 5.5];
@@ -790,8 +789,6 @@ export default function CarWashScene() {
       const xMax = X_STREETS[X_STREETS.length - 1]!;
       const zMin = Z_STREETS[0]!;
       const zMax = Z_STREETS[Z_STREETS.length - 1]!;
-      const spanX = xMax - xMin + STREET_W;
-      const spanZ = zMax - zMin + STREET_W;
 
       const addSlab = (
         mat: THREE.Material,
