@@ -1,0 +1,43 @@
+name: Corriger voitures grisées
+on:
+  issues:
+    types: [opened]
+permissions:
+  contents: write
+  issues: read
+jobs:
+  patch:
+    if: github.event.issue.title == '[TIKOWIKO] Apply grey car fix'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Conserver la vraie couleur des voitures
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('src/components/CarWashScene.tsx')
+          s = p.read_text(encoding='utf-8')
+          old = '''        m.color.copy(state.baseColor).lerp(DIRT_COLOR, dirt * 0.22);
+        m.roughness = THREE.MathUtils.clamp(state.baseRoughness + dirt * 0.14, 0.08, 1);'''
+          new = '''        /* La saleté ne doit jamais écraser la couleur Kenney :
+           on conserve exactement la couleur d'origine et on joue seulement
+           légèrement sur la rugosité pendant le passage au lavage. */
+        m.color.copy(state.baseColor);
+        m.roughness = THREE.MathUtils.clamp(state.baseRoughness + dirt * 0.08, 0.08, 1);'''
+          if old not in s:
+            raise SystemExit('bloc tintCar introuvable')
+          s = s.replace(old, new, 1)
+          p.write_text(s, encoding='utf-8')
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bunx tsc --noEmit
+      - name: Enregistrer le correctif
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/CarWashScene.tsx
+          git commit -m "Corrige les voitures qui devenaient grisées"
+          git pull --rebase origin main
+          git push origin HEAD:main
