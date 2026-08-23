@@ -1,0 +1,436 @@
+name: Appliquer correction ville nuit
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.issue.title == '[TIKOWIKO] Apply night city visual fix'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Corriger voitures feux maisons et circulation
+        shell: python
+        run: |
+          from pathlib import Path
+
+          p = Path('src/components/CarWashScene.tsx')
+          s = p.read_text(encoding='utf-8')
+
+          def replace_once(old: str, new: str, label: str):
+              global s
+              if old not in s:
+                  raise SystemExit(f'Bloc introuvable: {label}')
+              s = s.replace(old, new, 1)
+
+          # 1) Couleurs de carrosserie de secours : la première berline reste gris clair.
+          replace_once(
+              'const DIRT_COLOR = new THREE.Color(0x8a7355);',
+              'const DIRT_COLOR = new THREE.Color(0x8a7355);\nconst CAR_FALLBACK_COLORS = [0xb8bec7, 0xd94848, 0x2f80ed, 0xf2c94c, 0x27ae60, 0xf2994a, 0x9b51e0, 0x00a6a6] as const;',
+              'palette voitures',
+          )
+
+          # 2) Plus de PointLight par maison : uniquement les fenêtres émissives.
+          replace_once(
+              '    const streetLampLights: THREE.PointLight[] = [];\n    const houseLights: THREE.PointLight[] = [];',
+              '    const streetLampLights: THREE.PointLight[] = [];\n    const houseWindowMaterials = new Set<THREE.MeshStandardMaterial>();',
+              'liste lumières maisons',
+          )
+
+          # 3) Feux de circulation plus petits, droits et sans halo volumineux.
+          old = '''    const makeTrafficLight = (axis: "x" | "z") => {
+      const g = new THREE.Group();
+      const model = kit["traffic-light"];
+      if (model) {
+        const inst = model.clone(true);
+        inst.scale.setScalar(6);
+        g.add(inst);
+      }
+      const bulb = (color: number, y: number) => {
+        const m = new THREE.Mesh(
+          new THREE.SphereGeometry(0.12, 10, 10),
+          new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.2 }),
+        );
+        m.position.set(0, y, 0.28);
+        g.add(m);
+        return m;
+      };
+      const red = bulb(0xff3b30, 2.75);
+      const green = bulb(0x33d17a, 2.25);
+      trafficLights.push({ axis, red, green });
+      return g;
+    };'''
+          new = '''    const makeTrafficLight = (axis: "x" | "z") => {
+      const g = new THREE.Group();
+      const model = kit["traffic-light"];
+      if (model) {
+        const inst = model.clone(true);
+        inst.rotation.x = 0;
+        inst.rotation.z = 0;
+        inst.position.y = 0;
+        inst.scale.setScalar(5.0);
+        g.add(inst);
+      }
+      const bulb = (color: number, y: number) => {
+        const m = new THREE.Mesh(
+          new THREE.SphereGeometry(0.075, 8, 8),
+          new THREE.MeshStandardMaterial({
+            color,
+            emissive: color,
+            emissiveIntensity: 0.12,
+            roughness: 0.2,
+            metalness: 0,
+          }),
+        );
+        m.position.set(0, y, 0.23);
+        g.add(m);
+        return m;
+      };
+      const red = bulb(0xff3b30, 2.48);
+      const green = bulb(0x33d17a, 2.05);
+      trafficLights.push({ axis, red, green });
+      return g;
+    };'''
+          replace_once(old, new, 'modèle feu')
+
+          # 4) Clone de voiture Kenney avec matériaux propres, vitres nettes et petits feux arrière.
+          old = '''    const kitCar = (i: number) => {
+      const name = KIT_CARS[i % KIT_CARS.length]!;
+      return kit[name] ?? kit["sedan"] ?? models["sedan"]!;
+    };'''
+          new = '''    const kitCar = (i: number) => {
+      const name = KIT_CARS[i % KIT_CARS.length]!;
+      return kit[name] ?? kit["sedan"] ?? models["sedan"]!;
+    };
+
+    const rearLampGeo = new THREE.BoxGeometry(0.13, 0.1, 0.045);
+    const rearLampMat = new THREE.MeshStandardMaterial({
+      color: 0xb51f2b,
+      emissive: 0xff2638,
+      emissiveIntensity: 0.45,
+      roughness: 0.35,
+      metalness: 0,
+    });
+
+    /* Certains exports Kenney arrivent presque blancs. On conserve la vraie
+       géométrie, mais on restaure une carrosserie opaque, des vitres propres
+       et de petits feux arrière sans PointLight ni bloom. */
+    const cloneKenneyCar = (i: number) => {
+      const car = kitCar(i).clone(true);
+      const fallback = new THREE.Color(CAR_FALLBACK_COLORS[i % CAR_FALLBACK_COLORS.length]!);
+      car.traverse((n) => {
+        const mesh = n as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        const source = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        const cloned = source.map((raw) => {
+          const m = raw.clone() as THREE.MeshStandardMaterial;
+          const tag = `${mesh.name} ${m.name}`.toLowerCase();
+          const wheel = tag.includes("wheel") || tag.includes("tire") || tag.includes("tyre");
+          const glass = tag.includes("glass") || tag.includes("window") || tag.includes("windshield");
+          if (wheel && m.color) {
+            m.color.setHex(0x20242a);
+            m.roughness = 0.95;
+            m.metalness = 0.04;
+          } else if (glass && m.color) {
+            m.color.setHex(0x9fc9dc);
+            m.transparent = true;
+            m.opacity = 0.72;
+            m.depthWrite = false;
+            m.roughness = 0.12;
+            m.metalness = 0.02;
+          } else if (m.color) {
+            const hsl = { h: 0, s: 0, l: 0 };
+            m.color.getHSL(hsl);
+            if (!m.map && hsl.s < 0.15 && hsl.l > 0.38) {
+              m.color.copy(fallback);
+              m.transparent = false;
+              m.opacity = 1;
+              m.roughness = Math.min(m.roughness ?? 0.7, 0.72);
+            }
+          }
+          return m;
+        });
+        mesh.material = Array.isArray(mesh.material) ? cloned : cloned[0]!;
+      });
+
+      car.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(car);
+      const size = box.getSize(new THREE.Vector3());
+      const center = box.getCenter(new THREE.Vector3());
+      if (Number.isFinite(size.x) && size.x > 0.2 && size.z > 0.2) {
+        const rear = box.min.z - 0.025;
+        const y = box.min.y + size.y * 0.34;
+        for (const side of [-1, 1]) {
+          const lamp = new THREE.Mesh(rearLampGeo, rearLampMat);
+          lamp.position.set(center.x + side * size.x * 0.34, y, rear);
+          car.add(lamp);
+        }
+      }
+      return car;
+    };'''
+          replace_once(old, new, 'clone voiture')
+
+          for old_call, new_call in [
+              ('const car = kitCar(ti).clone(true);', 'const car = cloneKenneyCar(ti);'),
+              ('const parked = kitCar(i * 2 + 4).clone(true);', 'const parked = cloneKenneyCar(i * 2 + 4);'),
+              ('const c = kitCar(Math.floor(rnd(i) * 8) + i).clone(true);', 'const c = cloneKenneyCar(Math.floor(rnd(i) * 8) + i);'),
+              ('const c = kitCar(Math.floor(rnd(2) * 8)).clone(true);', 'const c = cloneKenneyCar(Math.floor(rnd(2) * 8));'),
+          ]:
+              s = s.replace(old_call, new_call)
+
+          # 5) Cache des maisons Kenney + rendu incrémental : évite le gros lag à chaque pose.
+          replace_once(
+              '    const KENNEY_CELL = 2;\n    const KENNEY_FLOOR_H = 2.4;\n    const makeHouse = (level: number) => {\n      const g = new THREE.Group();',
+              '    const KENNEY_CELL = 2;\n    const KENNEY_FLOOR_H = 2.4;\n    const houseTemplateCache = new Map<number, THREE.Group>();\n    const makeHouse = (level: number) => {\n      const cached = houseTemplateCache.get(level);\n      if (cached) return cached.clone(true);\n      const g = new THREE.Group();',
+              'cache maisons',
+          )
+          replace_once(
+              "              mat.userData['nightWindow'] = true;\n            }",
+              "              mat.userData['nightWindow'] = true;\n              houseWindowMaterials.add(mat);\n            }",
+              'matériaux fenêtres',
+          )
+          replace_once(
+              '      setShadow(g);\n      return g;\n    };\n\n    const renderHouses = () => {',
+              '      setShadow(g);\n      houseTemplateCache.set(level, g);\n      return g.clone(true);\n    };\n\n    const renderedHouses = new Map<string, THREE.Object3D>();\n    const renderHouses = () => {',
+              'fin makeHouse',
+          )
+
+          old = '''    const renderHouses = () => {
+      [...housesGroup.children].forEach((c) => housesGroup.remove(c));
+      houseLights.length = 0;
+      plan.houses.forEach((h, k) => {
+        const [cx, cz] = parseKey(k);
+        const m = makeHouse(h.level);
+        m.scale.setScalar(1.55);
+        m.position.set(cx * TILE, 0, cz * TILE);
+        m.rotation.y = ((h.rot ?? 0) * Math.PI) / 2;
+
+        /* Une lumière chaude par logement : elle s'allume uniquement la nuit. */
+        const homeLight = new THREE.PointLight(0xffc56e, 0, 18 + h.level * 3, 1.6);
+        homeLight.position.set(0, Math.min(5.4, 1.8 + h.level * 1.05), 0);
+        m.add(homeLight);
+        houseLights.push(homeLight);
+        housesGroup.add(m);
+      });
+      cityStatsRef.current(plan.houseLevels());
+    };'''
+          new = '''    const renderHouses = () => {
+      const wanted = new Set<string>();
+      plan.houses.forEach((h, k) => {
+        wanted.add(k);
+        const signature = `${h.level}:${h.rot ?? 0}`;
+        const existing = renderedHouses.get(k);
+        if (existing?.userData['houseSignature'] === signature) return;
+        if (existing) {
+          housesGroup.remove(existing);
+          renderedHouses.delete(k);
+        }
+        const [cx, cz] = parseKey(k);
+        const m = makeHouse(h.level);
+        m.scale.setScalar(1.55);
+        m.position.set(cx * TILE, 0, cz * TILE);
+        m.rotation.y = ((h.rot ?? 0) * Math.PI) / 2;
+        m.userData['houseSignature'] = signature;
+        housesGroup.add(m);
+        renderedHouses.set(k, m);
+      });
+      for (const [k, obj] of renderedHouses) {
+        if (wanted.has(k)) continue;
+        housesGroup.remove(obj);
+        renderedHouses.delete(k);
+      }
+      cityStatsRef.current(plan.houseLevels());
+    };'''
+          replace_once(old, new, 'render maisons')
+
+          # 6) Quatre feux séparés par intersection, aux quatre coins du trottoir.
+          old = '''        if (cell.light) {
+          const off = TILE / 2 - 0.6;
+          ([
+            ["x", -off, -off],
+            ["z", off, off],
+          ] as const).forEach(([axis, ox, oz]) => {
+            const l = makeTrafficLight(axis);
+            l.position.set(cx * TILE + ox, 0, cz * TILE + oz);
+            l.rotation.y = Math.atan2(-ox, -oz);
+            setShadow(l);
+            propsGroup.add(l);
+          });
+        }'''
+          new = '''        if (cell.light) {
+          const off = TILE / 2 - 0.58;
+          ([
+            ["z", -off, -off, 0],
+            ["x", off, -off, Math.PI / 2],
+            ["z", off, off, Math.PI],
+            ["x", -off, off, -Math.PI / 2],
+          ] as const).forEach(([axis, ox, oz, rotY]) => {
+            const l = makeTrafficLight(axis);
+            l.position.set(cx * TILE + ox, 0, cz * TILE + oz);
+            l.rotation.set(0, rotY, 0);
+            setShadow(l);
+            propsGroup.add(l);
+          });
+        }'''
+          replace_once(old, new, 'placement quatre feux')
+
+          # 7) Maisons : fenêtres chaudes seulement, sans illuminer toute la façade.
+          old = '''      houseLights.forEach((light) => {
+        light.intensity = night * 4.2;
+        light.parent?.traverse((n) => {
+          const mesh = n as THREE.Mesh;
+          if (!mesh.isMesh) return;
+          const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+          mats.forEach((mat) => {
+            const m = mat as THREE.MeshStandardMaterial;
+            if (m.userData?.['nightWindow']) m.emissiveIntensity = 0.08 + night * 1.5;
+          });
+        });
+      });'''
+          new = '''      houseWindowMaterials.forEach((m) => {
+        m.emissiveIntensity = 0.04 + night * 0.62;
+      });'''
+          replace_once(old, new, 'éclairage maison nuit')
+
+          # 8) Arrêt réel au rouge avant l'intersection, puis reprise au vert.
+          old = '''      netCars.forEach((e) => {
+        if (!ctl.traffic) return;
+        const step = dt * e.speed;
+        const nt = e.t + step / TILE;
+
+        // distance de sécurité avec la voiture devant, dans la même case
+        const tooClose = netCars.some(
+          (o) =>
+            o !== e && o.cx === e.cx && o.cz === e.cz && o.t > e.t && o.t - e.t < 0.4,
+        );
+        if (tooClose) return;
+
+        if (nt < 1) {
+          e.t = nt;
+        } else {
+          const [dx, dz] = DIR_VEC[e.dirOut]!;
+          const nx = e.cx + dx;
+          const nz = e.cz + dz;
+          const next = plan.get(nx, nz);
+          if (!next) {
+            // cul-de-sac : demi-tour sans quitter la chaussée
+            e.dirIn = e.dirOut;
+            e.dirOut = opposite(e.dirIn);
+            e.t = 0;
+          } else {
+            const busy =
+              netCars.filter((o) => o !== e && o.cx === nx && o.cz === nz).length >= 2;
+            const red = next.light && axisOf(e.dirOut) !== greenAxis;
+            if (busy || red) {
+              e.t = 0.97;
+              return;
+            }
+            e.cx = nx;
+            e.cz = nz;
+            e.dirIn = e.dirOut;
+            e.t = Math.min(nt - 1, 0.5);
+            const exits = plan.exitsFrom(nx, nz, e.dirIn);
+            e.dirOut =
+              exits.includes(e.dirIn) && Math.random() < 0.65
+                ? e.dirIn
+                : exits[Math.floor(Math.random() * exits.length)]!;
+          }
+        }
+
+        e.wheels.forEach((w) => {
+          w.rotation.x -= ((w.userData['spinSign'] as number) ?? 1) * (step / 0.35) * 2;
+        });
+      });'''
+          new = '''      netCars.forEach((e) => {
+        if (!ctl.traffic) return;
+        const step = dt * e.speed;
+        const rawNt = e.t + step / TILE;
+
+        const tooClose = netCars.some(
+          (o) =>
+            o !== e && o.cx === e.cx && o.cz === e.cz && o.t > e.t && o.t - e.t < 0.4,
+        );
+        if (tooClose) return;
+
+        const [sdx, sdz] = DIR_VEC[e.dirOut]!;
+        const signalHere = plan.get(e.cx, e.cz);
+        const signalNext = plan.get(e.cx + sdx, e.cz + sdz);
+        const hasSignal = !!signalHere?.light || !!signalNext?.light;
+        const redAtExit = hasSignal && axisOf(e.dirOut) !== greenAxis;
+        const STOP_LINE_T = 0.80;
+
+        if (redAtExit && e.t >= STOP_LINE_T) return;
+        const nt = redAtExit ? Math.min(rawNt, STOP_LINE_T) : rawNt;
+
+        if (nt < 1) {
+          const movedT = Math.max(nt - e.t, 0);
+          e.t = nt;
+          e.wheels.forEach((w) => {
+            w.rotation.x -= ((w.userData['spinSign'] as number) ?? 1) * ((movedT * TILE) / 0.35) * 2;
+          });
+          return;
+        }
+
+        const [dx, dz] = DIR_VEC[e.dirOut]!;
+        const nx = e.cx + dx;
+        const nz = e.cz + dz;
+        const next = plan.get(nx, nz);
+        if (!next) {
+          e.dirIn = e.dirOut;
+          e.dirOut = opposite(e.dirIn);
+          e.t = 0;
+        } else {
+          const busy =
+            netCars.filter((o) => o !== e && o.cx === nx && o.cz === nz).length >= 2;
+          const red = (!!signalHere?.light || !!next.light) && axisOf(e.dirOut) !== greenAxis;
+          if (busy || red) {
+            e.t = Math.min(e.t, STOP_LINE_T);
+            return;
+          }
+          e.cx = nx;
+          e.cz = nz;
+          e.dirIn = e.dirOut;
+          e.t = Math.min(nt - 1, 0.5);
+          const exits = plan.exitsFrom(nx, nz, e.dirIn);
+          e.dirOut =
+            exits.includes(e.dirIn) && Math.random() < 0.65
+              ? e.dirIn
+              : exits[Math.floor(Math.random() * exits.length)]!;
+        }
+
+        e.wheels.forEach((w) => {
+          w.rotation.x -= ((w.userData['spinSign'] as number) ?? 1) * (step / 0.35) * 2;
+        });
+      });'''
+          replace_once(old, new, 'arrêt feu rouge')
+
+          # 9) Signaux plus nets, sans intensité excessive.
+          s = s.replace(
+              '(l.green.material as THREE.MeshStandardMaterial).emissiveIntensity = green ? 1.4 : 0.06;\n        (l.red.material as THREE.MeshStandardMaterial).emissiveIntensity = green ? 0.06 : 1.4;',
+              '(l.green.material as THREE.MeshStandardMaterial).emissiveIntensity = green ? 0.95 : 0.03;\n        (l.red.material as THREE.MeshStandardMaterial).emissiveIntensity = green ? 0.03 : 0.95;',
+              1,
+          )
+
+          p.write_text(s, encoding='utf-8')
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bunx tsc --noEmit
+
+      - name: Enregistrer sur main
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/CarWashScene.tsx
+          git commit -m "Corrige ville nuit voitures feux et performances maisons"
+          git pull --rebase origin main
+          git push origin HEAD:main
