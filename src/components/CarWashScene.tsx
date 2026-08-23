@@ -104,6 +104,46 @@ export default function CarWashScene() {
     });
   };
 
+  /* ----- Mode construction (pose de routes / mobilier par le joueur) ----- */
+  const [buildMode, setBuildMode] = useState(false);
+  const [tool, setTool] = useState<BuildTool>("straight");
+  const [rot, setRot] = useState(0);
+  const buildRef = useRef(false);
+  const toolRef = useRef<BuildTool>("straight");
+  const rotRef = useRef(0);
+  const buildApplyRef = useRef<(on: boolean) => void>(() => {});
+  const planIoRef = useRef<{
+    save: () => SerializedPlan;
+    load: (data: SerializedPlan) => void;
+  }>({ save: () => [], load: () => {} });
+
+  const chooseTool = (t: BuildTool) => {
+    toolRef.current = t;
+    setTool(t);
+  };
+  const toggleBuild = () => {
+    setBuildMode((prev) => {
+      const next = !prev;
+      buildRef.current = next;
+      buildApplyRef.current(next);
+      return next;
+    });
+  };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() !== "r" || !buildRef.current) return;
+      setRot((r) => {
+        const next = (r + 1) % 4;
+        rotRef.current = next;
+        return next;
+      });
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+
+
   const [driveState, setDriveState] = useState<"idle" | "saving" | "done" | "error">("idle");
   const [loadState, setLoadState] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [driveMenuOpen, setDriveMenuOpen] = useState(false);
