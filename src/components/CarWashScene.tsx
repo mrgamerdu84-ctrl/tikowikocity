@@ -971,57 +971,62 @@ export default function CarWashScene() {
       const GAP = 3.2;
       const [zoneStart, zoneEnd] = WASH_ZONE;
 
-      // La voiture la plus avancée est en tête de file (ordre d'arrivée)
-      let aheadX = Number.POSITIVE_INFINITY;
-      const occupied = sedanCars.some(
-        (c) => c.position.x > zoneStart - 0.2 && c.position.x < zoneEnd,
-      );
+      // Les voitures suivent l'itinéraire routier ; la première est en tête
+      let aheadD = Number.POSITIVE_INFINITY;
+      const occupied = washCars.some((c) => c.d > WASH_D0 - 0.2 && c.d < WASH_D1);
 
-      for (let i = 0; i < sedanCars.length; i++) {
-        const car = sedanCars[i]!;
-        const onBelt = car.position.x >= zoneStart && car.position.x <= zoneEnd;
-        const wantSpeed = onBelt ? BELT_SPEED : SPEED;
+      for (let i = 0; i < washCars.length; i++) {
+        const e = washCars[i]!;
+        const onBelt = e.d >= WASH_D0 && e.d <= WASH_D1;
+        const wantSpeed = onBelt ? BELT_SPEED : e.speed;
 
         // Limite : garder une distance de sécurité avec la voiture devant
-        let limit = aheadX - GAP;
+        let limit = aheadD - GAP;
         // Portail d'entrée : on attend que le tunnel se libère
-        if (!onBelt && car.position.x < zoneStart && occupied) {
-          limit = Math.min(limit, zoneStart - 0.6);
+        if (!onBelt && e.d < WASH_D0 && occupied) {
+          limit = Math.min(limit, WASH_D0 - 0.6);
         }
 
-        const target = Math.min(car.position.x + dt * wantSpeed, limit);
-        const moved = Math.max(target - car.position.x, 0);
-        car.position.x += moved;
-        const waiting = moved < dt * wantSpeed * 0.35;
-        car.userData["waiting"] = waiting;
+        const target = Math.min(e.d + dt * wantSpeed, limit);
+        const moved = Math.max(target - e.d, 0);
+        e.d += moved;
 
-        (car.userData["wheels"] as THREE.Object3D[]).forEach((w) => {
+        e.wheels.forEach((w) => {
           w.rotation.x -= (moved / 0.35) * 2;
         });
 
         let dirtiness: number;
-        if (car.position.x <= zoneStart) dirtiness = 1;
-        else if (car.position.x >= zoneEnd) dirtiness = 0;
-        else dirtiness = 1 - (car.position.x - zoneStart) / (zoneEnd - zoneStart);
-        tintCar(car, dirtiness);
+        if (e.d <= WASH_D0) dirtiness = 1;
+        else if (e.d >= WASH_D1) dirtiness = 0;
+        else dirtiness = 1 - (e.d - WASH_D0) / (WASH_D1 - WASH_D0);
+        tintCar(e.car, dirtiness);
 
-        const baseY = (car.userData["baseY"] as number | undefined) ?? CAR_Y;
-        car.position.y = onBelt ? baseY + 0.14 + Math.sin(t * 30) * 0.012 : baseY;
+        const p = posAt(e.d);
+        e.car.position.set(
+          p.x,
+          onBelt ? e.baseY + 0.14 + Math.sin(t * 30) * 0.012 : e.baseY,
+          p.z,
+        );
+        // rotation douce vers la direction de la route (virages)
+        const targetRot = p.heading + e.yaw;
+        let delta = targetRot - e.car.rotation.y;
+        while (delta > Math.PI) delta -= Math.PI * 2;
+        while (delta < -Math.PI) delta += Math.PI * 2;
+        e.car.rotation.y += delta * Math.min(dt * 8, 1);
 
-        aheadX = car.position.x;
+        aheadD = e.d;
       }
 
-      for (let i = sedanCars.length - 1; i >= 0; i--) {
-        const car = sedanCars[i]!;
-        if (car.position.x > PATH_END) {
-          washSite.remove(car);
-          sedanCars.splice(i, 1);
+      for (let i = washCars.length - 1; i >= 0; i--) {
+        const e = washCars[i]!;
+        if (e.d >= ROUTE_LEN - 0.05) {
+          scene.remove(e.car);
+          washCars.splice(i, 1);
         }
       }
 
-      const carInWash = sedanCars.some(
-        (c) => c.position.x > zoneStart && c.position.x < zoneEnd,
-      );
+      const carInWash = washCars.some((c) => c.d > WASH_D0 && c.d < WASH_D1);
+
 
       /* Rouleaux et brosses : rotation continue, accélérée au passage d'une
          voiture ; ils se resserrent et descendent sur la carrosserie. */
