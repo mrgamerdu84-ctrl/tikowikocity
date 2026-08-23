@@ -74,7 +74,6 @@ export default function CarWashScene() {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState(MESSAGES[0]!);
-  const spawnRef = useRef<() => void>(() => {});
   const cinemaRef = useRef<() => void>(() => {});
   const [cinema, setCinema] = useState(false);
   const [machines, setMachines] = useState({
