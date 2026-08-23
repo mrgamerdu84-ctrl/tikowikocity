@@ -4,6 +4,7 @@ import CarWashScene from "@/components/CarWashScene";
 import PlayerSetup from "@/components/PlayerSetup";
 import SecurityGate from "@/components/SecurityGate";
 import { usePlayer } from "@/lib/player";
+import { handleSecurityRequest } from "@/lib/security-proxy";
 
 const TITLE = "TikowikoCity — gérez votre ville et son car wash";
 const DESCRIPTION =
@@ -20,6 +21,20 @@ export const Route = createFileRoute("/")({
       { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
+  server: {
+    handlers: {
+      POST: async ({ request }) => {
+        const response = await handleSecurityRequest(request);
+        return (
+          response ??
+          new Response(JSON.stringify({ valid: false, unavailable: true }), {
+            status: 404,
+            headers: { "content-type": "application/json; charset=utf-8" },
+          })
+        );
+      },
+    },
+  },
   component: Index,
 });
 
