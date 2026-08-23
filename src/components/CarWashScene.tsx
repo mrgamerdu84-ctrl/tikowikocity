@@ -514,8 +514,9 @@ export default function CarWashScene() {
       load(washCartoonAsset.url)
         .then((raw) => {
           if (disposed) return;
-          const building = normalizeModel(raw, 6);
-          building.position.set(2, 0, -6.5);
+          const building = normalizeModel(raw, 5);
+          building.position.set(-4, 0, -7);
+
           scene.add(building);
         })
         .catch((err: unknown) => console.error("bâtiment Meshy", err));
