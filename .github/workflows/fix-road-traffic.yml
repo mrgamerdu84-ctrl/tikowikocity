@@ -2,7 +2,7 @@ name: Corriger circulation voitures routes
 
 on:
   issues:
-    types: [opened]
+    types: [opened, edited]
 
 permissions:
   contents: write
