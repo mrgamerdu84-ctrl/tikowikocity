@@ -655,9 +655,13 @@ export default function CarWashScene() {
         blockCentersZ.push((Z_STREETS[i]! + Z_STREETS[i + 1]!) / 2);
       }
 
+      const lawnMat = new THREE.MeshStandardMaterial({ color: 0x7fc76b, roughness: 1 });
       blockCentersX.forEach((bx, ix) => {
         blockCentersZ.forEach((bz, iz) => {
+          // pelouse du pâté de maisons (entre les trottoirs)
+          addSlab(lawnMat, 12 - STREET_W - 2.2, 12 - STREET_W - 2.2, bx, bz, 0.01);
           // anneau : 0 = centre-ville, 2 = périphérie pavillonnaire
+
           const ring = Math.max(Math.abs(bx) / 12, Math.abs(bz) / 12);
           if (ring < 1.2) {
             // Centre : immeuble unique, hauteur qui décroît doucement vers l'extérieur
