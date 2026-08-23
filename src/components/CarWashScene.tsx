@@ -972,21 +972,22 @@ export default function CarWashScene() {
 
     /* Nappe de mousse qui vient recouvrir la carrosserie pendant le lavage. */
     const soapMat = new THREE.MeshStandardMaterial({
-      color: 0xffffff,
+      color: 0xf5fbff,
       transparent: true,
-      opacity: 0.9,
-      roughness: 0.45,
+      opacity: 0.48,
+      roughness: 0.35,
+      depthWrite: false,
     });
-    const soapGeo = new THREE.IcosahedronGeometry(0.22, 0);
+    const soapGeo = new THREE.IcosahedronGeometry(0.13, 0);
     const makeSoapCoat = () => {
       const g = new THREE.Group();
-      for (let i = 0; i < 26; i++) {
+      for (let i = 0; i < 14; i++) {
         const b = new THREE.Mesh(soapGeo, soapMat);
         const a = Math.random() * Math.PI * 2;
         b.position.set(
-          (Math.random() - 0.5) * 3.4,
-          0.25 + Math.random() * 0.95,
-          Math.cos(a) * (0.55 + Math.random() * 0.35),
+          (Math.random() - 0.5) * 2.5,
+          0.28 + Math.random() * 0.65,
+          Math.cos(a) * (0.42 + Math.random() * 0.22),
         );
         b.userData['s'] = 0.5 + Math.random() * 0.8;
         b.scale.setScalar(0.001);
@@ -2695,14 +2696,19 @@ export default function CarWashScene() {
         /* Mousse : elle se dépose sur la première moitié du tunnel puis
            est rincée sur la seconde. */
         if (e.soap) {
-          const prog = 1 - dirtiness; // 0 → 1 dans le tunnel
-          const inTunnel = e.d > WASH_D0 && e.d < WASH_D1;
-          const cover = inTunnel ? Math.sin(Math.PI * Math.min(prog * 1.15, 1)) : 0;
-          e.soap.visible = cover > 0.02;
+          /* La mousse n'apparait que dans la zone savon. Elle reste légère et
+             ne masque jamais entièrement le modèle Kenney. */
+          const washSpan = WASH_D1 - WASH_D0;
+          const soapStart = WASH_D0 + washSpan * 0.12;
+          const soapEnd = WASH_D0 + washSpan * 0.62;
+          const inSoapZone = e.d > soapStart && e.d < soapEnd;
+          const soapProg = THREE.MathUtils.clamp((e.d - soapStart) / Math.max(soapEnd - soapStart, 0.001), 0, 1);
+          const cover = inSoapZone ? Math.sin(Math.PI * soapProg) * 0.62 : 0;
+          e.soap.visible = inSoapZone && cover > 0.025;
           e.soap.children.forEach((b, j) => {
             const s = (b.userData['s'] as number) ?? 1;
-            b.scale.setScalar(Math.max(cover * s * (0.8 + Math.sin(t * 5 + j) * 0.12), 0.001));
-            b.rotation.y += dt * 1.5;
+            b.scale.setScalar(Math.max(cover * s * (0.72 + Math.sin(t * 5 + j) * 0.08), 0.001));
+            b.rotation.y += dt * 1.2;
           });
         }
 
