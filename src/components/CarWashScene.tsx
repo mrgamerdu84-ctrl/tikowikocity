@@ -284,11 +284,40 @@ export default function CarWashScene() {
       return g;
     };
 
+    // Tapis roulant : lattes qui défilent dans la zone de lavage
+    const makeConveyor = () => {
+      const group = new THREE.Group();
+      const [zs, ze] = WASH_ZONE;
+      const len = ze - zs;
+      const base = new THREE.Mesh(
+        new THREE.BoxGeometry(len, 0.12, 2.6),
+        new THREE.MeshStandardMaterial({ color: 0x2b3138, roughness: 0.8 }),
+      );
+      base.position.set((zs + ze) / 2, ROAD_Y + 0.06, 0);
+      base.receiveShadow = true;
+      group.add(base);
+
+      const slatMat = new THREE.MeshStandardMaterial({ color: 0x596470, roughness: 0.6 });
+      const slatGeo = new THREE.BoxGeometry(0.18, 0.06, 2.4);
+      const slats: THREE.Mesh[] = [];
+      const count = Math.round(len / 0.4);
+      for (let i = 0; i < count; i++) {
+        const s = new THREE.Mesh(slatGeo, slatMat);
+        s.position.set(zs + i * 0.4, ROAD_Y + 0.14, 0);
+        s.castShadow = true;
+        group.add(s);
+        slats.push(s);
+      }
+      return { group, slats };
+    };
+
     const models: Record<string, THREE.Group> = {};
     const meshyCars: THREE.Object3D[] = [];
     const sedanCars: THREE.Object3D[] = [];
-    const brushes: THREE.Object3D[] = [];
+    const brushes: Array<{ pivot: THREE.Object3D; spin: THREE.Object3D; dir: number }> = [];
     const foamSprites: THREE.Object3D[] = [];
+    const conveyorSlats: THREE.Mesh[] = [];
+    const trafficCars: Array<{ car: THREE.Object3D; dir: number; speed: number }> = [];
 
     const spawnSedan = () => {
       const template =
@@ -310,6 +339,7 @@ export default function CarWashScene() {
       sedanCars.push(sedan);
     };
     spawnRef.current = spawnSedan;
+
 
 
 
@@ -345,14 +375,32 @@ export default function CarWashScene() {
       kenneyTunnel = tunnel;
 
 
-      [-1, 1].forEach((zSide) => {
-        [1, 3].forEach((x) => {
-          const brush = makeBrush();
-          brush.position.set(x, ROAD_Y + 0.9, zSide * 1.5);
-          brush.rotation.z = Math.PI / 2;
-          scene.add(brush);
-          brushes.push(brush);
+      // Tapis roulant
+      const conveyor = makeConveyor();
+      scene.add(conveyor.group);
+      conveyorSlats.push(...conveyor.slats);
+
+      // Brosses verticales de chaque côté
+      [-1, 1].forEach((zSide, si) => {
+        [0, 2.5].forEach((offset, oi) => {
+          const pivot = new THREE.Group();
+          const spin = makeBrush();
+          pivot.add(spin);
+          pivot.position.set(WASH_ZONE[0] + 1.2 + offset, ROAD_Y + 1.05, zSide * 1.5);
+          scene.add(pivot);
+          brushes.push({ pivot, spin, dir: (si + oi) % 2 === 0 ? 1 : -1 });
         });
+      });
+
+      // Brosse horizontale au-dessus du tapis
+      [1.2, 3.8].forEach((x, i) => {
+        const pivot = new THREE.Group();
+        pivot.rotation.x = Math.PI / 2;
+        const spin = makeBrush();
+        pivot.add(spin);
+        pivot.position.set(x, ROAD_Y + 2.1, 0);
+        scene.add(pivot);
+        brushes.push({ pivot, spin, dir: i % 2 === 0 ? -1 : 1 });
       });
 
       for (let i = 0; i < 2; i++) {
@@ -362,14 +410,66 @@ export default function CarWashScene() {
         foamSprites.push(foam);
       }
 
-      const taxi = models["taxi"]!.clone(true);
-      taxi.rotation.y = Math.PI / 2;
-      taxi.position.set(-9, CAR_Y, -2.6);
-      setShadow(taxi);
-      tintCar(taxi, 1);
-      scene.add(taxi);
-
       spawnSedan();
+
+      // ----- Ville : avenues, immeubles et circulation -----
+      [-9, 9].forEach((zRow) => {
+        for (let x = -13; x <= 13; x += 1) {
+          place(models["roadStraight"]!, x, ROAD_Y, zRow, 0);
+        }
+      });
+
+      const buildingMats = [0xdfe6ee, 0xf3d6a8, 0xcfe3d0, 0xefc4c4, 0xd8d2ef].map(
+        (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.85 }),
+      );
+      const windowMat = new THREE.MeshStandardMaterial({
+        color: 0x8fd3ff,
+        roughness: 0.25,
+        metalness: 0.1,
+      });
+      const makeBuilding = (x: number, z: number, w: number, h: number, d: number, mi: number) => {
+        const g = new THREE.Group();
+        const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), buildingMats[mi]!);
+        body.position.y = h / 2;
+        g.add(body);
+        for (let fy = 0.8; fy < h - 0.5; fy += 1.1) {
+          for (let fx = -w / 2 + 0.5; fx < w / 2 - 0.2; fx += 0.9) {
+            const win = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.55, 0.06), windowMat);
+            win.position.set(fx, fy, d / 2 + 0.03);
+            g.add(win);
+            const back = win.clone();
+            back.position.z = -d / 2 - 0.03;
+            g.add(back);
+          }
+        }
+        g.position.set(x, 0, z);
+        setShadow(g);
+        scene.add(g);
+      };
+
+      for (let i = 0; i < 9; i++) {
+        const x = -13 + i * 3.2;
+        makeBuilding(x, 13 + (i % 2) * 1.6, 2.6, 3 + ((i * 7) % 5) * 1.3, 2.6, i % 5);
+        makeBuilding(x + 1.2, -13 - (i % 2) * 1.6, 2.4, 3.5 + ((i * 3) % 4) * 1.5, 2.4, (i + 2) % 5);
+      }
+
+      // Voitures qui circulent en ville
+      const cityTemplates = [models["taxi"]!, models["sedan"]!];
+      for (let i = 0; i < 8; i++) {
+        const dir = i % 2 === 0 ? 1 : -1;
+        const zRow = i % 2 === 0 ? -9.35 : 9.35;
+        const car = cityTemplates[i % cityTemplates.length]!.clone(true);
+        car.rotation.y = dir > 0 ? Math.PI / 2 : -Math.PI / 2;
+        car.position.set(-13 + (i * 3.7) % 26, CAR_Y, zRow);
+        setShadow(car);
+        scene.add(car);
+        trafficCars.push({
+          car,
+          dir,
+          speed: 2.6 + Math.random() * 1.8,
+        });
+      }
+
 
       const houseSpots: Array<[number, number]> = [
         [-11, 4],
@@ -397,16 +497,39 @@ export default function CarWashScene() {
       const dt = Math.min(clock.getDelta(), 0.05);
       const t = clock.elapsedTime;
 
-      const SPEED = 2.2;
-      for (let i = sedanCars.length - 1; i >= 0; i--) {
+      const SPEED = 2.6;
+      const BELT_SPEED = 1.1;
+      const GAP = 3.2;
+      const [zoneStart, zoneEnd] = WASH_ZONE;
+
+      // La voiture la plus avancée est en tête de file (ordre d'arrivée)
+      let aheadX = Number.POSITIVE_INFINITY;
+      const occupied = sedanCars.some(
+        (c) => c.position.x > zoneStart - 0.2 && c.position.x < zoneEnd,
+      );
+
+      for (let i = 0; i < sedanCars.length; i++) {
         const car = sedanCars[i]!;
-        car.position.x += dt * SPEED;
+        const onBelt = car.position.x >= zoneStart && car.position.x <= zoneEnd;
+        const wantSpeed = onBelt ? BELT_SPEED : SPEED;
+
+        // Limite : garder une distance de sécurité avec la voiture devant
+        let limit = aheadX - GAP;
+        // Portail d'entrée : on attend que le tunnel se libère
+        if (!onBelt && car.position.x < zoneStart && occupied) {
+          limit = Math.min(limit, zoneStart - 0.6);
+        }
+
+        const target = Math.min(car.position.x + dt * wantSpeed, limit);
+        const moved = Math.max(target - car.position.x, 0);
+        car.position.x += moved;
+        const waiting = moved < dt * wantSpeed * 0.35;
+        car.userData["waiting"] = waiting;
 
         (car.userData["wheels"] as THREE.Object3D[]).forEach((w) => {
-          w.rotation.x -= dt * SPEED * 3.2;
+          w.rotation.x -= (moved / 0.35) * 2;
         });
 
-        const [zoneStart, zoneEnd] = WASH_ZONE;
         let dirtiness: number;
         if (car.position.x <= zoneStart) dirtiness = 1;
         else if (car.position.x >= zoneEnd) dirtiness = 0;
@@ -414,12 +537,13 @@ export default function CarWashScene() {
         tintCar(car, dirtiness);
 
         const baseY = (car.userData["baseY"] as number | undefined) ?? CAR_Y;
-        car.position.y =
-          car.position.x > zoneStart && car.position.x < zoneEnd
-            ? baseY + Math.sin(t * 30) * 0.01
-            : baseY;
+        car.position.y = onBelt ? baseY + 0.14 + Math.sin(t * 30) * 0.012 : baseY;
 
+        aheadX = car.position.x;
+      }
 
+      for (let i = sedanCars.length - 1; i >= 0; i--) {
+        const car = sedanCars[i]!;
         if (car.position.x > PATH_END) {
           scene.remove(car);
           sedanCars.splice(i, 1);
@@ -427,10 +551,27 @@ export default function CarWashScene() {
       }
 
       const carInWash = sedanCars.some(
-        (c) => c.position.x > WASH_ZONE[0] && c.position.x < WASH_ZONE[1],
+        (c) => c.position.x > zoneStart && c.position.x < zoneEnd,
       );
-      brushes.forEach((b, i) => {
-        b.rotation.x += dt * (carInWash ? 10 : 1.5) * (i % 2 === 0 ? 1 : -1);
+
+      // Rouleaux : ils tournent en continu, plus vite quand une voiture passe
+      const brushSpeed = carInWash ? 9 : 2;
+      brushes.forEach((b) => {
+        b.spin.rotation.y += dt * brushSpeed * b.dir;
+      });
+
+      // Tapis roulant : les lattes défilent en boucle
+      const beltLen = zoneEnd - zoneStart;
+      conveyorSlats.forEach((s) => {
+        s.position.x += dt * BELT_SPEED;
+        if (s.position.x > zoneEnd) s.position.x -= beltLen;
+      });
+
+      // Circulation en ville
+      trafficCars.forEach(({ car, dir, speed }) => {
+        car.position.x += dt * speed * dir;
+        if (car.position.x > 14) car.position.x = -14;
+        if (car.position.x < -14) car.position.x = 14;
       });
 
       foamSprites.forEach((f) => {
@@ -439,6 +580,7 @@ export default function CarWashScene() {
         });
         f.visible = carInWash;
       });
+
 
       if (cinemaMode) {
         const angle = t * 0.18;
@@ -521,12 +663,18 @@ export default function CarWashScene() {
       });
     };
 
+    // File d'attente : de nouvelles voitures arrivent régulièrement
+    let queueTimer = 0;
+
     loadAll()
       .then(() => {
         if (disposed) return;
         buildScene();
         setLoading(false);
         animate();
+        queueTimer = window.setInterval(() => {
+          if (sedanCars.length < 5) spawnSedan();
+        }, 4000);
         void loadMeshy();
       })
       .catch((err: unknown) => {
@@ -538,11 +686,13 @@ export default function CarWashScene() {
     return () => {
       disposed = true;
       cancelAnimationFrame(frame);
+      window.clearInterval(queueTimer);
       window.removeEventListener("resize", onResize);
       controls.dispose();
       renderer.dispose();
       renderer.domElement.remove();
     };
+
   }, []);
 
   return (
