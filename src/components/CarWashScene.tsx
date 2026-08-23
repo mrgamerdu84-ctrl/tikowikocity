@@ -346,16 +346,21 @@ export default function CarWashScene() {
     const conveyorSlats: THREE.Mesh[] = [];
     type TrafficCar = {
       car: THREE.Object3D;
-      dir: number;
-      u: number;
-      speed: number;
+      axis: "x" | "z";
+      /* coordonnée fixe = centre de la voie */
       lane: number;
+      /* position le long de la rue */
+      s: number;
+      dir: number;
+      speed: number;
+      heading: number;
       yaw: number;
       baseY: number;
     };
     const trafficCars: TrafficCar[] = [];
-    let cityCurve: THREE.CatmullRomCurve3 | null = null;
-    let cityLen = 1;
+    const CITY_MIN = -33;
+    const CITY_MAX = 33;
+
 
 
     const spawnSedan = () => {
