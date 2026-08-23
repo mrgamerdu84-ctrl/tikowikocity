@@ -2034,6 +2034,16 @@ export default function CarWashScene() {
         </div>
 
 
+        <div className="mt-1.5 flex items-center gap-2 rounded-xl bg-splash/15 px-2 py-1.5 ring-1 ring-ink/10">
+          <span aria-hidden className="text-[15px]">👥</span>
+          <span className="text-[14px] font-extrabold tabular-nums sm:text-[15px]">
+            {residents} habitant{residents > 1 ? "s" : ""}
+          </span>
+          <span className="ml-auto text-[11px] font-semibold opacity-70">
+            {city.houses} 🏠 / {city.capacity} places
+          </span>
+        </div>
+
         <p className="mt-1 hidden text-[12.5px] leading-relaxed opacity-80 sm:block">
           Construit avec les kits Kenney (voitures, routes, bâtiments). Glisse pour tourner la
           caméra, molette pour zoomer.
@@ -2248,6 +2258,7 @@ export default function CarWashScene() {
                 "crossroad",
                 "light",
                 "lamp",
+                "house",
                 "erase",
               ] as BuildTool[]
             ).map((t) => (
@@ -2263,6 +2274,28 @@ export default function CarWashScene() {
                 {TOOL_LABEL[t]}
               </button>
             ))}
+            {tool === "house" && (
+              <div className="flex w-full items-center justify-center gap-1.5 border-t border-ink/10 pt-1.5">
+                {HOUSE_LEVELS.map((h) => (
+                  <button
+                    key={h.level}
+                    type="button"
+                    onClick={() => chooseHouseLevel(h.level)}
+                    aria-pressed={houseLevel === h.level}
+                    className={`rounded-xl px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${
+                      houseLevel === h.level
+                        ? "bg-sunny text-sunny-foreground"
+                        : "bg-ink/10 text-ink"
+                    }`}
+                  >
+                    {h.icon} Niv.{h.level} · {h.cost} € · {h.capacity} hab.
+                  </button>
+                ))}
+                <span className="w-full text-center text-[10.5px] opacity-70">
+                  Pose sur une case libre bordant une route · reclique une maison pour l'améliorer
+                </span>
+              </div>
+            )}
             <button
               type="button"
               onClick={() => {
