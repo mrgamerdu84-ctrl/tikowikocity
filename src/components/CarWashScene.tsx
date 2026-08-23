@@ -503,7 +503,12 @@ export default function CarWashScene() {
       roadGeo.computeVertexNormals();
       const roadMesh = new THREE.Mesh(
         roadGeo,
-        new THREE.MeshStandardMaterial({ color: 0x4a4f57, roughness: 0.95 }),
+        new THREE.MeshStandardMaterial({
+          color: 0x4a4f57,
+          roughness: 0.95,
+          side: THREE.DoubleSide,
+        }),
+
       );
       roadMesh.receiveShadow = true;
       scene.add(roadMesh);
