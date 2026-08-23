@@ -459,8 +459,8 @@ export default function CarWashScene() {
     // Grille de rues régulière (rues nord-sud et est-ouest)
     const X_STREETS = [-30, -18, -6, 6, 18, 30];
     const Z_STREETS = [-24, -12, 0, 12, 24];
-    const STREET_W = 6;
-    const LANE = 1.5;
+    const STREET_W = 5;
+    const LANE = 1.25;
 
     const buildScene = () => {
 
@@ -553,10 +553,10 @@ export default function CarWashScene() {
 
       // Trottoirs (légèrement plus larges que la chaussée) puis chaussée
       Z_STREETS.forEach((z) => {
-        addSlab(sidewalkMat, spanX, STREET_W + 1.6, 0, z, 0.005);
+        addSlab(sidewalkMat, spanX, STREET_W + 1.2, 0, z, 0.005);
       });
       X_STREETS.forEach((x) => {
-        addSlab(sidewalkMat, STREET_W + 1.6, spanZ, x, 0, 0.005);
+        addSlab(sidewalkMat, STREET_W + 1.2, spanZ, x, 0, 0.005);
       });
       Z_STREETS.forEach((z) => {
         addSlab(asphalt, spanX, STREET_W, 0, z, 0.02);
@@ -659,7 +659,7 @@ export default function CarWashScene() {
       blockCentersX.forEach((bx, ix) => {
         blockCentersZ.forEach((bz, iz) => {
           // pelouse du pâté de maisons (entre les trottoirs)
-          addSlab(lawnMat, 12 - STREET_W - 1.6, 12 - STREET_W - 1.6, bx, bz, 0.01);
+          addSlab(lawnMat, 12 - STREET_W - 1.2, 12 - STREET_W - 1.2, bx, bz, 0.01);
           // anneau : 0 = centre-ville, 2 = périphérie pavillonnaire
 
           const ring = Math.max(Math.abs(bx) / 12, Math.abs(bz) / 12);
