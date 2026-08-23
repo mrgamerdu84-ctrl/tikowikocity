@@ -118,7 +118,7 @@ export default function CarWashScene() {
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
     controls.minDistance = 6;
-    controls.maxDistance = 60;
+    controls.maxDistance = 110;
     controls.maxPolarAngle = Math.PI * 0.49;
     controls.update();
 
@@ -132,7 +132,7 @@ export default function CarWashScene() {
     sun.shadow.camera.right = 35;
     sun.shadow.camera.top = 35;
     sun.shadow.camera.bottom = -35;
-    sun.shadow.camera.far = 80;
+    sun.shadow.camera.far = 120;
     sun.shadow.bias = -0.0015;
     scene.add(sun);
 
