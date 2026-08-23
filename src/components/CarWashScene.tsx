@@ -6,18 +6,25 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
 import modelsAsset from "@/assets/car-wash-models.json.asset.json";
 
-import blueSuvAsset from "@/assets/blue_suv.glb.asset.json";
-import graySedanAsset from "@/assets/gray_sedan.glb.asset.json";
-import greenSportsAsset from "@/assets/green_sports.glb.asset.json";
-import yellowPickupAsset from "@/assets/yellow_pickup.glb.asset.json";
 import tunnelAsset from "@/assets/tunnel.glb.asset.json";
+import kenneyPackAsset from "@/assets/kenney-pack.glb.asset.json";
 
+/* Modèles issus des kits Kenney (car-kit, city-kit-roads, building-kit),
+   regroupés dans un seul GLB optimisé. */
+const KIT_CARS = [
+  "sedan",
+  "sedan-sports",
+  "suv",
+  "suv-luxury",
+  "taxi",
+  "van",
+  "delivery",
+  "hatchback-sports",
+  "police",
+  "truck",
+  "ambulance",
+] as const;
 
-const MESHY_CARS = [blueSuvAsset, graySedanAsset, greenSportsAsset, yellowPickupAsset];
-
-/* Les voitures Meshy sont normalisées le long de +X ; ce décalage aligne
-   l'avant (capot) sur le sens de marche. */
-const MESHY_YAW = Math.PI / 2;
 
 
 
@@ -40,7 +47,6 @@ const MODEL_KEYS = [
 ] as const;
 
 const ROAD_Y = 0;
-const CAR_Y = 0.3;
 const PATH_START = -13;
 const PATH_END = 13;
 const WASH_ZONE: [number, number] = [-1.5, 5.5];
@@ -311,87 +317,38 @@ export default function CarWashScene() {
       return g;
     };
 
-    /* ---------- Mobilier urbain ---------- */
-    const poleMat = new THREE.MeshStandardMaterial({ color: 0x3d4249, roughness: 0.7 });
+    /* ---------- Mobilier urbain : modèles Kenney ---------- */
 
-    const makeLamp = () => {
-      const g = new THREE.Group();
-      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 3.6, 8), poleMat);
-      pole.position.y = 1.8;
-      g.add(pole);
-      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.08, 0.08), poleMat);
-      arm.position.set(0.45, 3.55, 0);
-      g.add(arm);
-      const head = new THREE.Mesh(
-        new THREE.BoxGeometry(0.5, 0.14, 0.28),
-        new THREE.MeshStandardMaterial({
-          color: 0xfff4c2,
-          emissive: 0xffe58a,
-          emissiveIntensity: 0.5,
-        }),
-      );
-      head.position.set(0.85, 3.46, 0);
-      g.add(head);
-      return g;
-    };
 
-    const makeBench = () => {
-      const g = new THREE.Group();
-      const woodMat = new THREE.MeshStandardMaterial({ color: 0xa9713f, roughness: 0.9 });
-      const seat = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.1, 0.55), woodMat);
-      seat.position.y = 0.45;
-      g.add(seat);
-      const back = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.5, 0.09), woodMat);
-      back.position.set(0, 0.72, -0.24);
-      g.add(back);
-      [-0.7, 0.7].forEach((x) => {
-        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.45, 0.5), poleMat);
-        leg.position.set(x, 0.22, 0);
-        g.add(leg);
-      });
-      return g;
-    };
-
-    const makeBin = () => {
-      const g = new THREE.Group();
-      const body = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.26, 0.22, 0.75, 10),
-        new THREE.MeshStandardMaterial({ color: 0x2f7d4f, roughness: 0.85 }),
-      );
-      body.position.y = 0.38;
-      g.add(body);
-      const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.29, 0.29, 0.08, 10), poleMat);
-      lid.position.y = 0.79;
-      g.add(lid);
-      return g;
-    };
 
     type TrafficLight = { axis: "x" | "z"; red: THREE.Mesh; green: THREE.Mesh };
     const trafficLights: TrafficLight[] = [];
 
+    /* Feu tricolore Kenney (city-kit-roads) + deux ampoules émissives pour
+       pouvoir piloter le cycle rouge/vert. */
     const makeTrafficLight = (axis: "x" | "z") => {
       const g = new THREE.Group();
-      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 2.6, 8), poleMat);
-      pole.position.y = 1.3;
-      g.add(pole);
-      const box = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.9, 0.3), poleMat);
-      box.position.y = 2.9;
-      g.add(box);
+      const model = kit["traffic-light"];
+      if (model) {
+        const inst = model.clone(true);
+        inst.scale.setScalar(6);
+        g.add(inst);
+      }
       const bulb = (color: number, y: number) => {
         const m = new THREE.Mesh(
-          new THREE.SphereGeometry(0.1, 10, 10),
+          new THREE.SphereGeometry(0.12, 10, 10),
           new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.2 }),
         );
-        m.position.set(0, y, 0.17);
-        box.add(m);
+        m.position.set(0, y, 0.28);
+        g.add(m);
         return m;
       };
-      const red = bulb(0xff3b30, 0.28);
-      bulb(0xffcc00, 0);
-      const green = bulb(0x33d17a, -0.28);
+      const red = bulb(0xff3b30, 2.75);
+      const green = bulb(0x33d17a, 2.25);
       trafficLights.push({ axis, red, green });
       return g;
     };
+
 
 
     // Tapis roulant : lattes qui défilent dans la zone de lavage
@@ -422,7 +379,13 @@ export default function CarWashScene() {
     };
 
     const models: Record<string, THREE.Group> = {};
-    const meshyCars: THREE.Object3D[] = [];
+    /* Modèles Kenney extraits du pack : routes, voitures, bâtiments, mobilier */
+    const kit: Record<string, THREE.Object3D> = {};
+    const kitCar = (i: number) => {
+      const name = KIT_CARS[i % KIT_CARS.length]!;
+      return kit[name] ?? kit["sedan"] ?? models["sedan"]!;
+    };
+
     type WashCar = {
       car: THREE.Object3D;
       d: number;
@@ -512,16 +475,13 @@ export default function CarWashScene() {
       return { x, z, heading };
     };
 
+    let spawnIndex = 0;
     const spawnSedan = () => {
-      const template =
-        meshyCars.length > 0
-          ? meshyCars[Math.floor(Math.random() * meshyCars.length)]!
-          : models["sedan"];
+      const template = kitCar(spawnIndex++ * 3 + 1);
       if (!template) return;
       const sedan = template.clone(true);
       setShadow(sedan);
-      const isKenney = template === models["sedan"];
-      const baseY = isKenney ? CAR_Y : 0.06;
+      const baseY = 0;
       const start = posAt(0);
       sedan.position.set(start.x, baseY, start.z);
       tintCar(sedan, 1);
@@ -530,11 +490,12 @@ export default function CarWashScene() {
         car: sedan,
         d: 0,
         speed: 5.2,
-        yaw: isKenney ? 0 : MESHY_YAW,
+        yaw: 0,
         baseY,
         wheels: findWheels(sedan),
       });
     };
+
     spawnRef.current = spawnSedan;
 
 
@@ -562,8 +523,11 @@ export default function CarWashScene() {
       rotY = 0,
     ) => {
       const g = new THREE.Group();
-      const floorTpl = models["hFloor"]!;
-      const wallTpl = models["hWallWindow"]!;
+      const floorTpl = kit["floor"] ?? models["hFloor"]!;
+      const wallTpl = kit["wall-window-square"] ?? models["hWallWindow"]!;
+      const roofTpl = kit["roof-flat-center"] ?? floorTpl;
+      const doorTpl = kit["wall-doorway-square"] ?? wallTpl;
+
       const ox = (-(cols - 1) * CELL) / 2;
       const oz = (-(rows - 1) * CELL) / 2;
 
@@ -577,16 +541,17 @@ export default function CarWashScene() {
             slab.position.set(cx, y, cz);
             g.add(slab);
 
-            const wall = (wx: number, wz: number, wr: number) => {
-              const w = wallTpl.clone(true);
+            const wall = (wx: number, wz: number, wr: number, door = false) => {
+              const w = (door ? doorTpl : wallTpl).clone(true);
               w.position.set(wx, y, wz);
               w.rotation.y = wr;
               g.add(w);
             };
             if (i === 0) wall(cx - CELL / 2, cz, 0);
             if (i === cols - 1) wall(cx + CELL / 2, cz, 0);
-            if (j === 0) wall(cx, cz - CELL / 2, Math.PI / 2);
+            if (j === 0) wall(cx, cz - CELL / 2, Math.PI / 2, f === 0 && i === 0);
             if (j === rows - 1) wall(cx, cz + CELL / 2, Math.PI / 2);
+
           }
         }
       }
@@ -595,7 +560,7 @@ export default function CarWashScene() {
       const top = floors * FLOOR_H;
       for (let i = 0; i < cols; i++) {
         for (let j = 0; j < rows; j++) {
-          const deck = floorTpl.clone(true);
+          const deck = roofTpl.clone(true);
           deck.position.set(ox + i * CELL, top, oz + j * CELL);
           g.add(deck);
         }
@@ -635,8 +600,10 @@ export default function CarWashScene() {
     // Grille de rues régulière (rues nord-sud et est-ouest)
     const X_STREETS = [-30, -18, -6, 6, 18, 30];
     const Z_STREETS = [-24, -12, 0, 12, 24];
-    const STREET_W = 5;
-    const LANE = 1.25;
+    const STREET_W = 6; // = une tuile de route Kenney mise à l'échelle
+    const TILE = 6;
+    const LANE = 1.5;
+
 
     const buildScene = () => {
 
@@ -822,8 +789,6 @@ export default function CarWashScene() {
       const xMax = X_STREETS[X_STREETS.length - 1]!;
       const zMin = Z_STREETS[0]!;
       const zMax = Z_STREETS[Z_STREETS.length - 1]!;
-      const spanX = xMax - xMin + STREET_W;
-      const spanZ = zMax - zMin + STREET_W;
 
       const addSlab = (
         mat: THREE.Material,
@@ -841,43 +806,51 @@ export default function CarWashScene() {
         return m;
       };
 
-      // Trottoirs (légèrement plus larges que la chaussée) puis chaussée
-      Z_STREETS.forEach((z) => {
-        addSlab(sidewalkMat, spanX, STREET_W + 1.2, 0, z, 0.005);
-      });
-      X_STREETS.forEach((x) => {
-        addSlab(sidewalkMat, STREET_W + 1.2, spanZ, x, 0, 0.005);
-      });
-      Z_STREETS.forEach((z) => {
-        addSlab(asphalt, spanX, STREET_W, 0, z, 0.02);
-      });
-      X_STREETS.forEach((x) => {
-        addSlab(asphalt, STREET_W, spanZ, x, 0, 0.02);
-      });
-
-      // Ligne axiale discontinue (interrompue aux carrefours)
+      /* ----- Chaussées : vraies tuiles du kit Kenney city-kit-roads -----
+         Une tuile = 1 unité de kit, mise à l'échelle sur la largeur de rue. */
       const dashGeoX = new THREE.PlaneGeometry(1.4, 0.16);
       const nearCross = (v: number, list: number[]) =>
         list.some((c) => Math.abs(v - c) < STREET_W / 2 + 1);
+
+      const roadTile = (name: string, x: number, z: number, rotY: number) => {
+        const tpl = kit[name];
+        if (!tpl) return;
+        const t = tpl.clone(true);
+        t.scale.setScalar(TILE);
+        t.position.set(x, 0.012, z);
+        t.rotation.y = rotY;
+        t.traverse((n) => {
+          const m = n as THREE.Mesh;
+          if (m.isMesh) m.receiveShadow = true;
+        });
+        scene.add(t);
+      };
+      const onStreetX = (x: number) => X_STREETS.some((c) => Math.abs(c - x) < 0.01);
+      const onStreetZ = (z: number) => Z_STREETS.some((c) => Math.abs(c - z) < 0.01);
+
       Z_STREETS.forEach((z) => {
-        for (let x = xMin - STREET_W / 2 + 1; x < xMax + STREET_W / 2; x += 3) {
-          if (nearCross(x, X_STREETS)) continue;
-          const d = new THREE.Mesh(dashGeoX, dashMat);
-          d.rotation.x = -Math.PI / 2;
-          d.position.set(x, 0.03, z);
-          scene.add(d);
+        for (let x = xMin; x <= xMax; x += TILE) {
+          if (onStreetX(x)) continue;
+          roadTile("road-straight", x, z, Math.PI / 2);
         }
       });
       X_STREETS.forEach((x) => {
-        for (let z = zMin - STREET_W / 2 + 1; z < zMax + STREET_W / 2; z += 3) {
-          if (nearCross(z, Z_STREETS)) continue;
-          const d = new THREE.Mesh(dashGeoX, dashMat);
-          d.rotation.x = -Math.PI / 2;
-          d.rotation.z = Math.PI / 2;
-          d.position.set(x, 0.03, z);
-          scene.add(d);
+        for (let z = zMin; z <= zMax; z += TILE) {
+          if (onStreetZ(z)) continue;
+          roadTile("road-straight", x, z, 0);
         }
       });
+      // Carrefours du quadrillage
+      X_STREETS.forEach((x) => {
+        Z_STREETS.forEach((z) => {
+          roadTile("road-crossroad", x, z, 0);
+        });
+      });
+      // Voie d'accès au car wash, dans le même style
+      for (let z = zMin - TILE; z >= WASH_SITE_Z; z -= TILE) {
+        roadTile("road-straight", WASH_ACCESS_X, z, 0);
+      }
+
 
       // ----- Bâtiments Kenney : un par parcelle, hauteurs cohérentes -----
       const blockCentersX: number[] = [];
@@ -893,7 +866,7 @@ export default function CarWashScene() {
       blockCentersX.forEach((bx, ix) => {
         blockCentersZ.forEach((bz, iz) => {
           // pelouse du pâté de maisons (entre les trottoirs)
-          addSlab(lawnMat, 12 - STREET_W - 1.2, 12 - STREET_W - 1.2, bx, bz, 0.01);
+          addSlab(lawnMat, 12 - STREET_W, 12 - STREET_W, bx, bz, 0.01);
 
           // anneau : 0 = centre-ville, 2 = périphérie pavillonnaire
           const ring = Math.max(Math.abs(bx) / 12, Math.abs(bz) / 12);
@@ -906,32 +879,45 @@ export default function CarWashScene() {
       });
 
 
-      // Arbres réguliers le long des trottoirs
+      // Arbres alignés le long des trottoirs, un sur deux entre carrefours
       Z_STREETS.forEach((z, zi) => {
         for (let x = xMin + 3; x <= xMax - 3; x += 6) {
           if (nearCross(x, X_STREETS)) continue;
           [-1, 1].forEach((side) => {
             const tr = makeTree();
-            tr.position.set(x, 0, z + side * (STREET_W / 2 + 0.9));
+            tr.position.set(x, 0, z + side * (STREET_W / 2 + 1.1));
             tr.scale.setScalar(0.85 + ((zi + x) % 3) * 0.06);
+            setShadow(tr);
             scene.add(tr);
           });
         }
       });
+      // Rangées d'arbres au cœur des îlots verts
+      for (let xi = 0; xi < X_STREETS.length - 1; xi++) {
+        for (let zi = 0; zi < Z_STREETS.length - 1; zi++) {
+          if ((xi + zi) % 2 === 0) continue;
+          const bx = (X_STREETS[xi]! + X_STREETS[xi + 1]!) / 2;
+          const bz = (Z_STREETS[zi]! + Z_STREETS[zi + 1]!) / 2;
+          [-1, 1].forEach((s) => {
+            const tr = makeTree();
+            tr.position.set(bx + s * 2.4, 0, bz + s * 2.4);
+            tr.scale.setScalar(0.75);
+            setShadow(tr);
+            scene.add(tr);
+          });
+        }
+      }
 
-      /* Mobilier urbain structuré sur trois grilles indépendantes.
-         Les feux sont réservés à six carrefours majeurs : exactement un poteau
-         par angle, donc quatre par carrefour, sans doublon. */
-      const CURB_OFFSET = STREET_W / 2 + 0.32;
+      /* Mobilier urbain 100 % Kenney, posé sur une grille stricte :
+         feux aux carrefours majeurs, lampadaires et bennes en bord de bloc. */
+      const CURB_OFFSET = STREET_W / 2 + 0.45;
       const signalX = X_STREETS.filter((_, i) => i % 2 === 1);
       const signalZ = Z_STREETS.filter((_, i) => i % 2 === 1);
       signalX.forEach((cx) => {
         signalZ.forEach((cz) => {
           const corners: Array<{ x: number; z: number; axis: "x" | "z" }> = [
             { x: cx - CURB_OFFSET, z: cz - CURB_OFFSET, axis: "x" },
-            { x: cx + CURB_OFFSET, z: cz - CURB_OFFSET, axis: "z" },
-            { x: cx + CURB_OFFSET, z: cz + CURB_OFFSET, axis: "x" },
-            { x: cx - CURB_OFFSET, z: cz + CURB_OFFSET, axis: "z" },
+            { x: cx + CURB_OFFSET, z: cz + CURB_OFFSET, axis: "z" },
           ];
           corners.forEach(({ x, z, axis }) => {
             const light = makeTrafficLight(axis);
@@ -943,41 +929,43 @@ export default function CarWashScene() {
         });
       });
 
-      /* Bancs et poubelles au milieu des côtés de blocs : leur centre reste
-         dans la bande de trottoir et loin des zones de circulation. */
-      const FURNITURE_OFFSET = STREET_W / 2 + 0.38;
+      const FURNITURE_OFFSET = STREET_W / 2 + 0.6;
+      const placeKit = (
+        name: string,
+        x: number,
+        z: number,
+        rotY: number,
+        scale = 6,
+      ) => {
+        const tpl = kit[name];
+        if (!tpl) return;
+        const inst = tpl.clone(true);
+        inst.scale.setScalar(scale);
+        inst.position.set(x, 0, z);
+        inst.rotation.y = rotY;
+        setShadow(inst);
+        scene.add(inst);
+      };
+
       for (let xi = 0; xi < X_STREETS.length - 1; xi++) {
         for (let zi = 0; zi < Z_STREETS.length - 1; zi++) {
-          if ((xi + zi) % 2 !== 0) continue;
           const bx = (X_STREETS[xi]! + X_STREETS[xi + 1]!) / 2;
           const southStreet = Z_STREETS[zi]!;
-
-          const bench = makeBench();
-          bench.position.set(bx, 0, southStreet + FURNITURE_OFFSET);
-          bench.rotation.y = 0;
-          setShadow(bench);
-          scene.add(bench);
-
-          const bin = makeBin();
-          bin.position.set(bx + 1.25, 0, southStreet + FURNITURE_OFFSET);
-          setShadow(bin);
-          scene.add(bin);
-        }
-      }
-
-      /* Lampadaires régulièrement espacés sur le bord nord des mêmes blocs,
-         toujours alignés avec la bordure et jamais dans un carrefour. */
-      for (let xi = 0; xi < X_STREETS.length - 1; xi += 2) {
-        for (let zi = 0; zi < Z_STREETS.length - 1; zi++) {
-          const bx = (X_STREETS[xi]! + X_STREETS[xi + 1]!) / 2;
           const northStreet = Z_STREETS[zi + 1]!;
-          const lamp = makeLamp();
-          lamp.position.set(bx, 0, northStreet - FURNITURE_OFFSET);
-          lamp.rotation.y = Math.PI;
-          setShadow(lamp);
-          scene.add(lamp);
+
+          // lampadaires alternés de part et d'autre du bloc
+          placeKit("light-square", bx - 2, southStreet + FURNITURE_OFFSET, Math.PI);
+          placeKit("light-square", bx + 2, northStreet - FURNITURE_OFFSET, 0);
+
+          // bennes et panneaux de rue, un bloc sur deux
+          if ((xi + zi) % 2 === 0) {
+            placeKit("dumpster", bx + 2.4, southStreet + FURNITURE_OFFSET, Math.PI / 2, 6);
+          } else {
+            placeKit("road-sign-street", bx - 2.4, northStreet - FURNITURE_OFFSET, 0, 6);
+          }
         }
       }
+
 
 
 
@@ -987,18 +975,12 @@ export default function CarWashScene() {
         roughness: 1,
       });
 
-      // Voie d'accès depuis la rue z = zMin jusqu'à la station
+      /* Voie d'accès : déjà pavée en tuiles Kenney ci-dessus, on ajoute
+         seulement la bande enherbée de bord. */
       const accessLen = zMin - WASH_SITE_Z;
       const accessCz = (zMin + WASH_SITE_Z) / 2;
-      addSlab(sidewalkMat, STREET_W + 1.2, accessLen, WASH_ACCESS_X, accessCz, 0.005);
-      addSlab(asphalt, STREET_W, accessLen, WASH_ACCESS_X, accessCz, 0.02);
-      for (let z = zMin - 4; z > WASH_SITE_Z + 3; z -= 3) {
-        const d = new THREE.Mesh(dashGeoX, dashMat);
-        d.rotation.x = -Math.PI / 2;
-        d.rotation.z = Math.PI / 2;
-        d.position.set(WASH_ACCESS_X, 0.03, z);
-        scene.add(d);
-      }
+      addSlab(sidewalkMat, STREET_W + 2.4, accessLen, WASH_ACCESS_X, accessCz, 0.004);
+
 
       // Terrain de la station : pelouse + dalle béton (parcelle resserrée)
       addSlab(lawnMat, 38, 21, 0, WASH_SITE_Z + 2, 0.008);
@@ -1038,13 +1020,12 @@ export default function CarWashScene() {
         line.position.set(-12 + i * 4.4, 0.024, parkZ);
         scene.add(line);
       }
-      // Voitures en attente, alignées au centre de leur place
-      const parkTemplates = [models["taxi"]!, models["sedan"]!, models["taxi"]!];
-      parkTemplates.forEach((tpl, i) => {
-        const parked = tpl.clone(true);
+      // Voitures Kenney en attente, alignées au centre de leur place
+      [0, 1, 2, 3].forEach((i) => {
+        const parked = kitCar(i * 2 + 4).clone(true);
         setShadow(parked);
         parked.rotation.y = Math.PI / 2;
-        parked.position.set(-12 + 2.2 + i * 4.4, CAR_Y, parkZ);
+        parked.position.set(-12 + 2.2 + i * 4.4, 0, parkZ);
         scene.add(parked);
       });
 
@@ -1053,12 +1034,12 @@ export default function CarWashScene() {
         const tr = makeTree();
         tr.position.set(x, 0, WASH_SITE_Z + 12);
         tr.scale.setScalar(0.9);
+        setShadow(tr);
         scene.add(tr);
 
       }
 
       // ----- Circulation : deux voies par rue, sens opposés, bien centrées -----
-      const cityTemplates = [models["taxi"]!, models["sedan"]!];
       let ti = 0;
       const addTraffic = (
         axis: "x" | "z",
@@ -1066,15 +1047,15 @@ export default function CarWashScene() {
         dir: number,
         s: number,
       ) => {
-        const car = cityTemplates[ti % cityTemplates.length]!.clone(true);
+        const car = kitCar(ti).clone(true);
         setShadow(car);
         scene.add(car);
         // modèles Kenney : le nez pointe vers +Z
         const heading =
           axis === "x" ? (dir > 0 ? Math.PI / 2 : -Math.PI / 2) : dir > 0 ? 0 : Math.PI;
         /* on ne circule que sur la chaussée : bornes = extrémités de la rue */
-        const sMin = (axis === "x" ? xMin : zMin) - STREET_W / 2;
-        const sMax = (axis === "x" ? xMax : zMax) + STREET_W / 2;
+        const sMin = axis === "x" ? xMin : zMin;
+        const sMax = axis === "x" ? xMax : zMax;
         trafficCars.push({
           car,
           axis,
@@ -1084,11 +1065,12 @@ export default function CarWashScene() {
           speed: 3.4 + (ti % 3) * 0.5,
           heading,
           yaw: 0,
-          baseY: CAR_Y,
+          baseY: 0,
           wheels: findWheels(car),
           sMin,
           sMax,
         });
+
 
 
         ti++;
@@ -1324,7 +1306,22 @@ export default function CarWashScene() {
             }),
         ),
       );
+
+      // Pack Kenney (routes, voitures, bâtiments, mobilier) en un seul GLB
+      const pack = await new Promise<THREE.Group>((resolve, reject) => {
+        loader.load(
+          kenneyPackAsset.url,
+          (gltf) => resolve(gltf.scene),
+          undefined,
+          (err) => reject(err instanceof Error ? err : new Error(String(err))),
+        );
+      });
+      [...pack.children].forEach((child) => {
+        child.removeFromParent();
+        kit[child.name] = child;
+      });
     };
+
 
     const loadMeshy = async () => {
       const load = (url: string) =>
@@ -1357,39 +1354,8 @@ export default function CarWashScene() {
         })
         .catch((err: unknown) => console.error("tunnel Meshy", err));
 
-
-
-
-      // Véhicules : ajoutés au pool de spawn au fur et à mesure
-      const slots: Array<THREE.Group | null> = MESHY_CARS.map(() => null);
-      await Promise.all(
-        MESHY_CARS.map((asset, i) =>
-          load(asset.url)
-            .then((raw) => {
-              if (disposed) return;
-              slots[i] = normalizeModel(raw, 2.4);
-            })
-            .catch((err: unknown) => console.error("voiture Meshy", err)),
-        ),
-      );
-      slots.forEach((m) => {
-        if (m) meshyCars.push(m);
-      });
-      if (disposed || meshyCars.length === 0) return;
-
-      // Le trafic Kenney est remplacé par les voitures Meshy, variées et bien orientées
-      trafficCars.forEach((entry, i) => {
-        const idx = (i * 3 + 1) % meshyCars.length;
-        const next = meshyCars[idx]!.clone(true);
-        setShadow(next);
-        scene.add(next);
-        scene.remove(entry.car);
-        entry.car = next;
-        entry.baseY = 0.02;
-        entry.yaw = MESHY_YAW;
-        entry.wheels = findWheels(next);
-      });
     };
+
 
 
     // File d'attente : de nouvelles voitures arrivent régulièrement
