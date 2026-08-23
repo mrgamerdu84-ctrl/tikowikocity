@@ -1334,7 +1334,7 @@ export default function CarWashScene() {
         const panel = new THREE.Mesh(
           new THREE.PlaneGeometry(9, 2.6),
           new THREE.MeshBasicMaterial({
-            map: signTexture(`${player.name} WASH`, hex),
+            map: signTexture(`${player?.name ?? "Tikowiko"} WASH`, hex),
             side: THREE.DoubleSide,
           }),
         );
