@@ -2,9 +2,9 @@ import { createFileRoute } from "@tanstack/react-router";
 
 import CarWashScene from "@/components/CarWashScene";
 
-const TITLE = "Le Car Wash 3D — station de lavage interactive";
+const TITLE = "TikowikoCarWash — station de lavage 3D interactive";
 const DESCRIPTION =
-  "Une station de lavage auto en 3D : envoyez des voitures dans le tunnel, regardez les brosses et la mousse faire briller la carrosserie.";
+  "TikowikoCarWash : une station de lavage auto en 3D : envoyez des voitures dans le tunnel, regardez les brosses et la mousse faire briller la carrosserie.";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -23,7 +23,7 @@ export const Route = createFileRoute("/")({
 function Index() {
   return (
     <main className="min-h-screen">
-      <h1 className="sr-only">Le Car Wash 3D</h1>
+      <h1 className="sr-only">TikowikoCarWash</h1>
       <CarWashScene />
     </main>
   );
