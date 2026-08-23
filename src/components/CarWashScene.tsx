@@ -521,8 +521,9 @@ export default function CarWashScene() {
       const dt = Math.min(clock.getDelta(), 0.05);
       const t = clock.elapsedTime;
 
+      const ctl = machinesRef.current;
       const SPEED = 2.6;
-      const BELT_SPEED = 1.1;
+      const BELT_SPEED = ctl.belt ? 1.1 : 0;
       const GAP = 3.2;
       const [zoneStart, zoneEnd] = WASH_ZONE;
 
