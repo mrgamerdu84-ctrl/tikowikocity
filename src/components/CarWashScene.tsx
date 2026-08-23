@@ -372,7 +372,8 @@ export default function CarWashScene() {
       const sedan = template.clone(true);
       setShadow(sedan);
       const isKenney = template === models["sedan"];
-      if (isKenney) sedan.rotation.y = Math.PI / 2;
+      // la voiture roule vers +X : on oriente le capot dans ce sens
+      sedan.rotation.y = Math.PI / 2 + (isKenney ? 0 : MESHY_YAW);
       const baseY = isKenney ? CAR_Y : 0.06;
       sedan.userData["baseY"] = baseY;
       sedan.position.set(PATH_START, baseY, 0);
