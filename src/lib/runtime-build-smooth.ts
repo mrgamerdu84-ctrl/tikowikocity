@@ -120,6 +120,7 @@ if (!globalState[cameraMarker] && typeof window !== "undefined" && typeof docume
   let homePosition: THREE.Vector3 | null = null;
   let homeTarget: THREE.Vector3 | null = null;
   let holdTimer: number | null = null;
+  const cameraCoarsePointer = window.matchMedia?.("(pointer: coarse)").matches ?? false;
 
   /* OrbitControls est créé dans CarWashScene. En capturant son premier update,
      on obtient la caméra et la cible sans coupler ce module au gros composant 3D. */
@@ -333,7 +334,7 @@ if (!globalState[cameraMarker] && typeof window !== "undefined" && typeof docume
         button.textContent?.includes("Terminer"),
       );
       const mobileLike =
-        coarsePointer ||
+        cameraCoarsePointer ||
         window.innerWidth <= 1024 ||
         window.matchMedia?.("(hover: none)").matches;
       pad.style.display = buildActive && mobileLike ? "block" : "none";
