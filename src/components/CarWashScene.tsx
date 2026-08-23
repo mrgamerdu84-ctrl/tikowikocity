@@ -1237,6 +1237,11 @@ export default function CarWashScene() {
       const dt = Math.min(clock.getDelta(), 0.05);
       const t = clock.elapsedTime;
 
+      // léger clapotis sur les surfaces d'eau
+      if (waterSurface) waterSurface.position.y = 0.05 + Math.sin(t * 0.8) * 0.03;
+      if (pondSurface) pondSurface.position.y = 0.06 + Math.sin(t * 1.1 + 1) * 0.025;
+
+
       const ctl = machinesRef.current;
       const SPEED = 2.6;
       const BELT_SPEED = ctl.belt ? 1.1 : 0;
