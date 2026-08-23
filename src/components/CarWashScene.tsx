@@ -106,13 +106,32 @@ export default function CarWashScene() {
     (window as unknown as { createImageBitmap?: unknown }).createImageBitmap = undefined;
 
     const scene = new THREE.Scene();
-    scene.fog = new THREE.Fog(0xdff2ff, 160, 420);
+    scene.fog = new THREE.Fog(0xd9eefb, 220, 700);
+
+    /* Ciel dégradé (canvas) pour sortir du fond plat */
+    const skyCanvas = document.createElement("canvas");
+    skyCanvas.width = 4;
+    skyCanvas.height = 256;
+    const sctx = skyCanvas.getContext("2d")!;
+    const grad = sctx.createLinearGradient(0, 0, 0, 256);
+    grad.addColorStop(0, "#3fa9e8");
+    grad.addColorStop(0.55, "#9fd8f5");
+    grad.addColorStop(1, "#e9f6ff");
+    sctx.fillStyle = grad;
+    sctx.fillRect(0, 0, 4, 256);
+    const skyTex = new THREE.CanvasTexture(skyCanvas);
+    skyTex.colorSpace = THREE.SRGBColorSpace;
+    const skyDome = new THREE.Mesh(
+      new THREE.SphereGeometry(760, 32, 16),
+      new THREE.MeshBasicMaterial({ map: skyTex, side: THREE.BackSide, fog: false }),
+    );
+    scene.add(skyDome);
 
     const camera = new THREE.PerspectiveCamera(
       45,
       window.innerWidth / window.innerHeight,
       0.1,
-      300,
+      2000,
     );
     camera.position.set(-34, 26, WASH_SITE_Z + 40);
 
@@ -129,7 +148,7 @@ export default function CarWashScene() {
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
     controls.minDistance = 6;
-    controls.maxDistance = 110;
+    controls.maxDistance = 160;
     controls.maxPolarAngle = Math.PI * 0.49;
     controls.update();
 
@@ -148,13 +167,14 @@ export default function CarWashScene() {
     scene.add(sun);
 
     const ground = new THREE.Mesh(
-      new THREE.PlaneGeometry(240, 240),
+      new THREE.PlaneGeometry(900, 900),
       new THREE.MeshStandardMaterial({ color: 0x7fc76b, roughness: 1 }),
     );
     ground.rotation.x = -Math.PI / 2;
     ground.position.y = -0.02;
     ground.receiveShadow = true;
     scene.add(ground);
+
 
     const setShadow = (obj: THREE.Object3D) => {
       obj.traverse((n) => {
