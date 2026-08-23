@@ -395,67 +395,66 @@ export default function CarWashScene() {
       setCinema(cinemaMode);
     };
 
-    /* Maison procédurale : 4 murs pleins + toit à deux pentes posé dessus. */
-    const houseWallMats = [0xf6ece0, 0xe8dcc8, 0xf1e3d3, 0xe3ead9].map(
-      (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.9 }),
-    );
-    const roofMats = [0xc1543f, 0xa9563f, 0x8f4f6b, 0x4f6f8f].map(
-      (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.85 }),
-    );
-    const doorMat = new THREE.MeshStandardMaterial({ color: 0x6b4a2f, roughness: 0.8 });
-    const houseWinMat = new THREE.MeshStandardMaterial({
-      color: 0x9ad8ff,
-      roughness: 0.3,
-    });
+    /* Bâtiments assemblés avec le kit maison Kenney (dalles, murs à fenêtres,
+       toitures) : ils gardent la texture « colormap » d'origine. */
+    const CELL = 2; // taille d'une dalle hFloor
+    const FLOOR_H = 2.4; // hauteur d'un mur hWallWindow
 
-    const buildHouse = (x: number, z: number, rotY = 0, variant = 0) => {
+    const buildKenneyBuilding = (
+      x: number,
+      z: number,
+      cols: number,
+      rows: number,
+      floors: number,
+      rotY = 0,
+    ) => {
       const g = new THREE.Group();
-      const w = 3.4;
-      const d = 3;
-      const h = 2.2;
-      const body = new THREE.Mesh(
-        new THREE.BoxGeometry(w, h, d),
-        houseWallMats[variant % houseWallMats.length]!,
-      );
-      body.position.y = h / 2;
-      g.add(body);
+      const floorTpl = models["hFloor"]!;
+      const wallTpl = models["hWallWindow"]!;
+      const roofTpl = models["hRoof"]!;
+      const ox = (-(cols - 1) * CELL) / 2;
+      const oz = (-(rows - 1) * CELL) / 2;
 
-      // Toit à deux pentes : prisme triangulaire qui repose exactement sur les murs
-      const rh = 1.1;
-      const overhang = 0.22;
-      const rw = w / 2 + overhang;
-      const shape = new THREE.Shape();
-      shape.moveTo(-rw, 0);
-      shape.lineTo(rw, 0);
-      shape.lineTo(0, rh);
-      shape.closePath();
-      const roofGeo = new THREE.ExtrudeGeometry(shape, {
-        depth: d + overhang * 2,
-        bevelEnabled: false,
-      });
-      roofGeo.translate(0, 0, -(d / 2 + overhang));
-      const roof = new THREE.Mesh(roofGeo, roofMats[variant % roofMats.length]!);
-      roof.position.y = h;
-      g.add(roof);
+      for (let f = 0; f < floors; f++) {
+        const y = f * FLOOR_H;
+        for (let i = 0; i < cols; i++) {
+          for (let j = 0; j < rows; j++) {
+            const cx = ox + i * CELL;
+            const cz = oz + j * CELL;
+            const slab = floorTpl.clone(true);
+            slab.position.set(cx, y, cz);
+            g.add(slab);
 
+            const wall = (wx: number, wz: number, wr: number) => {
+              const w = wallTpl.clone(true);
+              w.position.set(wx, y, wz);
+              w.rotation.y = wr;
+              g.add(w);
+            };
+            if (i === 0) wall(cx - CELL / 2, cz, 0);
+            if (i === cols - 1) wall(cx + CELL / 2, cz, 0);
+            if (j === 0) wall(cx, cz - CELL / 2, Math.PI / 2);
+            if (j === rows - 1) wall(cx, cz + CELL / 2, Math.PI / 2);
+          }
+        }
+      }
 
-      const door = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.1, 0.08), doorMat);
-      door.position.set(0, 0.55, d / 2 + 0.04);
-      g.add(door);
-      [-1, 1].forEach((sx) => {
-        const win = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.55, 0.08), houseWinMat);
-        win.position.set(sx * 1.1, 1.3, d / 2 + 0.04);
-        g.add(win);
-        const back = win.clone();
-        back.position.z = -d / 2 - 0.04;
-        g.add(back);
-      });
+      const top = floors * FLOOR_H;
+      for (let i = 0; i < cols; i++) {
+        for (let j = 0; j < rows; j++) {
+          const roof = roofTpl.clone(true);
+          roof.position.set(ox + i * CELL, top, oz + j * CELL);
+          roof.scale.set(CELL / 2.4, 1, CELL / 2.4);
+          g.add(roof);
+        }
+      }
 
       g.position.set(x, 0, z);
       g.rotation.y = rotY;
       setShadow(g);
       scene.add(g);
     };
+
 
     // Grille de rues régulière (rues nord-sud et est-ouest)
     const X_STREETS = [-30, -18, -6, 6, 18, 30];
