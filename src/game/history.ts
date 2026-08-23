@@ -33,17 +33,17 @@ export function sanitizeHistory(raw: unknown): WashEntry[] {
   const out: WashEntry[] = [];
   for (const item of raw) {
     if (!item || typeof item !== "object") continue;
-    const e = item as Record<string, unknown>;
-    const amount = e.amount;
-    const balance = e.balance;
+    const e = item as Partial<WashEntry> & Record<string, unknown>;
+    const amount = e['amount'];
+    const balance = e['balance'];
     if (typeof amount !== "number" || !Number.isFinite(amount)) continue;
     if (typeof balance !== "number" || !Number.isFinite(balance)) continue;
     out.push({
-      id: typeof e.id === "string" ? e.id : `${out.length}-${amount}`,
-      at: typeof e.at === "string" ? e.at : new Date().toISOString(),
+      id: typeof e['id'] === "string" ? e['id'] : `${out.length}-${amount}`,
+      at: typeof e['at'] === "string" ? e['at'] : new Date().toISOString(),
       amount,
       balance,
-      wash: typeof e.wash === "number" && Number.isFinite(e.wash) ? e.wash : out.length + 1,
+      wash: typeof e['wash'] === "number" && Number.isFinite(e['wash']) ? e['wash'] : out.length + 1,
     });
     if (out.length >= MAX_HISTORY) break;
   }
