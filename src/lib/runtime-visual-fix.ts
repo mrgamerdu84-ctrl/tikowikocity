@@ -30,7 +30,7 @@ if (!globalState[marker]) {
   ] as const;
   const carNames = new Set<string>(CAR_NAMES);
   const carPalette = new Map<string, number>([
-    ["sedan", 0xb8bec7], // berline de référence : gris clair opaque
+    ["sedan", 0xb8bec7],
     ["sedan-sports", 0xd94848],
     ["suv", 0x2f80ed],
     ["suv-luxury", 0x7f8c9a],
@@ -86,7 +86,7 @@ if (!globalState[marker]) {
         if (rear && material.color) {
           hasRearLight = true;
           material.color.setHex(0xb91f2d);
-          material.emissive?.setHex(0xff2638);
+          material.emissive.setHex(0xff2638);
           material.emissiveIntensity = 0.42;
           material.transparent = false;
           material.opacity = 1;
@@ -117,7 +117,7 @@ if (!globalState[marker]) {
             material.color.copy(fallback);
             material.transparent = false;
             material.opacity = 1;
-            material.roughness = Math.min(material.roughness ?? 0.7, 0.72);
+            material.roughness = Math.min(material.roughness, 0.72);
           }
         }
         return material;
@@ -125,8 +125,6 @@ if (!globalState[marker]) {
       mesh.material = Array.isArray(mesh.material) ? styled : styled[0]!;
     });
 
-    // Si l'asset n'a pas de feux arrière identifiables, deux petits blocs rouges
-    // sont ajoutés à la carrosserie. Aucun PointLight : pas de halo géant/bloom.
     if (!hasRearLight) {
       car.updateMatrixWorld(true);
       const box = new THREE.Box3().setFromObject(car);
@@ -151,8 +149,14 @@ if (!globalState[marker]) {
     }
   };
 
-  const originalClone = THREE.Object3D.prototype.clone;
-  THREE.Object3D.prototype.clone = function patchedClone(recursive = true) {
+  type Object3DPatch = {
+    clone: (this: THREE.Object3D, recursive?: boolean) => THREE.Object3D;
+    add: (this: THREE.Object3D, ...objects: THREE.Object3D[]) => THREE.Object3D;
+  };
+  const objectProto = THREE.Object3D.prototype as unknown as Object3DPatch;
+  const originalClone = objectProto.clone;
+
+  objectProto.clone = function patchedClone(this: THREE.Object3D, recursive = true) {
     const cloned = originalClone.call(this, recursive);
     if (carNames.has(this.name)) styleCar(cloned, this.name);
     return cloned;
@@ -181,8 +185,8 @@ if (!globalState[marker]) {
       mats.forEach((raw) => {
         const material = raw as THREE.MeshStandardMaterial;
         if (!material.emissive) return;
-        const e = material.emissive.getHex();
-        if (e === 0xff3b30 || e === 0x33d17a) {
+        const emissive = material.emissive.getHex();
+        if (emissive === 0xff3b30 || emissive === 0x33d17a) {
           mesh.scale.multiplyScalar(0.68);
           capNumberProperty(material, "emissiveIntensity", 0.95);
         }
@@ -192,7 +196,6 @@ if (!globalState[marker]) {
 
   const tameHouseLighting = (obj: THREE.Object3D) => {
     if (obj instanceof THREE.PointLight && obj.color.getHex() === 0xffc56e) {
-      // Les fenêtres restent émissives mais la maison entière ne devient plus jaune.
       obj.visible = false;
       obj.castShadow = false;
     }
@@ -209,8 +212,8 @@ if (!globalState[marker]) {
     });
   };
 
-  const originalAdd = THREE.Object3D.prototype.add;
-  THREE.Object3D.prototype.add = function patchedAdd(...objects: THREE.Object3D[]) {
+  const originalAdd = objectProto.add;
+  objectProto.add = function patchedAdd(this: THREE.Object3D, ...objects: THREE.Object3D[]) {
     objects.forEach((obj) => tameHouseLighting(obj));
 
     const trafficObjects = objects.filter(
@@ -220,9 +223,6 @@ if (!globalState[marker]) {
 
     const result = originalAdd.apply(this, objects);
 
-    // Le jeu créait deux feux en diagonale. On duplique chaque signal de l'autre
-    // côté du carrefour : quatre feux propres au total, en partageant les mêmes
-    // matériaux de signal pour rester parfaitement synchronisés rouge/vert.
     trafficObjects.forEach((obj) => {
       const cx = Math.round(obj.position.x / TILE) * TILE;
       const cz = Math.round(obj.position.z / TILE) * TILE;
