@@ -1722,6 +1722,8 @@ export default function CarWashScene() {
       if (!origin) return;
       origin.car.position.set(start.x, origin.baseY, start.z);
       tintCar(origin.car, 1);
+      const soap = makeSoapCoat();
+      origin.car.add(soap);
       washCars.push({
         car: origin.car,
         d: 0,
@@ -1730,7 +1732,9 @@ export default function CarWashScene() {
         baseY: origin.baseY,
         wheels: origin.wheels,
         origin,
+        soap,
       });
+
     };
 
 
