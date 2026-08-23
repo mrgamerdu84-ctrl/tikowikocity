@@ -154,6 +154,7 @@ export const loadFromDrive = createServerFn({ method: "POST" }).handler(async ()
     fileName: latest.name,
     version: typeof obj.version === "number" ? obj.version : 0,
     savedAt: typeof obj.savedAt === "string" ? obj.savedAt : null,
-    state,
+    // Serialized so future fields travel unchanged through the RPC boundary.
+    stateJson: JSON.stringify(state ?? {}),
   };
 });

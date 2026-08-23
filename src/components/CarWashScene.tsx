@@ -143,7 +143,7 @@ export default function CarWashScene() {
         toast.info("Aucune sauvegarde trouvée dans le dossier TikowikoCarWash.");
         return;
       }
-      const state = (res.state ?? {}) as {
+      const state = JSON.parse(res.stateJson || "{}") as {
         machines?: Partial<typeof machines>;
         cinema?: unknown;
       };
