@@ -360,6 +360,10 @@ export default function CarWashScene() {
       heading: number;
       yaw: number;
       baseY: number;
+      /* bornes de la chaussée pour cet axe : jamais de sortie sur la pelouse */
+      sMin: number;
+      sMax: number;
+
     };
     const trafficCars: TrafficCar[] = [];
     /* Toute la station de lavage (tunnel, tapis, brosses, voitures à laver)
