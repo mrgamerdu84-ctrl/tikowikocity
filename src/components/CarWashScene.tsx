@@ -1342,6 +1342,7 @@ export default function CarWashScene() {
         .then((raw) => {
           if (disposed) return;
           const meshyTunnel = normalizeModel(raw, 11);
+          console.log("MESHY TUNNEL OK");
           // On le contient sous la toiture du hall
           const tb = new THREE.Box3().setFromObject(meshyTunnel);
           const th = tb.max.y - tb.min.y;
