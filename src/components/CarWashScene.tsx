@@ -43,6 +43,10 @@ const CAR_Y = 0.3;
 const PATH_START = -13;
 const PATH_END = 13;
 const WASH_ZONE: [number, number] = [-1.5, 5.5];
+/* Le car wash a sa propre parcelle en périphérie sud de la ville,
+   reliée à la grille par une voie d'accès dédiée. */
+const WASH_SITE_Z = -42;
+const WASH_ACCESS_X = 6;
 const DIRT_COLOR = new THREE.Color(0x8a7355);
 
 function b64ToArrayBuffer(b64: string) {
@@ -103,7 +107,7 @@ export default function CarWashScene() {
       0.1,
       300,
     );
-    camera.position.set(-26, 20, 34);
+    camera.position.set(-34, 26, WASH_SITE_Z + 40);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -114,7 +118,7 @@ export default function CarWashScene() {
     wrap.appendChild(renderer.domElement);
 
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.target.set(2, 1.5, 0);
+    controls.target.set(2, 1.5, WASH_SITE_Z + 6);
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
     controls.minDistance = 6;
@@ -358,6 +362,11 @@ export default function CarWashScene() {
       baseY: number;
     };
     const trafficCars: TrafficCar[] = [];
+    /* Toute la station de lavage (tunnel, tapis, brosses, voitures à laver)
+       vit dans ce groupe : ses coordonnées locales restent inchangées. */
+    const washSite = new THREE.Group();
+    washSite.position.z = WASH_SITE_Z;
+    scene.add(washSite);
     const CITY_MIN = -33;
     const CITY_MAX = 33;
 
@@ -379,7 +388,7 @@ export default function CarWashScene() {
       sedan.position.set(PATH_START, baseY, 0);
       sedan.userData["wheels"] = findWheels(sedan);
       tintCar(sedan, 1);
-      scene.add(sedan);
+      washSite.add(sedan);
 
       sedanCars.push(sedan);
     };
@@ -490,12 +499,12 @@ export default function CarWashScene() {
       tunnel.rotation.y = Math.PI / 2;
       tunnel.position.set(2, 0, 0);
       setShadow(tunnel);
-      scene.add(tunnel);
+      washSite.add(tunnel);
 
 
       // Tapis roulant
       const conveyor = makeConveyor();
-      scene.add(conveyor.group);
+      washSite.add(conveyor.group);
       conveyorSlats.push(...conveyor.slats);
 
       /* Rouleaux verticaux : deux paires à l'entrée (bien visibles depuis
@@ -507,7 +516,7 @@ export default function CarWashScene() {
           spin.scale.set(1.25, 1.15, 1.25);
           pivot.add(spin);
           pivot.position.set(WASH_ZONE[0] + offset, ROAD_Y + 1.1, zSide * 1.45);
-          scene.add(pivot);
+          washSite.add(pivot);
           brushes.push({
             pivot,
             spin,
@@ -525,7 +534,7 @@ export default function CarWashScene() {
         spin.scale.set(1.1, 1.5, 1.1);
         pivot.add(spin);
         pivot.position.set(x, ROAD_Y + 2.1, 0);
-        scene.add(pivot);
+        washSite.add(pivot);
         brushes.push({ pivot, spin, dir: i % 2 === 0 ? -1 : 1, kind: "brush" });
       });
 
@@ -533,7 +542,7 @@ export default function CarWashScene() {
       for (let i = 0; i < 2; i++) {
         const foam = makeFoamVeil();
         foam.position.set(1.5 + i * 2, ROAD_Y + 1.2, 0);
-        scene.add(foam);
+        washSite.add(foam);
         foamSprites.push(foam);
       }
 
@@ -654,6 +663,63 @@ export default function CarWashScene() {
         }
       });
 
+      /* ----- Parcelle dédiée du car wash (périphérie sud) ----- */
+      const concreteMat = new THREE.MeshStandardMaterial({
+        color: 0x9aa0a6,
+        roughness: 1,
+      });
+
+      // Voie d'accès depuis la rue z = zMin jusqu'à la station
+      const accessLen = zMin - WASH_SITE_Z;
+      const accessCz = (zMin + WASH_SITE_Z) / 2;
+      addSlab(sidewalkMat, STREET_W + 1.2, accessLen, WASH_ACCESS_X, accessCz, 0.005);
+      addSlab(asphalt, STREET_W, accessLen, WASH_ACCESS_X, accessCz, 0.02);
+      for (let z = zMin - 4; z > WASH_SITE_Z + 3; z -= 3) {
+        const d = new THREE.Mesh(dashGeoX, dashMat);
+        d.rotation.x = -Math.PI / 2;
+        d.rotation.z = Math.PI / 2;
+        d.position.set(WASH_ACCESS_X, 0.03, z);
+        scene.add(d);
+      }
+
+      // Terrain de la station : pelouse + dalle béton
+      addSlab(lawnMat, 46, 26, 0, WASH_SITE_Z + 2, 0.008);
+      addSlab(concreteMat, 40, 20, 0, WASH_SITE_Z + 3, 0.012);
+
+      // Voie de lavage (traversée est-ouest de la parcelle)
+      addSlab(asphalt, 34, STREET_W, 0, WASH_SITE_Z, 0.02);
+      for (let x = -16; x <= 16; x += 3) {
+        if (x > PATH_START + 2 && x < PATH_END - 2) continue;
+        const d = new THREE.Mesh(dashGeoX, dashMat);
+        d.rotation.x = -Math.PI / 2;
+        d.position.set(x, 0.03, WASH_SITE_Z);
+        scene.add(d);
+      }
+
+      // Parking : 5 places marquées derrière la station
+      const parkZ = WASH_SITE_Z + 8.5;
+      addSlab(concreteMat, 26, 8, -2, parkZ, 0.016);
+      const lineMat = new THREE.MeshStandardMaterial({ color: 0xf2f2ec, roughness: 0.8 });
+      for (let i = 0; i <= 5; i++) {
+        const line = new THREE.Mesh(new THREE.PlaneGeometry(0.16, 6), lineMat);
+        line.rotation.x = -Math.PI / 2;
+        line.position.set(-13 + i * 4.4, 0.024, parkZ);
+        scene.add(line);
+      }
+      // Une voiture garée en attente
+      const parked = models["taxi"]!.clone(true);
+      setShadow(parked);
+      parked.position.set(-10.8, CAR_Y, parkZ);
+      scene.add(parked);
+
+      // Arbres en bordure de parcelle, pour séparer la station de la ville
+      for (let x = -20; x <= 20; x += 5) {
+        const tr = makeTree();
+        tr.position.set(x, 0, WASH_SITE_Z + 14);
+        tr.scale.setScalar(0.9);
+        scene.add(tr);
+      }
+
       // ----- Circulation : deux voies par rue, sens opposés, bien centrées -----
       const cityTemplates = [models["taxi"]!, models["sedan"]!];
       let ti = 0;
@@ -684,7 +750,6 @@ export default function CarWashScene() {
       };
 
       Z_STREETS.forEach((z, i) => {
-        if (z === 0) return; // rue du car wash réservée aux voitures à laver
         addTraffic("x", z + LANE, 1, xMin + ((i * 11) % 40));
         addTraffic("x", z - LANE, -1, xMin + ((i * 17) % 40));
       });
@@ -752,7 +817,7 @@ export default function CarWashScene() {
       for (let i = sedanCars.length - 1; i >= 0; i--) {
         const car = sedanCars[i]!;
         if (car.position.x > PATH_END) {
-          scene.remove(car);
+          washSite.remove(car);
           sedanCars.splice(i, 1);
         }
       }
@@ -846,9 +911,9 @@ export default function CarWashScene() {
         camera.position.set(
           Math.cos(angle) * 20,
           11 + Math.sin(t * 0.3) * 2,
-          Math.sin(angle) * 20 + 2,
+          Math.sin(angle) * 20 + 2 + WASH_SITE_Z,
         );
-        camera.lookAt(2, 2, 0);
+        camera.lookAt(2, 2, WASH_SITE_Z);
       }
 
       controls.update();
