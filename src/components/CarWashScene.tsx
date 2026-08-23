@@ -17,7 +17,7 @@ import modelsAsset from "@/assets/car-wash-models.json.asset.json";
 
 import tunnelAsset from "@/assets/tunnel.glb.asset.json";
 import kenneyPackAsset from "@/assets/kenney-pack.glb.asset.json";
-import { CityPlan, type SerializedPlan } from "@/game/cityPlan";
+import { CityPlan, type SerializedPlan, type SerializedHouses } from "@/game/cityPlan";
 import {
   TILE,
   DIR_VEC,
@@ -42,6 +42,7 @@ import {
   type UpgradeKey,
   type UpgradeLevels,
 } from "@/game/upgrades";
+import { HOUSE_LEVELS, MAX_HOUSE_LEVEL, houseDef, totalCapacity } from "@/game/houses";
 
 
 /* Modèles issus des kits Kenney (car-kit, city-kit-roads, building-kit),
@@ -167,6 +168,53 @@ export default function CarWashScene() {
     });
   };
 
+  /* ----- Quartiers résidentiels : maisons posées par le joueur ----- */
+  const [houseLevel, setHouseLevel] = useState(1);
+  const houseLevelRef = useRef(1);
+  const [city, setCity] = useState({ houses: 0, capacity: 0 });
+  const [residents, setResidents] = useState(0);
+  const residentsRef = useRef(0);
+  const cityRef = useRef(city);
+  const cityStatsRef = useRef<(levels: number[]) => void>(() => {});
+  cityStatsRef.current = (levels: number[]) => {
+    const next = { houses: levels.length, capacity: totalCapacity(levels) };
+    cityRef.current = next;
+    setCity(next);
+  };
+  /* Dépense d'argent depuis la scène 3D (pose / amélioration de maison). */
+  const spendRef = useRef<(amount: number) => boolean>(() => false);
+  spendRef.current = (amount: number) => {
+    if (economyRef.current.money < amount) {
+      toast.error(`Il manque ${(amount - economyRef.current.money).toLocaleString("fr-FR")} €`);
+      return false;
+    }
+    const next = { ...economyRef.current, money: economyRef.current.money - amount };
+    economyRef.current = next;
+    setEconomy(next);
+    return true;
+  };
+
+  /* Les habitants arrivent progressivement jusqu'à la capacité des maisons. */
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setResidents((prev) => {
+        const cap = cityRef.current.capacity;
+        const next = prev < cap ? prev + 1 : prev > cap ? cap : prev;
+        residentsRef.current = next;
+        if (next > prev && (next === 1 || next % 10 === 0)) {
+          toast.success(`👥 ${next} habitant${next > 1 ? "s" : ""} à TikowikoCity`);
+        }
+        return next;
+      });
+    }, 2200);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const chooseHouseLevel = (l: number) => {
+    houseLevelRef.current = l;
+    setHouseLevel(l);
+  };
+
   /* ----- Mode construction (pose de routes / mobilier par le joueur) ----- */
   const [buildMode, setBuildMode] = useState(false);
   const [tool, setTool] = useState<BuildTool>("straight");
@@ -178,7 +226,9 @@ export default function CarWashScene() {
   const planIoRef = useRef<{
     save: () => SerializedPlan;
     load: (data: SerializedPlan) => void;
-  }>({ save: () => [], load: () => {} });
+    saveHouses: () => SerializedHouses;
+    loadHouses: (data: SerializedHouses) => void;
+  }>({ save: () => [], load: () => {}, saveHouses: () => [], loadHouses: () => {} });
 
   const chooseTool = (t: BuildTool) => {
     toolRef.current = t;
@@ -242,6 +292,8 @@ export default function CarWashScene() {
               machines: machinesRef.current,
               cinema: cinemaStateRef.current,
               city: planIoRef.current.save(),
+              houses: planIoRef.current.saveHouses(),
+              residents: residentsRef.current,
               economy: economyRef.current,
               upgrades: upgradesRef.current,
 
@@ -279,6 +331,8 @@ export default function CarWashScene() {
         machines?: Partial<typeof machines>;
         cinema?: unknown;
         city?: SerializedPlan;
+        houses?: SerializedHouses;
+        residents?: unknown;
         economy?: { money?: unknown; washes?: unknown };
         upgrades?: unknown;
 
@@ -295,6 +349,12 @@ export default function CarWashScene() {
         });
       }
       if (Array.isArray(state.city)) planIoRef.current.load(state.city);
+      if (Array.isArray(state.houses)) planIoRef.current.loadHouses(state.houses);
+      if (typeof state.residents === "number" && Number.isFinite(state.residents)) {
+        const r = Math.max(0, Math.round(state.residents));
+        residentsRef.current = r;
+        setResidents(r);
+      }
       if (state.economy && typeof state.economy === "object") {
         const money = state.economy.money;
         const washes = state.economy.washes;
@@ -924,6 +984,60 @@ export default function CarWashScene() {
     const propsGroup = new THREE.Group();
     scene.add(propsGroup);
 
+    const housesGroup = new THREE.Group();
+    scene.add(housesGroup);
+
+    /* Maison stylisée Kenney-like : corps + toit à deux pentes + détails. */
+    const makeHouse = (level: number) => {
+      const def = houseDef(level);
+      const g = new THREE.Group();
+      const wallMat = new THREE.MeshStandardMaterial({ color: def.color, roughness: 0.95 });
+      const roofMat = new THREE.MeshStandardMaterial({ color: def.roof, roughness: 0.9 });
+      const floors = level === 3 ? 3 : level === 2 ? 2 : 1;
+      const w = level === 3 ? 3.1 : 2.7;
+      const h = 1.5 * floors;
+      const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, w), wallMat);
+      body.position.y = h / 2;
+      g.add(body);
+
+      const roof = new THREE.Mesh(new THREE.ConeGeometry(w * 0.86, 1.25, 4), roofMat);
+      roof.position.y = h + 0.6;
+      roof.rotation.y = Math.PI / 4;
+      g.add(roof);
+
+      // fenêtres
+      const winMat = new THREE.MeshStandardMaterial({ color: 0x9fd7f2, roughness: 0.4 });
+      const winGeo = new THREE.BoxGeometry(0.55, 0.55, 0.06);
+      for (let f = 0; f < floors; f++) {
+        for (const sx of [-0.65, 0.65]) {
+          const win = new THREE.Mesh(winGeo, winMat);
+          win.position.set(sx, 0.85 + f * 1.5, w / 2 + 0.02);
+          g.add(win);
+        }
+      }
+      const door = new THREE.Mesh(
+        new THREE.BoxGeometry(0.6, 0.95, 0.08),
+        new THREE.MeshStandardMaterial({ color: 0x7a5230, roughness: 0.9 }),
+      );
+      door.position.set(0, 0.475, w / 2 + 0.02);
+      g.add(door);
+      setShadow(g);
+      return g;
+    };
+
+    const renderHouses = () => {
+      [...housesGroup.children].forEach((c) => housesGroup.remove(c));
+      plan.houses.forEach((h, k) => {
+        const [cx, cz] = parseKey(k);
+        const m = makeHouse(h.level);
+        m.position.set(cx * TILE, 0, cz * TILE);
+        // légère variation d'orientation pour casser la rigidité
+        m.rotation.y = ((cx * 7 + cz * 13) % 4) * 0.06;
+        housesGroup.add(m);
+      });
+      cityStatsRef.current(plan.houseLevels());
+    };
+
     const renderPlan = () => {
       [...roadsGroup.children].forEach((c) => roadsGroup.remove(c));
       [...propsGroup.children].forEach((c) => propsGroup.remove(c));
@@ -1447,7 +1561,9 @@ export default function CarWashScene() {
           ? !!existing && !existing.locked
           : tool === "light" || tool === "lamp"
             ? !!existing
-            : canBuild(c.cx, c.cz);
+            : tool === "house"
+              ? plan.canPlaceHouse(c.cx, c.cz) || !!plan.house(c.cx, c.cz)
+              : canBuild(c.cx, c.cz);
       (ghost.material as THREE.MeshBasicMaterial).color.set(ok ? 0x2bd07c : 0xe05252);
     };
     const onPointerDown = (ev: PointerEvent) => {
@@ -1462,7 +1578,29 @@ export default function CarWashScene() {
       if (!c) return;
       const tool = toolRef.current;
       if (tool === "erase") {
+        if (plan.removeHouse(c.cx, c.cz)) {
+          renderHouses();
+          return;
+        }
         if (plan.remove(c.cx, c.cz)) renderPlan();
+        return;
+      }
+      if (tool === "house") {
+        const existingHouse = plan.house(c.cx, c.cz);
+        if (existingHouse) {
+          // clic sur une maison existante : amélioration de niveau
+          const target = Math.min(MAX_HOUSE_LEVEL, existingHouse.level + 1);
+          if (target === existingHouse.level) return;
+          if (!spendRef.current(houseDef(target).cost)) return;
+          plan.placeHouse(c.cx, c.cz, target);
+          renderHouses();
+          return;
+        }
+        if (!plan.canPlaceHouse(c.cx, c.cz)) return;
+        const lvl = houseLevelRef.current;
+        if (!spendRef.current(houseDef(lvl).cost)) return;
+        plan.placeHouse(c.cx, c.cz, lvl);
+        renderHouses();
         return;
       }
       if (tool === "light" || tool === "lamp") {
@@ -1490,6 +1628,11 @@ export default function CarWashScene() {
       load: (data) => {
         plan.load(data);
         renderPlan();
+      },
+      saveHouses: () => plan.serializeHouses(),
+      loadHouses: (data) => {
+        plan.loadHouses(data);
+        renderHouses();
       },
     };
 
@@ -1592,7 +1735,9 @@ export default function CarWashScene() {
       washCooldown -= dt;
       if (washCooldown <= 0) {
         const [lo, hi] = washInterval(up.speed);
-        washCooldown = lo + Math.random() * (hi - lo + 3);
+        // plus la ville compte d'habitants, plus les clients affluent
+        const crowd = 1 / (1 + residentsRef.current / 25);
+        washCooldown = (lo + Math.random() * (hi - lo + 3)) * crowd;
         if (ctl.traffic && washCars.length < capacityOf(up.capacity)) sendCityCarToWash();
       }
 
@@ -1889,6 +2034,26 @@ export default function CarWashScene() {
         </div>
 
 
+        <div className="mt-1.5 flex items-center gap-2 rounded-xl bg-splash/15 px-2 py-1.5 ring-1 ring-ink/10">
+          <span aria-hidden className="text-[15px]">👥</span>
+          <span className="text-[14px] font-extrabold tabular-nums sm:text-[15px]">
+            {residents} habitant{residents > 1 ? "s" : ""}
+          </span>
+          <span className="ml-auto text-[11px] font-semibold opacity-70">
+            {city.houses} 🏠 / {city.capacity} places
+          </span>
+        </div>
+
+        {/* Boutique d'améliorations */}
+        <button
+          type="button"
+          onClick={() => setShopOpen((v) => !v)}
+          aria-expanded={shopOpen}
+          className="mt-2 w-full rounded-full bg-sunny px-3 py-2 text-[12.5px] font-bold text-sunny-foreground shadow-[0_3px_0_var(--sunny-shadow)] transition-transform active:translate-y-0.5"
+        >
+          🛠️ Améliorations
+        </button>
+
         <p className="mt-1 hidden text-[12.5px] leading-relaxed opacity-80 sm:block">
           Construit avec les kits Kenney (voitures, routes, bâtiments). Glisse pour tourner la
           caméra, molette pour zoomer.
@@ -1903,16 +2068,6 @@ export default function CarWashScene() {
         <p className="mt-1 font-semibold opacity-90">© {new Date().getFullYear()} tikowikoFamily</p>
 
       </div>
-
-      {/* Boutique d'améliorations */}
-      <button
-        type="button"
-        onClick={() => setShopOpen((v) => !v)}
-        aria-expanded={shopOpen}
-        className="fixed left-2 top-[132px] z-40 rounded-full bg-sunny px-3 py-2 text-[12.5px] font-bold text-sunny-foreground shadow-[0_3px_0_var(--sunny-shadow)] transition-transform active:translate-y-0.5 sm:left-4 sm:top-[168px]"
-      >
-        🛠️ Améliorations
-      </button>
 
       {shopOpen && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 p-3 backdrop-blur-sm sm:items-center">
@@ -2103,6 +2258,7 @@ export default function CarWashScene() {
                 "crossroad",
                 "light",
                 "lamp",
+                "house",
                 "erase",
               ] as BuildTool[]
             ).map((t) => (
@@ -2118,6 +2274,28 @@ export default function CarWashScene() {
                 {TOOL_LABEL[t]}
               </button>
             ))}
+            {tool === "house" && (
+              <div className="flex w-full items-center justify-center gap-1.5 border-t border-ink/10 pt-1.5">
+                {HOUSE_LEVELS.map((h) => (
+                  <button
+                    key={h.level}
+                    type="button"
+                    onClick={() => chooseHouseLevel(h.level)}
+                    aria-pressed={houseLevel === h.level}
+                    className={`rounded-xl px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${
+                      houseLevel === h.level
+                        ? "bg-sunny text-sunny-foreground"
+                        : "bg-ink/10 text-ink"
+                    }`}
+                  >
+                    {h.icon} Niv.{h.level} · {h.cost} € · {h.capacity} hab.
+                  </button>
+                ))}
+                <span className="w-full text-center text-[10.5px] opacity-70">
+                  Pose sur une case libre bordant une route · reclique une maison pour l'améliorer
+                </span>
+              </div>
+            )}
             <button
               type="button"
               onClick={() => {
