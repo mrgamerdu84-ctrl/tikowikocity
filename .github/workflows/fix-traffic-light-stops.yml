@@ -76,9 +76,6 @@ jobs:
         );
         if (tooClose) return;
 
-        /* Vraie ligne d'arrêt : on regarde le feu de la case que la voiture
-           quitte ET celui de l'intersection qu'elle va emprunter. Ainsi un
-           feu rouge posé sur une intersection ou juste avant est respecté. */
         const [sdx, sdz] = DIR_VEC[e.dirOut]!;
         const signalNext = plan.get(e.cx + sdx, e.cz + sdz);
         const signalHere = plan.get(e.cx, e.cz);
@@ -86,7 +83,6 @@ jobs:
         const redAtExit = hasSignal && axisOf(e.dirOut) !== greenAxis;
         const STOP_LINE_T = 0.82;
 
-        // Au rouge on avance jusqu'à la ligne, jamais dans l'intersection.
         if (redAtExit && e.t >= STOP_LINE_T) return;
         const nt = redAtExit ? Math.min(rawNt, STOP_LINE_T) : rawNt;
 
@@ -104,15 +100,12 @@ jobs:
         const nz = e.cz + dz;
         const next = plan.get(nx, nz);
         if (!next) {
-          // cul-de-sac : demi-tour sans quitter la chaussée
           e.dirIn = e.dirOut;
           e.dirOut = opposite(e.dirIn);
           e.t = 0;
         } else {
           const busy =
             netCars.filter((o) => o !== e && o.cx === nx && o.cz === nz).length >= 2;
-          /* Double sécurité au franchissement : si le feu devient rouge entre
-             deux images, la voiture reste avant l'intersection. */
           const red = (!!signalHere?.light || !!next.light) && axisOf(e.dirOut) !== greenAxis;
           if (busy || red) {
             e.t = Math.min(e.t, STOP_LINE_T);
@@ -151,3 +144,4 @@ jobs:
           git commit -m "Fait respecter les feux rouges par les voitures"
           git pull --rebase origin main
           git push origin HEAD:main
+# relance 2026-08-23
