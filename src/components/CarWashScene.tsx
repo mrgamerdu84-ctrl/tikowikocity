@@ -1569,7 +1569,7 @@ export default function CarWashScene() {
       return { cx: worldToCell(hitPoint.x), cz: worldToCell(hitPoint.z) };
     };
 
-    let downAt: { x: number; y: number } | null = null;
+    let downAt: { x: number; y: number; id: number; type: string } | null = null;
     const onPointerMove = (ev: PointerEvent) => {
       if (!buildRef.current) {
         ghost.visible = false;
@@ -1594,14 +1594,41 @@ export default function CarWashScene() {
               : canBuild(c.cx, c.cz);
       (ghost.material as THREE.MeshBasicMaterial).color.set(ok ? 0x2bd07c : 0xe05252);
     };
+    const releasePointer = (ev: PointerEvent) => {
+      try {
+        if (renderer.domElement.hasPointerCapture(ev.pointerId)) {
+          renderer.domElement.releasePointerCapture(ev.pointerId);
+        }
+      } catch {
+        // Le pointeur peut déjà avoir été relâché par le navigateur.
+      }
+    };
     const onPointerDown = (ev: PointerEvent) => {
-      downAt = { x: ev.clientX, y: ev.clientY };
+      if (!buildRef.current) return;
+      if (ev.pointerType === "mouse" && ev.button !== 0) return;
+      ev.preventDefault();
+      downAt = {
+        x: ev.clientX,
+        y: ev.clientY,
+        id: ev.pointerId,
+        type: ev.pointerType,
+      };
+      try {
+        renderer.domElement.setPointerCapture(ev.pointerId);
+      } catch {
+        // Certains WebView ne prennent pas en charge la capture de pointeur.
+      }
+      onPointerMove(ev);
     };
     const onPointerUp = (ev: PointerEvent) => {
       const start = downAt;
+      if (!start || start.id !== ev.pointerId) return;
       downAt = null;
-      if (!buildRef.current || !start) return;
-      if (Math.hypot(ev.clientX - start.x, ev.clientY - start.y) > 6) return;
+      releasePointer(ev);
+      if (!buildRef.current) return;
+      if (ev.pointerType === "mouse" && ev.button !== 0) return;
+      const tapTolerance = start.type === "touch" || start.type === "pen" ? 24 : 8;
+      if (Math.hypot(ev.clientX - start.x, ev.clientY - start.y) > tapTolerance) return;
       const c = cellUnderPointer(ev);
       if (!c) return;
       const tool = toolRef.current;
@@ -1642,14 +1669,23 @@ export default function CarWashScene() {
       plan.place(c.cx, c.cz, tool, rotRef.current);
       renderPlan();
     };
+    const onPointerCancel = (ev: PointerEvent) => {
+      if (downAt?.id === ev.pointerId) downAt = null;
+      releasePointer(ev);
+    };
     renderer.domElement.addEventListener("pointermove", onPointerMove);
     renderer.domElement.addEventListener("pointerdown", onPointerDown);
     renderer.domElement.addEventListener("pointerup", onPointerUp);
+    renderer.domElement.addEventListener("pointercancel", onPointerCancel);
 
     buildApplyRef.current = (on: boolean) => {
       gridHelper.visible = on;
-      controls.enableRotate = !on;
-      if (!on) ghost.visible = false;
+      controls.enabled = !on;
+      renderer.domElement.style.touchAction = on ? "none" : "auto";
+      if (!on) {
+        ghost.visible = false;
+        downAt = null;
+      }
     };
     planIoRef.current = {
       save: () => plan.serialize(),
@@ -2005,6 +2041,7 @@ export default function CarWashScene() {
       renderer.domElement.removeEventListener("pointermove", onPointerMove);
       renderer.domElement.removeEventListener("pointerdown", onPointerDown);
       renderer.domElement.removeEventListener("pointerup", onPointerUp);
+      renderer.domElement.removeEventListener("pointercancel", onPointerCancel);
       controls.dispose();
       renderer.dispose();
       renderer.domElement.remove();
@@ -2348,7 +2385,7 @@ export default function CarWashScene() {
           🏗️ {buildMode ? "Quitter la construction" : "Construire"}
         </button>
         {buildMode && (
-          <div className="flex w-full flex-wrap items-center justify-center gap-1.5 rounded-2xl bg-white/90 p-2 shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur">
+          <div className="flex max-h-[min(48vh,360px)] w-full flex-wrap items-center justify-center gap-1.5 overflow-y-auto overscroll-contain rounded-2xl bg-white/90 p-2 shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur">
             {(
               [
                 "straight",
