@@ -235,12 +235,12 @@ export default function CarWashScene() {
        et on élargit le champ pour que la ville et le car wash remplissent l'écran. */
     const isPortrait = () => window.innerHeight >= window.innerWidth;
     const camera = new THREE.PerspectiveCamera(
-      isPortrait() ? 58 : 45,
+      isPortrait() ? 52 : 45,
       window.innerWidth / window.innerHeight,
       0.1,
       2000,
     );
-    if (isPortrait()) camera.position.set(-30, 25, WASH_SITE_Z + 36);
+    if (isPortrait()) camera.position.set(-44, 34, WASH_SITE_Z + 50);
     else camera.position.set(-34, 26, WASH_SITE_Z + 40);
 
 
@@ -253,7 +253,7 @@ export default function CarWashScene() {
     wrap.appendChild(renderer.domElement);
 
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.target.set(2, 1.5, WASH_SITE_Z + 6);
+    controls.target.set(2, 1.5, WASH_SITE_Z + (isPortrait() ? 12 : 6));
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
     controls.minDistance = 6;
@@ -1656,7 +1656,7 @@ export default function CarWashScene() {
 
     const onResize = () => {
       camera.aspect = window.innerWidth / window.innerHeight;
-      camera.fov = isPortrait() ? 58 : 45;
+      camera.fov = isPortrait() ? 52 : 45;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
     };
