@@ -827,18 +827,24 @@ export default function CarWashScene() {
 
           // mobilier bas (pas de poteaux) sur un carrefour sur deux
           if ((xi + zi) % 2 === 0) {
-            const [bx, bz] = corners[1];
             const bench = makeBench();
-            bench.position.set(bx + 1.4, 0, bz - 1.4);
-            bench.rotation.y = Math.atan2(cx - bx, cz - bz);
+            bench.position.set(cx + CORNER + 1.4, 0, cz - CORNER - 1.4);
+            bench.rotation.y = Math.PI / 2;
             setShadow(bench);
             scene.add(bench);
 
-            const [nx, nz] = corners[3];
             const bin = makeBin();
-            bin.position.set(nx - 1.4, 0, nz + 1.4);
+            bin.position.set(cx - CORNER - 1.4, 0, cz + CORNER + 1.4);
             setShadow(bin);
             scene.add(bin);
+          }
+
+          // un lampadaire discret, un carrefour sur deux (l'autre parité)
+          if ((xi + zi) % 2 === 1) {
+            const lamp = makeLamp();
+            lamp.position.set(cx + CORNER + 1.2, 0, cz + CORNER + 1.2);
+            setShadow(lamp);
+            scene.add(lamp);
           }
         });
       });
