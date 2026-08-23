@@ -593,16 +593,17 @@ export default function CarWashScene() {
             slab.position.set(cx, y, cz);
             g.add(slab);
 
-            const wall = (wx: number, wz: number, wr: number) => {
-              const w = wallTpl.clone(true);
+            const wall = (wx: number, wz: number, wr: number, door = false) => {
+              const w = (door ? doorTpl : wallTpl).clone(true);
               w.position.set(wx, y, wz);
               w.rotation.y = wr;
               g.add(w);
             };
             if (i === 0) wall(cx - CELL / 2, cz, 0);
             if (i === cols - 1) wall(cx + CELL / 2, cz, 0);
-            if (j === 0) wall(cx, cz - CELL / 2, Math.PI / 2);
+            if (j === 0) wall(cx, cz - CELL / 2, Math.PI / 2, f === 0 && i === 0);
             if (j === rows - 1) wall(cx, cz + CELL / 2, Math.PI / 2);
+
           }
         }
       }
