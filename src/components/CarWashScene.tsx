@@ -1767,18 +1767,13 @@ export default function CarWashScene() {
 
 
 
-    // File d'attente : de nouvelles voitures arrivent régulièrement
-    let queueTimer = 0;
-
     loadAll()
       .then(() => {
         if (disposed) return;
         buildScene();
         setLoading(false);
         animate();
-        queueTimer = window.setInterval(() => {
-          if (washCars.length < 5) spawnSedan();
-        }, 4000);
+
 
         void loadMeshy();
       })
