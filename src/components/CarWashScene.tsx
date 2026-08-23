@@ -240,7 +240,7 @@ export default function CarWashScene() {
       0.1,
       2000,
     );
-    if (isPortrait()) camera.position.set(-44, 34, WASH_SITE_Z + 50);
+    if (isPortrait()) camera.position.set(-50, 40, WASH_SITE_Z + 58);
     else camera.position.set(-34, 26, WASH_SITE_Z + 40);
 
 
@@ -253,7 +253,7 @@ export default function CarWashScene() {
     wrap.appendChild(renderer.domElement);
 
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.target.set(2, 1.5, WASH_SITE_Z + (isPortrait() ? 12 : 6));
+    controls.target.set(2, 1.5, WASH_SITE_Z + (isPortrait() ? 18 : 6));
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
     controls.minDistance = 6;
