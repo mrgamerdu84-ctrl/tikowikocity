@@ -131,6 +131,7 @@ export default function CarWashScene() {
         },
       });
       setDriveState("done");
+      setDriveMenuOpen(false);
       toast.success("Sauvegardé sur Google Drive", {
         description: res.name,
         ...(res.webViewLink
