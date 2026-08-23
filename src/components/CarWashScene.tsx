@@ -3,6 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { saveToDrive, loadFromDrive } from "@/lib/drive.functions";
 import { avatarSrc, usePlayer } from "@/lib/player";
+import { RentalManager } from "@/components/RentalManager";
 
 
 const SAVE_VERSION = 2;
@@ -263,6 +264,22 @@ export default function CarWashScene() {
     if (label) logRef.current(makeEvent(kind ?? "build", label, -amount, next.money));
     return true;
   };
+
+  /** Revenus des logements : le locataire paie le loyer, puis les impôts sont déduits. */
+  const receiveRentalIncome = (gross: number, tax: number, label: string) => {
+    const net = gross - tax;
+    setEconomy((prev) => {
+      const next = { ...prev, money: prev.money + net };
+      economyRef.current = next;
+      logRef.current(makeEvent("house", `Loyer · ${label}`, gross, prev.money + gross));
+      logRef.current(makeEvent("house", `Impôts · ${label}`, -tax, next.money));
+      return next;
+    });
+    setGain({ id: Date.now() + Math.random(), amount: net });
+  };
+
+  const spendRentalNeed = (amount: number, label: string) =>
+    spendRef.current(amount, "house", `Besoin locataire · ${label}`);
 
   /* Les habitants arrivent progressivement jusqu'à la capacité des maisons. */
   useEffect(() => {
@@ -3014,6 +3031,12 @@ export default function CarWashScene() {
   return (
     <>
       <div ref={wrapRef} className="fixed inset-0" />
+      <RentalManager
+        houses={planIoRef.current.saveHouses()}
+        balance={economy.money}
+        onIncome={receiveRentalIncome}
+        onSpend={spendRentalNeed}
+      />
 
       {loading && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[linear-gradient(180deg,var(--sky-top),var(--sky-mid)_55%,var(--sky-bottom))] transition-opacity duration-500">
@@ -3041,10 +3064,10 @@ export default function CarWashScene() {
       )}
 
       <div
-        className={`fixed left-2 top-2 z-40 max-w-[calc(100vw-146px)] rounded-2xl bg-white/90 ring-1 ring-ink/10 px-3 py-2 text-ink shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur sm:left-4 sm:top-4 sm:max-w-[300px] sm:px-4 sm:py-3 ${buildMode ? "hidden" : ""}`}
+        className={`fixed left-2 top-2 z-40 max-w-[calc(100vw-146px)] rounded-2xl bg-white/90 ring-1 ring-ink/10 px-3 py-2 text-ink shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur sm:left-4 sm:top-4 sm:max-w-[260px] sm:px-3 sm:py-2 ${buildMode ? "hidden" : ""}`}
       >
         <div className="flex items-center gap-2">
-          <p className="flex items-center gap-2 text-[17px] font-bold tracking-wide sm:text-[22px]">
+          <p className="flex items-center gap-2 text-[17px] font-bold tracking-wide sm:text-[19px]">
             <span aria-hidden>🫧</span> TikowikoCity
           </p>
           <span ref={gameTimeRef} className="ml-auto whitespace-nowrap rounded-full bg-ink/5 px-2 py-1 text-[11px] font-extrabold">
