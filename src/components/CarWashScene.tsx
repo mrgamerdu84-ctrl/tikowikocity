@@ -762,10 +762,11 @@ export default function CarWashScene() {
         [-1.1, 1.2, 3.4].forEach((offset, oi) => {
           const pivot = new THREE.Group();
           const spin = makeBrush();
-          spin.scale.set(1.25, 1.15, 1.25);
+          spin.scale.set(1.7, 1.7, 1.7);
           pivot.add(spin);
-          pivot.position.set(WASH_ZONE[0] + offset, ROAD_Y + 1.1, zSide * 1.45);
+          pivot.position.set(WASH_ZONE[0] + offset, ROAD_Y + 1.4, zSide * 1.9);
           washSite.add(pivot);
+
           brushes.push({
             pivot,
             spin,
