@@ -316,6 +316,7 @@ export default function CarWashScene() {
               houses: planIoRef.current.saveHouses(),
               residents: residentsRef.current,
               economy: economyRef.current,
+              history: historyRef.current,
               upgrades: upgradesRef.current,
 
 
