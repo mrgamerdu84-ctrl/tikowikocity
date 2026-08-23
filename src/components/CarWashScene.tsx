@@ -314,7 +314,12 @@ export default function CarWashScene() {
     const models: Record<string, THREE.Group> = {};
     const meshyCars: THREE.Object3D[] = [];
     const sedanCars: THREE.Object3D[] = [];
-    const brushes: Array<{ pivot: THREE.Object3D; spin: THREE.Object3D; dir: number }> = [];
+    const brushes: Array<{
+      pivot: THREE.Object3D;
+      spin: THREE.Object3D;
+      dir: number;
+      kind: "roller" | "brush";
+    }> = [];
     const foamSprites: THREE.Object3D[] = [];
     const conveyorSlats: THREE.Mesh[] = [];
     const trafficCars: Array<{ car: THREE.Object3D; dir: number; speed: number }> = [];
