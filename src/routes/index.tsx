@@ -4,7 +4,7 @@ import CarWashScene from "@/components/CarWashScene";
 
 const TITLE = "TikowikoCarWash — station de lavage 3D interactive";
 const DESCRIPTION =
-  "TikowikoCarWash : une station de lavage auto en 3D : envoyez des voitures dans le tunnel, regardez les brosses et la mousse faire briller la carrosserie.";
+  "TikowikoCarWash : une station de lavage auto en 3D. Envoyez des voitures dans le tunnel et regardez les brosses et la mousse faire briller la carrosserie.";
 
 export const Route = createFileRoute("/")({
   head: () => ({
