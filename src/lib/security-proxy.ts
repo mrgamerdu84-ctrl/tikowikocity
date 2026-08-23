@@ -81,12 +81,20 @@ export async function handleSecurityRequest(request: Request): Promise<Response 
     });
 
     if (!upstream.ok) {
-      return json(502, { valid: false, unavailable: true });
+      return json(502, {
+        valid: false,
+        unavailable: true,
+        reason: `google-http-${upstream.status}`,
+      });
     }
 
     const contentType = upstream.headers.get("content-type") ?? "";
     if (!contentType.includes("application/json")) {
-      return json(502, { valid: false, unavailable: true });
+      return json(502, {
+        valid: false,
+        unavailable: true,
+        reason: "google-non-json",
+      });
     }
 
     const payload = (await upstream.json()) as { valid?: unknown; retryLater?: unknown };
@@ -104,6 +112,10 @@ export async function handleSecurityRequest(request: Request): Promise<Response 
     });
   } catch (error) {
     console.error("TikoWiko Security verification failed", error);
-    return json(502, { valid: false, unavailable: true });
+    return json(502, {
+      valid: false,
+      unavailable: true,
+      reason: "google-fetch-error",
+    });
   }
 }
