@@ -2460,7 +2460,9 @@ export default function CarWashScene() {
                 "light",
                 "lamp",
                 "house",
+                "bulldoze",
                 "erase",
+
               ] as BuildTool[]
             ).map((t) => (
               <button
