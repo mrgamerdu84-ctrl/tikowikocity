@@ -212,6 +212,7 @@ export default function CarWashScene() {
       const state = JSON.parse(res.stateJson || "{}") as {
         machines?: Partial<typeof machines>;
         cinema?: unknown;
+        city?: SerializedPlan;
       };
       if (state.machines && typeof state.machines === "object") {
         setMachines((prev) => {
@@ -224,9 +225,11 @@ export default function CarWashScene() {
           return next;
         });
       }
+      if (Array.isArray(state.city)) planIoRef.current.load(state.city);
       if (typeof state.cinema === "boolean" && state.cinema !== cinemaStateRef.current) {
         cinemaRef.current();
       }
+
       setLoadState("done");
       setDriveMenuOpen(false);
       toast.success("Progression restaurée depuis Drive", { description: res.fileName });
