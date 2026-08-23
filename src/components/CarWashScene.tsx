@@ -1342,39 +1342,8 @@ export default function CarWashScene() {
         })
         .catch((err: unknown) => console.error("tunnel Meshy", err));
 
-
-
-
-      // Véhicules : ajoutés au pool de spawn au fur et à mesure
-      const slots: Array<THREE.Group | null> = MESHY_CARS.map(() => null);
-      await Promise.all(
-        MESHY_CARS.map((asset, i) =>
-          load(asset.url)
-            .then((raw) => {
-              if (disposed) return;
-              slots[i] = normalizeModel(raw, 2.4);
-            })
-            .catch((err: unknown) => console.error("voiture Meshy", err)),
-        ),
-      );
-      slots.forEach((m) => {
-        if (m) meshyCars.push(m);
-      });
-      if (disposed || meshyCars.length === 0) return;
-
-      // Le trafic Kenney est remplacé par les voitures Meshy, variées et bien orientées
-      trafficCars.forEach((entry, i) => {
-        const idx = (i * 3 + 1) % meshyCars.length;
-        const next = meshyCars[idx]!.clone(true);
-        setShadow(next);
-        scene.add(next);
-        scene.remove(entry.car);
-        entry.car = next;
-        entry.baseY = 0.02;
-        entry.yaw = MESHY_YAW;
-        entry.wheels = findWheels(next);
-      });
     };
+
 
 
     // File d'attente : de nouvelles voitures arrivent régulièrement
