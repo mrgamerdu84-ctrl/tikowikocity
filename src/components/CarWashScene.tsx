@@ -1084,7 +1084,7 @@ export default function CarWashScene() {
       }
 
 
-      // ----- Ville : grille de rues régulière -----
+      // ----- Sols et matériaux partagés -----
       const asphalt = new THREE.MeshStandardMaterial({
         color: 0x4a4f57,
         roughness: 0.95,
@@ -1097,11 +1097,9 @@ export default function CarWashScene() {
         color: 0xf5f0d8,
         roughness: 0.7,
       });
-
-      const xMin = X_STREETS[0]!;
-      const xMax = X_STREETS[X_STREETS.length - 1]!;
-      const zMin = Z_STREETS[0]!;
-      const zMax = Z_STREETS[Z_STREETS.length - 1]!;
+      const lawnMat = new THREE.MeshStandardMaterial({ color: 0x7fc76b, roughness: 1 });
+      const dashGeoX = new THREE.PlaneGeometry(1.4, 0.16);
+      const zMin = MAIN_CZ_START * TILE; // extrémité sud de la route principale
 
       const addSlab = (
         mat: THREE.Material,
@@ -1119,261 +1117,14 @@ export default function CarWashScene() {
         return m;
       };
 
-      /* ----- Chaussées : vraies tuiles du kit Kenney city-kit-roads -----
-         Une tuile = 1 unité de kit, mise à l'échelle sur la largeur de rue. */
-      const dashGeoX = new THREE.PlaneGeometry(1.4, 0.16);
-      const nearCross = (v: number, list: number[]) =>
-        list.some((c) => Math.abs(v - c) < STREET_W / 2 + 1);
-
-      const roadTile = (name: string, x: number, z: number, rotY: number) => {
-        const tpl = kit[name];
-        if (!tpl) return;
-        const t = tpl.clone(true);
-        t.scale.setScalar(TILE);
-        t.position.set(x, 0.012, z);
-        t.rotation.y = rotY;
-        t.traverse((n) => {
-          const m = n as THREE.Mesh;
-          if (m.isMesh) m.receiveShadow = true;
-        });
-        scene.add(t);
-      };
-      const onStreetX = (x: number) => X_STREETS.some((c) => Math.abs(c - x) < 0.01);
-      const onStreetZ = (z: number) => Z_STREETS.some((c) => Math.abs(c - z) < 0.01);
-
-      Z_STREETS.forEach((z) => {
-        for (let x = xMin; x <= xMax; x += TILE) {
-          if (onStreetX(x)) continue;
-          roadTile("road-straight", x, z, Math.PI / 2);
-        }
-      });
-      X_STREETS.forEach((x) => {
-        for (let z = zMin; z <= zMax; z += TILE) {
-          if (onStreetZ(z)) continue;
-          roadTile("road-straight", x, z, 0);
-        }
-      });
-      // Carrefours du quadrillage
-      X_STREETS.forEach((x) => {
-        Z_STREETS.forEach((z) => {
-          roadTile("road-crossroad", x, z, 0);
-        });
-      });
-      // Voie d'accès au car wash, dans le même style
-      for (let z = zMin - TILE; z >= WASH_SITE_Z; z -= TILE) {
-        roadTile("road-straight", WASH_ACCESS_X, z, 0);
+      /* ----- Route principale : du car wash vers les reliefs du fond -----
+         Elle est posée par le jeu et ne peut pas être effacée ; tout le reste
+         du réseau est construit par le joueur. */
+      for (let cz = MAIN_CZ_START; cz <= MAIN_CZ_END; cz++) {
+        plan.place(MAIN_CX, cz, "straight", 0, true);
       }
+      renderPlan();
 
-
-      // ----- Bâtiments Kenney : un par parcelle, hauteurs cohérentes -----
-      const blockCentersX: number[] = [];
-      for (let i = 0; i < X_STREETS.length - 1; i++) {
-        blockCentersX.push((X_STREETS[i]! + X_STREETS[i + 1]!) / 2);
-      }
-      const blockCentersZ: number[] = [];
-      for (let i = 0; i < Z_STREETS.length - 1; i++) {
-        blockCentersZ.push((Z_STREETS[i]! + Z_STREETS[i + 1]!) / 2);
-      }
-
-      const lawnMat = new THREE.MeshStandardMaterial({ color: 0x7fc76b, roughness: 1 });
-      const pavingMat = new THREE.MeshStandardMaterial({ color: 0xded7c4, roughness: 1 });
-
-      /* Deux îlots sortent du moule : un parc avec bassin, une place pavée. */
-      const PARK = { x: blockCentersX[1]!, z: blockCentersZ[2]! };
-      const PLAZA = { x: blockCentersX[3]!, z: blockCentersZ[1]! };
-      const isSpecial = (x: number, z: number) =>
-        (x === PARK.x && z === PARK.z) || (x === PLAZA.x && z === PLAZA.z);
-
-      const buildPark = (cx: number, cz: number) => {
-        // allées diagonales en croix sur la pelouse
-        [-1, 1].forEach((s) => {
-          const path = new THREE.Mesh(new THREE.PlaneGeometry(8.4, 1.5), pavingMat);
-          path.rotation.x = -Math.PI / 2;
-          path.rotation.z = (s * Math.PI) / 4;
-          path.position.set(cx, 0.02, cz);
-          path.receiveShadow = true;
-          scene.add(path);
-        });
-        // bassin
-        const pond = new THREE.Mesh(
-          new THREE.CircleGeometry(1.9, 28),
-          new THREE.MeshStandardMaterial({
-            color: 0x3fa9d8,
-            roughness: 0.15,
-            metalness: 0.35,
-          }),
-        );
-        pond.rotation.x = -Math.PI / 2;
-        pond.position.set(cx, 0.06, cz);
-        scene.add(pond);
-        pondSurface = pond;
-        const rim = new THREE.Mesh(
-          new THREE.TorusGeometry(2.0, 0.16, 8, 28),
-          new THREE.MeshStandardMaterial({ color: 0xcfc7ae, roughness: 1 }),
-        );
-        rim.rotation.x = -Math.PI / 2;
-        rim.position.set(cx, 0.16, cz);
-        setShadow(rim);
-        scene.add(rim);
-        // arbres en couronne
-        for (let i = 0; i < 8; i++) {
-          const a = (i / 8) * Math.PI * 2 + 0.3;
-          const tr = makeTree();
-          tr.position.set(cx + Math.cos(a) * 4, 0, cz + Math.sin(a) * 4);
-          tr.scale.setScalar(0.8 + (i % 3) * 0.08);
-          setShadow(tr);
-          scene.add(tr);
-        }
-      };
-
-      const buildPlaza = (cx: number, cz: number) => {
-        addSlab(pavingMat, 11, 11, cx, cz, 0.015);
-        // fontaine centrale
-        const basin = new THREE.Mesh(
-          new THREE.CylinderGeometry(2.1, 2.3, 0.6, 20),
-          new THREE.MeshStandardMaterial({ color: 0xe6e0cd, roughness: 0.9 }),
-        );
-        basin.position.set(cx, 0.3, cz);
-        setShadow(basin);
-        scene.add(basin);
-        const jet = new THREE.Mesh(
-          new THREE.CylinderGeometry(0.16, 0.3, 2.2, 10),
-          new THREE.MeshStandardMaterial({
-            color: 0x9fdcf5,
-            transparent: true,
-            opacity: 0.75,
-          }),
-        );
-        jet.position.set(cx, 1.5, cz);
-        scene.add(jet);
-        // arbres et coins verts
-        [
-          [-1, -1],
-          [1, -1],
-          [-1, 1],
-          [1, 1],
-        ].forEach(([sx, sz]) => {
-          const tr = makeTree();
-          tr.position.set(cx + sx! * 4.2, 0, cz + sz! * 4.2);
-          tr.scale.setScalar(0.85);
-          setShadow(tr);
-          scene.add(tr);
-        });
-      };
-
-      blockCentersX.forEach((bx, ix) => {
-        blockCentersZ.forEach((bz, iz) => {
-          // pelouse du pâté de maisons (entre les trottoirs)
-          addSlab(lawnMat, 12 - STREET_W, 12 - STREET_W, bx, bz, 0.01);
-
-          if (bx === PARK.x && bz === PARK.z) {
-            buildPark(bx, bz);
-            return;
-          }
-          if (bx === PLAZA.x && bz === PLAZA.z) {
-            buildPlaza(bx, bz);
-            return;
-          }
-
-          // anneau : 0 = centre-ville, 2 = périphérie pavillonnaire
-          const ring = Math.max(Math.abs(bx) / 12, Math.abs(bz) / 12);
-          let floors: number;
-          if (ring < 1.2) floors = 4 - ((ix + iz) % 2);
-          else if (ring < 1.8) floors = 2 + ((ix + iz) % 2);
-          else floors = 1;
-          buildKenneyBuilding(bx, bz, 2, 2, floors, bz > 0 ? Math.PI : 0);
-        });
-      });
-
-
-      // Arbres alignés le long des trottoirs, un sur deux entre carrefours
-      Z_STREETS.forEach((z, zi) => {
-        for (let x = xMin + 3; x <= xMax - 3; x += 6) {
-          if (nearCross(x, X_STREETS)) continue;
-          [-1, 1].forEach((side) => {
-            const tr = makeTree();
-            tr.position.set(x, 0, z + side * (STREET_W / 2 + 1.1));
-            tr.scale.setScalar(0.85 + ((zi + x) % 3) * 0.06);
-            setShadow(tr);
-            scene.add(tr);
-          });
-        }
-      });
-      // Rangées d'arbres au cœur des îlots verts
-      for (let xi = 0; xi < X_STREETS.length - 1; xi++) {
-        for (let zi = 0; zi < Z_STREETS.length - 1; zi++) {
-          if ((xi + zi) % 2 === 0) continue;
-          const bx = (X_STREETS[xi]! + X_STREETS[xi + 1]!) / 2;
-          const bz = (Z_STREETS[zi]! + Z_STREETS[zi + 1]!) / 2;
-          if (isSpecial(bx, bz)) continue;
-          [-1, 1].forEach((s) => {
-            const tr = makeTree();
-            tr.position.set(bx + s * 2.4, 0, bz + s * 2.4);
-            tr.scale.setScalar(0.75);
-            setShadow(tr);
-            scene.add(tr);
-          });
-        }
-      }
-
-
-      /* Mobilier urbain 100 % Kenney, posé sur une grille stricte :
-         feux aux carrefours majeurs, lampadaires et bennes en bord de bloc. */
-      const CURB_OFFSET = STREET_W / 2 + 0.45;
-      const signalX = X_STREETS.filter((_, i) => i % 2 === 1);
-      const signalZ = Z_STREETS.filter((_, i) => i % 2 === 1);
-      signalX.forEach((cx) => {
-        signalZ.forEach((cz) => {
-          const corners: Array<{ x: number; z: number; axis: "x" | "z" }> = [
-            { x: cx - CURB_OFFSET, z: cz - CURB_OFFSET, axis: "x" },
-            { x: cx + CURB_OFFSET, z: cz + CURB_OFFSET, axis: "z" },
-          ];
-          corners.forEach(({ x, z, axis }) => {
-            const light = makeTrafficLight(axis);
-            light.position.set(x, 0, z);
-            light.rotation.y = Math.atan2(cx - x, cz - z);
-            setShadow(light);
-            scene.add(light);
-          });
-        });
-      });
-
-      const FURNITURE_OFFSET = STREET_W / 2 + 0.6;
-      const placeKit = (
-        name: string,
-        x: number,
-        z: number,
-        rotY: number,
-        scale = 6,
-      ) => {
-        const tpl = kit[name];
-        if (!tpl) return;
-        const inst = tpl.clone(true);
-        inst.scale.setScalar(scale);
-        inst.position.set(x, 0, z);
-        inst.rotation.y = rotY;
-        setShadow(inst);
-        scene.add(inst);
-      };
-
-      for (let xi = 0; xi < X_STREETS.length - 1; xi++) {
-        for (let zi = 0; zi < Z_STREETS.length - 1; zi++) {
-          const bx = (X_STREETS[xi]! + X_STREETS[xi + 1]!) / 2;
-          const southStreet = Z_STREETS[zi]!;
-          const northStreet = Z_STREETS[zi + 1]!;
-
-          // lampadaires alternés de part et d'autre du bloc
-          placeKit("light-square", bx - 2, southStreet + FURNITURE_OFFSET, Math.PI);
-          placeKit("light-square", bx + 2, northStreet - FURNITURE_OFFSET, 0);
-
-          // bennes et panneaux de rue, un bloc sur deux
-          if ((xi + zi) % 2 === 0) {
-            placeKit("dumpster", bx + 2.4, southStreet + FURNITURE_OFFSET, Math.PI / 2, 6);
-          } else {
-            placeKit("road-sign-street", bx - 2.4, northStreet - FURNITURE_OFFSET, 0, 6);
-          }
-        }
-      }
 
 
 
