@@ -1555,6 +1555,13 @@ export default function CarWashScene() {
       }
 
 
+      /* De temps en temps, une voiture de la ville part au lavage. */
+      washCooldown -= dt;
+      if (washCooldown <= 0) {
+        washCooldown = 9 + Math.random() * 12;
+        if (ctl.traffic && washCars.length < 3) sendCityCarToWash();
+      }
+
       const carInWash = washCars.some((c) => c.d > WASH_D0 && c.d < WASH_D1);
 
 
