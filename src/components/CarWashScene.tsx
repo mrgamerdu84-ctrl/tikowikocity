@@ -2529,6 +2529,10 @@ export default function CarWashScene() {
         if (e.d >= ROUTE_LEN - 0.05) {
           const o = e.origin;
           tintCar(o.car, 0);
+          if (e.soap) {
+            o.car.remove(e.soap);
+            e.soap.clear();
+          }
           o.cx = MAIN_CX;
           o.cz = MAIN_CZ_START;
           o.dirIn = 0;
@@ -2537,6 +2541,7 @@ export default function CarWashScene() {
           netCars.push(o);
           washCars.splice(i, 1);
         }
+
       }
 
 
