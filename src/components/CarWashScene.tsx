@@ -65,6 +65,7 @@ import {
   type WashEntry,
 } from "@/game/history";
 import { HOUSE_LEVELS, MAX_HOUSE_LEVEL, houseDef, totalCapacity } from "@/game/houses";
+import { readLocalCity, saveLocalCity } from "@/game/save";
 
 
 /* Catégories de la barre de construction : un seul onglet visible à la fois
@@ -454,6 +455,7 @@ export default function CarWashScene() {
 
   /* Sauvegarde locale automatique : la création du joueur est restaurée
      telle quelle au prochain lancement, sans action de sa part. */
+  const localReadyRef = useRef(false);
   const restoreLocalRef = useRef<() => void>(() => {});
   restoreLocalRef.current = () => {
     const saved = readLocalCity();
@@ -469,7 +471,6 @@ export default function CarWashScene() {
       localReadyRef.current = true;
     }
   };
-  const localReadyRef = useRef(false);
 
   useEffect(() => {
     const flush = () => {
