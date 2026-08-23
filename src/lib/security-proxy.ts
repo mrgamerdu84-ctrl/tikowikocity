@@ -49,6 +49,30 @@ function clearFailures(key: string) {
   failedAttempts.delete(key);
 }
 
+function classifyGoogleResponse(raw: string) {
+  const lower = raw.toLowerCase();
+  if (!raw.trim()) return "google-empty-response";
+  if (
+    lower.includes("accounts.google.com") ||
+    lower.includes("servicelogin") ||
+    lower.includes("sign in with google") ||
+    lower.includes("connexion avec google")
+  ) {
+    return "google-login-page";
+  }
+  if (
+    lower.includes("script function not found") ||
+    lower.includes("referenceerror") ||
+    lower.includes("typeerror") ||
+    lower.includes("exception:") ||
+    lower.includes("erreur de script")
+  ) {
+    return "google-script-error";
+  }
+  if (raw.trimStart().startsWith("<")) return "google-html-response";
+  return "google-invalid-response";
+}
+
 export async function handleSecurityRequest(request: Request): Promise<Response | null> {
   const url = new URL(request.url);
   const isSecurityEndpoint =
@@ -88,9 +112,6 @@ export async function handleSecurityRequest(request: Request): Promise<Response 
       });
     }
 
-    // Apps Script can return valid JSON with a text/plain content type.
-    // Read the body as text first and parse it ourselves instead of rejecting
-    // the response only because the Content-Type header is not application/json.
     const raw = (await upstream.text()).trim();
     let payload: { valid?: unknown; retryLater?: unknown };
 
@@ -100,7 +121,7 @@ export async function handleSecurityRequest(request: Request): Promise<Response 
       return json(502, {
         valid: false,
         unavailable: true,
-        reason: "google-invalid-response",
+        reason: classifyGoogleResponse(raw),
       });
     }
 
