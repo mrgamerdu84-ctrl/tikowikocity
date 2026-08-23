@@ -1718,7 +1718,22 @@ export default function CarWashScene() {
         >
           🎥 {cinema ? "Vue libre" : "Vue cinéma"}
         </button>
+        <button
+          type="button"
+          disabled={driveState === "saving"}
+          onClick={handleSaveToDrive}
+          className="rounded-full bg-ink/10 px-3.5 py-2.5 text-[12.5px] font-bold text-ink transition-transform active:translate-y-0.5 disabled:opacity-60"
+        >
+          {driveState === "saving"
+            ? "⏳ Envoi..."
+            : driveState === "done"
+              ? "✅ Sur Drive"
+              : driveState === "error"
+                ? "⚠️ Réessayer"
+                : "☁️ Sauver sur Drive"}
+        </button>
       </div>
+
     </>
   );
 }
