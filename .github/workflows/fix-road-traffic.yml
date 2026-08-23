@@ -1,15 +1,16 @@
 name: Corriger circulation voitures routes
 
 on:
-  issues:
-    types: [opened, edited]
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/fix-road-traffic.yml
 
 permissions:
   contents: write
 
 jobs:
   patch:
-    if: github.event.issue.title == '[TIKOWIKO] Apply road traffic fix'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
