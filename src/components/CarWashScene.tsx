@@ -365,13 +365,27 @@ export default function CarWashScene() {
       });
     };
 
+    /* Récupère les roues et mémorise, pour chacune, le sens de rotation
+       correct : certains modèles (4x4/SUV) ont des roues dont l'axe local
+       est inversé, ce qui les faisait tourner à l'envers. */
     const findWheels = (car: THREE.Object3D) => {
       const wheels: THREE.Object3D[] = [];
+      car.updateWorldMatrix(true, true);
+      const carRight = new THREE.Vector3(1, 0, 0).transformDirection(
+        car.matrixWorld,
+      );
       car.traverse((n) => {
-        if (n.name && n.name.toLowerCase().includes("wheel")) wheels.push(n);
+        if (n.name && n.name.toLowerCase().includes("wheel")) {
+          const axis = new THREE.Vector3(1, 0, 0).transformDirection(
+            n.matrixWorld,
+          );
+          n.userData.spinSign = axis.dot(carRight) < 0 ? -1 : 1;
+          wheels.push(n);
+        }
       });
       return wheels;
     };
+
 
     /* Rouleau de lavage : axe central + manchon de mousse sombre nervuré.
        On évite les milliers de micro-poils colorés qui produisaient un
