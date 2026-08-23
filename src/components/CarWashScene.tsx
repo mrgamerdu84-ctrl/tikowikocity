@@ -781,12 +781,13 @@ export default function CarWashScene() {
         const pivot = new THREE.Group();
         pivot.rotation.x = Math.PI / 2;
         const spin = makeBrush();
-        spin.scale.set(1.1, 1.5, 1.1);
+        spin.scale.set(1.5, 2.1, 1.5);
         pivot.add(spin);
-        pivot.position.set(x, ROAD_Y + 2.1, 0);
+        pivot.position.set(x, ROAD_Y + 2.4, 0);
         washSite.add(pivot);
         brushes.push({ pivot, spin, dir: i % 2 === 0 ? -1 : 1, kind: "brush" });
       });
+
 
 
       for (let i = 0; i < 2; i++) {
