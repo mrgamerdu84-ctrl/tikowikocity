@@ -231,13 +231,18 @@ export default function CarWashScene() {
     );
     scene.add(skyDome);
 
+    /* Cadrage responsive : en portrait (mobile) on rapproche la caméra
+       et on élargit le champ pour que la ville et le car wash remplissent l'écran. */
+    const isPortrait = () => window.innerHeight >= window.innerWidth;
     const camera = new THREE.PerspectiveCamera(
-      45,
+      isPortrait() ? 52 : 45,
       window.innerWidth / window.innerHeight,
       0.1,
       2000,
     );
-    camera.position.set(-34, 26, WASH_SITE_Z + 40);
+    if (isPortrait()) camera.position.set(-50, 40, WASH_SITE_Z + 58);
+    else camera.position.set(-34, 26, WASH_SITE_Z + 40);
+
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -248,7 +253,7 @@ export default function CarWashScene() {
     wrap.appendChild(renderer.domElement);
 
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.target.set(2, 1.5, WASH_SITE_Z + 6);
+    controls.target.set(2, 1.5, WASH_SITE_Z + (isPortrait() ? 18 : 6));
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
     controls.minDistance = 6;
@@ -1651,9 +1656,11 @@ export default function CarWashScene() {
 
     const onResize = () => {
       camera.aspect = window.innerWidth / window.innerHeight;
+      camera.fov = isPortrait() ? 52 : 45;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
     };
+
     window.addEventListener("resize", onResize);
 
     const loader = new GLTFLoader();
@@ -1774,18 +1781,19 @@ export default function CarWashScene() {
         </div>
       )}
 
-      <div className="pointer-events-none fixed left-4 top-4 z-30 max-w-[300px] rounded-2xl bg-white/80 px-4 py-3 text-ink shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur">
-        <p className="flex items-center gap-2 text-[22px] font-bold tracking-wide">
+      <div className="pointer-events-none fixed left-2 top-2 z-30 max-w-[calc(100vw-150px)] rounded-2xl bg-white/80 px-3 py-2 text-ink shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur sm:left-4 sm:top-4 sm:max-w-[300px] sm:px-4 sm:py-3">
+        <p className="flex items-center gap-2 text-[17px] font-bold tracking-wide sm:text-[22px]">
           <span aria-hidden>🫧</span> TikowikoCarWash
         </p>
 
-        <p className="mt-1 text-[12.5px] leading-relaxed opacity-80">
+        <p className="mt-1 hidden text-[12.5px] leading-relaxed opacity-80 sm:block">
           Construit avec les kits Kenney (voitures, routes, bâtiments). Glisse pour tourner la
           caméra, molette pour zoomer.
         </p>
       </div>
 
-      <div className="pointer-events-none fixed bottom-4 left-4 z-30 rounded-2xl bg-white/70 px-3 py-2 text-[11.5px] text-ink shadow-[0_6px_20px_rgba(6,58,94,0.14)] backdrop-blur">
+
+      <div className="pointer-events-none fixed bottom-2 left-2 z-30 hidden max-w-[46vw] rounded-2xl bg-white/70 px-3 py-2 text-[11.5px] sm:bottom-4 sm:left-4 sm:block text-ink shadow-[0_6px_20px_rgba(6,58,94,0.14)] backdrop-blur">
         <p>🖱️ Glisser = tourner • Molette = zoomer • Clic droit = déplacer</p>
         <p className="mt-1 opacity-80">Modèles Kenney (kenney.nl) — licence CC0</p>
         <p className="mt-1 font-semibold opacity-90">© {new Date().getFullYear()} tikowikoFamily</p>
@@ -1793,7 +1801,7 @@ export default function CarWashScene() {
       </div>
 
 
-      <div className="fixed right-4 top-4 z-30 w-[190px] rounded-2xl bg-white/80 p-3 shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur">
+      <div className="fixed right-2 top-2 z-30 w-[124px] rounded-2xl bg-white/80 p-2 sm:right-4 sm:top-4 sm:w-[190px] sm:p-3 shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur">
         <p className="mb-2 text-[12px] font-bold uppercase tracking-wide text-ink opacity-80">
           Panneau de contrôle
         </p>
@@ -1811,7 +1819,7 @@ export default function CarWashScene() {
               type="button"
               onClick={() => toggleMachine(key)}
               aria-pressed={machines[key]}
-              className={`flex items-center justify-between rounded-xl px-3 py-2 text-[12.5px] font-semibold transition-colors ${
+              className={`flex items-center justify-between rounded-xl px-2 py-1.5 text-[11px] font-semibold transition-colors sm:px-3 sm:py-2 sm:text-[12.5px] ${
                 machines[key]
                   ? "bg-splash text-splash-foreground"
                   : "bg-ink/10 text-ink opacity-70"
