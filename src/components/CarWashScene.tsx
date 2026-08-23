@@ -1904,6 +1904,90 @@ export default function CarWashScene() {
 
       </div>
 
+      {/* Boutique d'améliorations */}
+      <button
+        type="button"
+        onClick={() => setShopOpen((v) => !v)}
+        aria-expanded={shopOpen}
+        className="fixed left-2 top-[132px] z-40 rounded-full bg-sunny px-3 py-2 text-[12.5px] font-bold text-sunny-foreground shadow-[0_3px_0_var(--sunny-shadow)] transition-transform active:translate-y-0.5 sm:left-4 sm:top-[168px]"
+      >
+        🛠️ Améliorations
+      </button>
+
+      {shopOpen && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 p-3 backdrop-blur-sm sm:items-center">
+          <div className="w-full max-w-[420px] rounded-3xl bg-white p-4 text-ink shadow-[0_12px_40px_rgba(6,58,94,0.35)]">
+            <div className="flex items-center gap-2">
+              <h2 className="text-[18px] font-extrabold">🛠️ Boutique du car wash</h2>
+              <span className="ml-auto rounded-full bg-sunny/30 px-2 py-1 text-[13px] font-extrabold tabular-nums">
+                {economy.money.toLocaleString("fr-FR")} €
+              </span>
+              <button
+                type="button"
+                onClick={() => setShopOpen(false)}
+                aria-label="Fermer la boutique"
+                className="rounded-full bg-ink/10 px-2 py-1 text-[13px] font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <ul className="mt-3 flex flex-col gap-2">
+              {UPGRADES.map((u) => {
+                const level = upgrades[u.key];
+                const maxed = level >= MAX_LEVEL;
+                const cost = maxed ? 0 : upgradeCost(u.key, level);
+                const affordable = !maxed && economy.money >= cost;
+                return (
+                  <li
+                    key={u.key}
+                    className="rounded-2xl bg-splash/10 px-3 py-2 ring-1 ring-ink/10"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span aria-hidden className="text-[18px]">
+                        {u.icon}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-[14px] font-bold">
+                          {u.label}{" "}
+                          <span className="opacity-60">
+                            niv. {level}/{MAX_LEVEL}
+                          </span>
+                        </p>
+                        <p className="text-[11.5px] opacity-75">{u.desc}</p>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={maxed || !affordable}
+                        onClick={() => buyUpgrade(u.key)}
+                        className={`ml-auto shrink-0 rounded-full px-3 py-2 text-[12px] font-bold transition-transform active:translate-y-0.5 ${
+                          maxed
+                            ? "bg-ink/10 opacity-60"
+                            : affordable
+                              ? "bg-splash text-splash-foreground"
+                              : "bg-ink/10 opacity-60"
+                        }`}
+                      >
+                        {maxed ? "MAX" : `${cost.toLocaleString("fr-FR")} €`}
+                      </button>
+                    </div>
+                    <p className="mt-1 text-[11.5px] font-semibold opacity-80">
+                      Actuel : {u.effect(level)}
+                      {!maxed && <> → {u.effect(level + 1)}</>}
+                    </p>
+                  </li>
+                );
+              })}
+            </ul>
+
+            <p className="mt-3 text-[11.5px] opacity-70">
+              Les routes et bâtiments restent gratuits : l'argent sert uniquement aux
+              améliorations du lavage.
+            </p>
+          </div>
+        </div>
+      )}
+
 
       <div className="fixed right-2 top-2 z-40 w-[118px] rounded-2xl bg-white/90 ring-1 ring-ink/10 p-2 sm:right-4 sm:top-4 sm:w-[190px] sm:p-3 shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur">
         <p className="mb-2 text-[12px] font-bold uppercase tracking-wide text-ink opacity-80">
