@@ -1,0 +1,137 @@
+name: Optimiser performances maisons
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/optimize-house-performance.yml]
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Optimiser le rendu des maisons
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('src/components/CarWashScene.tsx')
+          s = p.read_text(encoding='utf-8')
+
+          # Plus de PointLight par maison : les fenêtres émissives suffisent la nuit
+          # et coûtent énormément moins cher sur mobile/WebView.
+          s = s.replace(
+            '    const streetLampLights: THREE.PointLight[] = [];\n    const houseLights: THREE.PointLight[] = [];',
+            '    const streetLampLights: THREE.PointLight[] = [];\n    const houseWindowMaterials = new Set<THREE.MeshStandardMaterial>();',
+            1,
+          )
+
+          # Cache les trois modèles de maisons. Les géométries et matériaux Kenney
+          # ne sont plus recréés à chaque pose.
+          s = s.replace(
+            '    const KENNEY_CELL = 2;\n    const KENNEY_FLOOR_H = 2.4;\n    const makeHouse = (level: number) => {\n      const g = new THREE.Group();',
+            '    const KENNEY_CELL = 2;\n    const KENNEY_FLOOR_H = 2.4;\n    const houseTemplateCache = new Map<number, THREE.Group>();\n    const makeHouse = (level: number) => {\n      const cached = houseTemplateCache.get(level);\n      if (cached) return cached.clone(true);\n      const g = new THREE.Group();',
+            1,
+          )
+
+          s = s.replace(
+            "              mat.userData['nightWindow'] = true;\n            }",
+            "              mat.userData['nightWindow'] = true;\n              houseWindowMaterials.add(mat);\n            }",
+            1,
+          )
+
+          s = s.replace(
+            '      setShadow(g);\n      return g;\n    };\n\n    const renderHouses = () => {',
+            '      setShadow(g);\n      houseTemplateCache.set(level, g);\n      return g.clone(true);\n    };\n\n    const renderedHouses = new Map<string, THREE.Object3D>();\n    const renderHouses = () => {',
+            1,
+          )
+
+          old_render = '''    const renderHouses = () => {
+      [...housesGroup.children].forEach((c) => housesGroup.remove(c));
+      houseLights.length = 0;
+      plan.houses.forEach((h, k) => {
+        const [cx, cz] = parseKey(k);
+        const m = makeHouse(h.level);
+        m.scale.setScalar(1.55);
+        m.position.set(cx * TILE, 0, cz * TILE);
+        m.rotation.y = ((h.rot ?? 0) * Math.PI) / 2;
+
+        /* Une lumière chaude par logement : elle s'allume uniquement la nuit. */
+        const homeLight = new THREE.PointLight(0xffc56e, 0, 18 + h.level * 3, 1.6);
+        homeLight.position.set(0, Math.min(5.4, 1.8 + h.level * 1.05), 0);
+        m.add(homeLight);
+        houseLights.push(homeLight);
+        housesGroup.add(m);
+      });
+      cityStatsRef.current(plan.houseLevels());
+    };'''
+          new_render = '''    const renderHouses = () => {
+      /* Rendu incrémental : une pose ne reconstruit plus toutes les maisons. */
+      const wanted = new Set<string>();
+      plan.houses.forEach((h, k) => {
+        wanted.add(k);
+        const signature = `${h.level}:${h.rot ?? 0}`;
+        const existing = renderedHouses.get(k);
+        if (existing?.userData['houseSignature'] === signature) return;
+        if (existing) {
+          housesGroup.remove(existing);
+          renderedHouses.delete(k);
+        }
+        const [cx, cz] = parseKey(k);
+        const m = makeHouse(h.level);
+        m.scale.setScalar(1.55);
+        m.position.set(cx * TILE, 0, cz * TILE);
+        m.rotation.y = ((h.rot ?? 0) * Math.PI) / 2;
+        m.userData['houseSignature'] = signature;
+        /* Maisons statiques : leurs matrices ne sont pas recalculées à chaque frame. */
+        m.traverse((o) => {
+          o.updateMatrix();
+          o.matrixAutoUpdate = false;
+        });
+        housesGroup.add(m);
+        renderedHouses.set(k, m);
+      });
+      for (const [k, obj] of renderedHouses) {
+        if (wanted.has(k)) continue;
+        housesGroup.remove(obj);
+        renderedHouses.delete(k);
+      }
+      cityStatsRef.current(plan.houseLevels());
+    };'''
+          if old_render not in s:
+            raise SystemExit('Bloc renderHouses attendu introuvable')
+          s = s.replace(old_render, new_render, 1)
+
+          old_night = '''      houseLights.forEach((light) => {
+        light.intensity = night * 4.2;
+        light.parent?.traverse((n) => {
+          const mesh = n as THREE.Mesh;
+          if (!mesh.isMesh) return;
+          const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+          mats.forEach((mat) => {
+            const m = mat as THREE.MeshStandardMaterial;
+            if (m.userData?.['nightWindow']) m.emissiveIntensity = 0.08 + night * 1.5;
+          });
+        });
+      });'''
+          new_night = '''      /* Quelques matériaux partagés au lieu d'une lumière + traversée par maison. */
+      houseWindowMaterials.forEach((m) => {
+        m.emissiveIntensity = 0.08 + night * 1.5;
+      });'''
+          if old_night not in s:
+            raise SystemExit('Bloc éclairage maisons attendu introuvable')
+          s = s.replace(old_night, new_night, 1)
+
+          p.write_text(s, encoding='utf-8')
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bunx tsc --noEmit
+      - name: Enregistrer
+        run: |
+          rm -f .github/workflows/optimize-house-performance.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/CarWashScene.tsx .github/workflows/optimize-house-performance.yml
+          git commit -m "Optimise fortement la pose et le rendu des maisons"
+          git push origin HEAD:main
