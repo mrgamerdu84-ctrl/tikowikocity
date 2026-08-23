@@ -1,5 +1,5 @@
 const GOOGLE_SECURITY_URL =
-  "https://script.google.com/macros/s/AKfycbxpTxHc7McTdbjmFKLNjw3gNHYBX7u2iC6Haft7Yqe06G8Q9GNhevwybNTsFsk/exec";
+  "https://script.google.com/macros/s/AKfycbxpTxHc7McTdbjmFKLNjw3gNHYBX7u2iC6Haft7Yqe06G8Q9GNhevwybNTsFskZliv90Q/exec";
 
 const APP_ID = "pixel-perfect-preview-16";
 const MAX_ATTEMPTS = 5;
