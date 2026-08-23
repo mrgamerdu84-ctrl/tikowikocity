@@ -2168,6 +2168,11 @@ export default function CarWashScene() {
         plan.loadHouses(data);
         renderHouses();
       },
+      saveDecor: () => plan.serializeDecor(),
+      loadDecor: (data) => {
+        plan.loadDecor(data);
+        renderDecor();
+      },
     };
 
 
