@@ -253,7 +253,7 @@ export default function CarWashScene() {
     wrap.appendChild(renderer.domElement);
 
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.target.set(2, 1.5, WASH_SITE_Z + (isPortrait() ? 12 : 6));
+    controls.target.set(isPortrait() ? -4 : 2, 1.5, WASH_SITE_Z + (isPortrait() ? 12 : 6));
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
     controls.minDistance = 6;
