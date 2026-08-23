@@ -631,9 +631,9 @@ export default function CarWashScene() {
     const skyDome = new THREE.Mesh(new THREE.SphereGeometry(760, 32, 16), skyMat);
     scene.add(skyDome);
     const dayFog = new THREE.Color(0xd9eefb);
-    const nightFog = new THREE.Color(0x071426);
+    const nightFog = new THREE.Color(0x0e2740);
     const daySkyTint = new THREE.Color(0xffffff);
-    const nightSkyTint = new THREE.Color(0x07152d);
+    const nightSkyTint = new THREE.Color(0x0b1f38);
 
     /* Cadrage responsive : en portrait (mobile) on rapproche la caméra
        et on élargit le champ pour que la ville et le car wash remplissent l'écran. */
@@ -649,7 +649,7 @@ export default function CarWashScene() {
     // regard vers le sud-est. La ville (route principale + parcelles) occupe le
     // centre/premier plan, le car wash reste visible en arrière-plan relié par
     // la route, les montagnes restent lointaines.
-    else camera.position.set(-25, 24, 20);
+    else camera.position.set(-22, 22, 8);
 
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -664,7 +664,7 @@ export default function CarWashScene() {
     controls.target.set(
       isPortrait() ? -4 : 5,
       1.5,
-      isPortrait() ? WASH_SITE_Z + 12 : -15,
+      isPortrait() ? WASH_SITE_Z + 12 : -20,
     );
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
@@ -766,31 +766,50 @@ export default function CarWashScene() {
 
 
 
+    type CarMaterialState = {
+      material: THREE.MeshStandardMaterial;
+      baseColor: THREE.Color;
+      baseRoughness: number;
+      baseMetalness: number;
+      baseEmissive: THREE.Color;
+      baseEmissiveIntensity: number;
+    };
+
     const isolateMaterials = (car: THREE.Object3D) => {
-      const materials: THREE.MeshStandardMaterial[] = [];
+      const materials: CarMaterialState[] = [];
       car.traverse((n) => {
         const mesh = n as THREE.Mesh;
-        if (mesh.isMesh) {
-          const cloned = (mesh.material as THREE.MeshStandardMaterial).clone();
-          mesh.material = cloned;
-          materials.push(cloned);
-        }
+        if (!mesh.isMesh) return;
+        const source = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        const cloned = source.map((raw) => {
+          const m = (raw as THREE.MeshStandardMaterial).clone();
+          materials.push({
+            material: m,
+            baseColor: m.color.clone(),
+            baseRoughness: m.roughness,
+            baseMetalness: m.metalness,
+            baseEmissive: m.emissive.clone(),
+            baseEmissiveIntensity: m.emissiveIntensity,
+          });
+          return m;
+        });
+        mesh.material = Array.isArray(mesh.material) ? cloned : cloned[0]!;
       });
       return materials;
     };
 
     const tintCar = (car: THREE.Object3D, dirtiness: number) => {
-      const data = car.userData as { materials?: THREE.MeshStandardMaterial[] };
+      const data = car.userData as { materials?: CarMaterialState[] };
       const materials = data.materials ?? isolateMaterials(car);
       data.materials = materials;
-      const clean = 1 - dirtiness;
-      materials.forEach((m) => {
-        m.color.setHex(0xffffff).lerp(DIRT_COLOR, dirtiness);
-        /* Carrosserie fraîchement lavée : vernis brillant + léger éclat. */
-        m.roughness = 0.85 - clean * 0.7;
-        m.metalness = 0.05 + clean * 0.55;
-        m.emissive.setHex(0xffffff);
-        m.emissiveIntensity = clean * 0.12;
+      const dirt = THREE.MathUtils.clamp(dirtiness, 0, 1);
+      materials.forEach((state) => {
+        const m = state.material;
+        m.color.copy(state.baseColor).lerp(DIRT_COLOR, dirt * 0.22);
+        m.roughness = THREE.MathUtils.clamp(state.baseRoughness + dirt * 0.14, 0.08, 1);
+        m.metalness = state.baseMetalness;
+        m.emissive.copy(state.baseEmissive);
+        m.emissiveIntensity = state.baseEmissiveIntensity;
       });
     };
 
@@ -1388,11 +1407,12 @@ export default function CarWashScene() {
       plan.houses.forEach((h, k) => {
         const [cx, cz] = parseKey(k);
         const m = makeHouse(h.level);
+        m.scale.setScalar(1.55);
         m.position.set(cx * TILE, 0, cz * TILE);
         m.rotation.y = ((h.rot ?? 0) * Math.PI) / 2;
 
         /* Une lumière chaude par logement : elle s'allume uniquement la nuit. */
-        const homeLight = new THREE.PointLight(0xffc56e, 0, 13 + h.level * 2, 2);
+        const homeLight = new THREE.PointLight(0xffc56e, 0, 18 + h.level * 3, 1.6);
         homeLight.position.set(0, Math.min(5.4, 1.8 + h.level * 1.05), 0);
         m.add(homeLight);
         houseLights.push(homeLight);
@@ -1741,7 +1761,7 @@ export default function CarWashScene() {
           const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 8), bulbMat);
           bulb.position.set(lx, 3.65, lz);
           propsGroup.add(bulb);
-          const light = new THREE.PointLight(0xffd27a, 0, 18, 2);
+          const light = new THREE.PointLight(0xffd27a, 0, 24, 1.55);
           light.position.set(lx, 3.55, lz);
           propsGroup.add(light);
           streetLampLights.push(light);
@@ -2577,17 +2597,17 @@ export default function CarWashScene() {
       const night = 1 - daylight;
       sun.intensity = daylight * 1.6;
       sun.position.set(Math.cos(sunAngle) * 70, Math.max(Math.sin(sunAngle) * 80, -20), 24);
-      moon.intensity = night * 0.42;
+      moon.intensity = night * 0.72;
       moon.position.set(-sun.position.x, Math.max(-sun.position.y, 18), -24);
-      hemi.intensity = 0.12 + daylight * 0.78;
+      hemi.intensity = 0.26 + daylight * 0.72;
       skyMat.color.copy(nightSkyTint).lerp(daySkyTint, daylight);
       scene.fog?.color.copy(nightFog).lerp(dayFog, daylight);
 
       streetLampLights.forEach((light) => {
-        light.intensity = night * 5.2;
+        light.intensity = night * 8.5;
       });
       houseLights.forEach((light) => {
-        light.intensity = night * 2.8;
+        light.intensity = night * 4.2;
         light.parent?.traverse((n) => {
           const mesh = n as THREE.Mesh;
           if (!mesh.isMesh) return;
@@ -3064,10 +3084,10 @@ export default function CarWashScene() {
       )}
 
       <div
-        className={`fixed left-2 top-2 z-40 max-w-[calc(100vw-146px)] rounded-2xl bg-white/90 ring-1 ring-ink/10 px-3 py-2 text-ink shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur sm:left-4 sm:top-4 sm:max-w-[260px] sm:px-3 sm:py-2 ${buildMode ? "hidden" : ""}`}
+        className={`fixed left-2 top-2 z-40 max-w-[calc(100vw-146px)] rounded-2xl bg-white/90 ring-1 ring-ink/10 px-3 py-2 text-ink shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur sm:left-4 sm:top-4 sm:max-w-[230px] sm:px-3 sm:py-2 ${buildMode ? "hidden" : ""}`}
       >
         <div className="flex items-center gap-2">
-          <p className="flex items-center gap-2 text-[17px] font-bold tracking-wide sm:text-[19px]">
+          <p className="flex items-center gap-2 text-[17px] font-bold tracking-wide sm:text-[18px]">
             <span aria-hidden>🫧</span> TikowikoCity
           </p>
           <span ref={gameTimeRef} className="ml-auto whitespace-nowrap rounded-full bg-ink/5 px-2 py-1 text-[11px] font-extrabold">
