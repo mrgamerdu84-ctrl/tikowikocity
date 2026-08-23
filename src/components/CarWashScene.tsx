@@ -361,6 +361,8 @@ export default function CarWashScene() {
               cinema: cinemaStateRef.current,
               city: planIoRef.current.save(),
               houses: planIoRef.current.saveHouses(),
+              decor: planIoRef.current.saveDecor(),
+              washStyle: washStyleRef.current,
               residents: residentsRef.current,
               economy: economyRef.current,
               history: historyRef.current,
