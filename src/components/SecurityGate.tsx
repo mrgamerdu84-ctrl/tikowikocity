@@ -54,12 +54,28 @@ export default function SecurityGate({ children }: { children: ReactNode }) {
 
     setChecking(true);
     try {
-      const response = await fetch("/api/security/verify", {
+      // Lovable preview always knows the existing root route. POST on / is
+      // reserved here for the security check, while normal page loads use GET.
+      const response = await fetch("/", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          accept: "application/json",
+        },
         body: JSON.stringify({ code }),
       });
-      const data = (await response.json()) as { valid?: boolean; retryLater?: boolean };
+
+      const contentType = response.headers.get("content-type") ?? "";
+      if (!contentType.includes("application/json")) {
+        setError("La vérification de sécurité n'est pas encore disponible dans cet aperçu.");
+        return;
+      }
+
+      const data = (await response.json()) as {
+        valid?: boolean;
+        retryLater?: boolean;
+        unavailable?: boolean;
+      };
 
       if (data.valid) {
         try {
@@ -69,6 +85,11 @@ export default function SecurityGate({ children }: { children: ReactNode }) {
         }
         setUnlocked(true);
         setAttempts(0);
+        return;
+      }
+
+      if (data.unavailable || response.status >= 500) {
+        setError("Le service de sécurité ne répond pas pour le moment.");
         return;
       }
 
@@ -86,7 +107,7 @@ export default function SecurityGate({ children }: { children: ReactNode }) {
         setError("Code incorrect.");
       }
     } catch {
-      setError("Impossible de vérifier le code. Vérifie ta connexion Internet.");
+      setError("La vérification de sécurité ne répond pas dans cet aperçu.");
     } finally {
       setChecking(false);
     }
