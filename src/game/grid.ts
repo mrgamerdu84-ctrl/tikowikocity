@@ -27,10 +27,15 @@ export const worldToCell = (v: number) => Math.round(v / TILE);
 export const headingOf = (d: Dir) =>
   Math.atan2(DIR_VEC[d]![0], DIR_VEC[d]![1]);
 
-/** Vecteur « à droite » du sens de circulation (conduite à droite). */
+/** Vecteur réellement à droite du sens de circulation (conduite à droite).
+ *  Nord (-z) -> Est (+x)
+ *  Est (+x)  -> Sud (+z)
+ *  Sud (+z)  -> Ouest (-x)
+ *  Ouest (-x)-> Nord (-z)
+ */
 export const rightOf = (d: Dir): [number, number] => {
   const [dx, dz] = DIR_VEC[d]!;
-  return [dz, -dx];
+  return [-dz, dx];
 };
 
 export const axisOf = (d: Dir): "x" | "z" => (d === 1 || d === 3 ? "x" : "z");
