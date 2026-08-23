@@ -17,7 +17,23 @@ import modelsAsset from "@/assets/car-wash-models.json.asset.json";
 
 import tunnelAsset from "@/assets/tunnel.glb.asset.json";
 import kenneyPackAsset from "@/assets/kenney-pack.glb.asset.json";
-import { CityPlan, type SerializedPlan, type SerializedHouses } from "@/game/cityPlan";
+import {
+  CityPlan,
+  type SerializedPlan,
+  type SerializedHouses,
+  type SerializedDecor,
+} from "@/game/cityPlan";
+import {
+  DECOR,
+  decorDef,
+  decorOf,
+  DEFAULT_WASH_STYLE,
+  sanitizeWashStyle,
+  WASH_COLORS,
+  type DecorCategory,
+  type DecorKind,
+  type WashStyle,
+} from "@/game/decor";
 import {
   TILE,
   DIR_VEC,
