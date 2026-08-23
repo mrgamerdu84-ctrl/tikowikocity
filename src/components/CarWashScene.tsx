@@ -379,7 +379,7 @@ export default function CarWashScene() {
           const axis = new THREE.Vector3(1, 0, 0).transformDirection(
             n.matrixWorld,
           );
-          n.userData.spinSign = axis.dot(carRight) < 0 ? -1 : 1;
+          n.userData['spinSign'] = axis.dot(carRight) < 0 ? -1 : 1;
           wheels.push(n);
         }
       });
@@ -1552,7 +1552,7 @@ export default function CarWashScene() {
         e.d += moved;
 
         e.wheels.forEach((w) => {
-          w.rotation.x -= ((w.userData.spinSign as number) ?? 1) * (moved / 0.35) * 2;
+          w.rotation.x -= ((w.userData['spinSign'] as number) ?? 1) * (moved / 0.35) * 2;
         });
 
         let dirtiness: number;
@@ -1688,7 +1688,7 @@ export default function CarWashScene() {
         if (e.s < e.sMin) e.s = e.sMax;
         // roues qui tournent proportionnellement à la distance parcourue
         e.wheels.forEach((w) => {
-          w.rotation.x -= ((w.userData.spinSign as number) ?? 1) * (step / 0.35) * 2;
+          w.rotation.x -= ((w.userData['spinSign'] as number) ?? 1) * (step / 0.35) * 2;
         });
       });
 
