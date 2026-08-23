@@ -731,10 +731,17 @@ export default function CarWashScene() {
       const data = car.userData as { materials?: THREE.MeshStandardMaterial[] };
       const materials = data.materials ?? isolateMaterials(car);
       data.materials = materials;
+      const clean = 1 - dirtiness;
       materials.forEach((m) => {
         m.color.setHex(0xffffff).lerp(DIRT_COLOR, dirtiness);
+        /* Carrosserie fraîchement lavée : vernis brillant + léger éclat. */
+        m.roughness = 0.85 - clean * 0.7;
+        m.metalness = 0.05 + clean * 0.55;
+        m.emissive.setHex(0xffffff);
+        m.emissiveIntensity = clean * 0.12;
       });
     };
+
 
     /* Récupère les roues et mémorise, pour chacune, le sens de rotation
        correct : certains modèles (4x4/SUV) ont des roues dont l'axe local
