@@ -1809,7 +1809,7 @@ export default function CarWashScene() {
         </button>
         <button
           type="button"
-          disabled={driveState === "saving"}
+          disabled={driveState === "saving" || loadState === "loading"}
           onClick={handleSaveToDrive}
           className="rounded-full bg-ink/10 px-3.5 py-2.5 text-[12.5px] font-bold text-ink transition-transform active:translate-y-0.5 disabled:opacity-60"
         >
@@ -1821,6 +1821,21 @@ export default function CarWashScene() {
                 ? "⚠️ Réessayer"
                 : "☁️ Sauver sur Drive"}
         </button>
+        <button
+          type="button"
+          disabled={loadState === "loading" || driveState === "saving"}
+          onClick={handleLoadFromDrive}
+          className="rounded-full bg-ink/10 px-3.5 py-2.5 text-[12.5px] font-bold text-ink transition-transform active:translate-y-0.5 disabled:opacity-60"
+        >
+          {loadState === "loading"
+            ? "⏳ Lecture..."
+            : loadState === "done"
+              ? "✅ Chargé"
+              : loadState === "error"
+                ? "⚠️ Réessayer"
+                : "📥 Charger depuis Drive"}
+        </button>
+
       </div>
 
     </>
