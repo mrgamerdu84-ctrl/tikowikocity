@@ -284,11 +284,40 @@ export default function CarWashScene() {
       return g;
     };
 
+    // Tapis roulant : lattes qui défilent dans la zone de lavage
+    const makeConveyor = () => {
+      const group = new THREE.Group();
+      const [zs, ze] = WASH_ZONE;
+      const len = ze - zs;
+      const base = new THREE.Mesh(
+        new THREE.BoxGeometry(len, 0.12, 2.6),
+        new THREE.MeshStandardMaterial({ color: 0x2b3138, roughness: 0.8 }),
+      );
+      base.position.set((zs + ze) / 2, ROAD_Y + 0.06, 0);
+      base.receiveShadow = true;
+      group.add(base);
+
+      const slatMat = new THREE.MeshStandardMaterial({ color: 0x596470, roughness: 0.6 });
+      const slatGeo = new THREE.BoxGeometry(0.18, 0.06, 2.4);
+      const slats: THREE.Mesh[] = [];
+      const count = Math.round(len / 0.4);
+      for (let i = 0; i < count; i++) {
+        const s = new THREE.Mesh(slatGeo, slatMat);
+        s.position.set(zs + i * 0.4, ROAD_Y + 0.14, 0);
+        s.castShadow = true;
+        group.add(s);
+        slats.push(s);
+      }
+      return { group, slats };
+    };
+
     const models: Record<string, THREE.Group> = {};
     const meshyCars: THREE.Object3D[] = [];
     const sedanCars: THREE.Object3D[] = [];
-    const brushes: THREE.Object3D[] = [];
+    const brushes: Array<{ pivot: THREE.Object3D; spin: THREE.Object3D; dir: number }> = [];
     const foamSprites: THREE.Object3D[] = [];
+    const conveyorSlats: THREE.Mesh[] = [];
+    const trafficCars: Array<{ car: THREE.Object3D; dir: number; speed: number }> = [];
 
     const spawnSedan = () => {
       const template =
@@ -310,6 +339,7 @@ export default function CarWashScene() {
       sedanCars.push(sedan);
     };
     spawnRef.current = spawnSedan;
+
 
 
 
