@@ -1,0 +1,82 @@
+name: Corriger mode construction
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/fix-construction.yml
+
+permissions:
+  contents: write
+
+jobs:
+  fix-construction:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Corriger interactions construction
+        shell: python
+        run: |
+          from pathlib import Path
+
+          p = Path("src/components/CarWashScene.tsx")
+          s = p.read_text(encoding="utf-8")
+
+          replacements = [
+            (
+              '    let downAt: { x: number; y: number } | null = null;',
+              '    let downAt: { x: number; y: number; id: number; type: string } | null = null;'
+            ),
+            (
+              '''    const onPointerDown = (ev: PointerEvent) => {\n      downAt = { x: ev.clientX, y: ev.clientY };\n    };''',
+              '''    const releasePointer = (ev: PointerEvent) => {\n      try {\n        if (renderer.domElement.hasPointerCapture(ev.pointerId)) {\n          renderer.domElement.releasePointerCapture(ev.pointerId);\n        }\n      } catch {\n        // Le pointeur peut déjà avoir été relâché par le navigateur.\n      }\n    };\n    const onPointerDown = (ev: PointerEvent) => {\n      if (!buildRef.current) return;\n      if (ev.pointerType === "mouse" && ev.button !== 0) return;\n      ev.preventDefault();\n      downAt = {\n        x: ev.clientX,\n        y: ev.clientY,\n        id: ev.pointerId,\n        type: ev.pointerType,\n      };\n      try {\n        renderer.domElement.setPointerCapture(ev.pointerId);\n      } catch {\n        // Certains WebView ne prennent pas en charge la capture de pointeur.\n      }\n      onPointerMove(ev);\n    };'''
+            ),
+            (
+              '''    const onPointerUp = (ev: PointerEvent) => {\n      const start = downAt;\n      downAt = null;\n      if (!buildRef.current || !start) return;\n      if (Math.hypot(ev.clientX - start.x, ev.clientY - start.y) > 6) return;''',
+              '''    const onPointerUp = (ev: PointerEvent) => {\n      const start = downAt;\n      if (!start || start.id !== ev.pointerId) return;\n      downAt = null;\n      releasePointer(ev);\n      if (!buildRef.current) return;\n      if (ev.pointerType === "mouse" && ev.button !== 0) return;\n      const tapTolerance = start.type === "touch" || start.type === "pen" ? 24 : 8;\n      if (Math.hypot(ev.clientX - start.x, ev.clientY - start.y) > tapTolerance) return;'''
+            ),
+            (
+              '''    renderer.domElement.addEventListener("pointermove", onPointerMove);\n    renderer.domElement.addEventListener("pointerdown", onPointerDown);\n    renderer.domElement.addEventListener("pointerup", onPointerUp);''',
+              '''    const onPointerCancel = (ev: PointerEvent) => {\n      if (downAt?.id === ev.pointerId) downAt = null;\n      releasePointer(ev);\n    };\n    renderer.domElement.addEventListener("pointermove", onPointerMove);\n    renderer.domElement.addEventListener("pointerdown", onPointerDown);\n    renderer.domElement.addEventListener("pointerup", onPointerUp);\n    renderer.domElement.addEventListener("pointercancel", onPointerCancel);'''
+            ),
+            (
+              '''    buildApplyRef.current = (on: boolean) => {\n      gridHelper.visible = on;\n      controls.enableRotate = !on;\n      if (!on) ghost.visible = false;\n    };''',
+              '''    buildApplyRef.current = (on: boolean) => {\n      gridHelper.visible = on;\n      controls.enabled = !on;\n      renderer.domElement.style.touchAction = on ? "none" : "auto";\n      if (!on) {\n        ghost.visible = false;\n        downAt = null;\n      }\n    };'''
+            ),
+            (
+              '''      renderer.domElement.removeEventListener("pointermove", onPointerMove);\n      renderer.domElement.removeEventListener("pointerdown", onPointerDown);\n      renderer.domElement.removeEventListener("pointerup", onPointerUp);''',
+              '''      renderer.domElement.removeEventListener("pointermove", onPointerMove);\n      renderer.domElement.removeEventListener("pointerdown", onPointerDown);\n      renderer.domElement.removeEventListener("pointerup", onPointerUp);\n      renderer.domElement.removeEventListener("pointercancel", onPointerCancel);'''
+            ),
+            (
+              '          <div className="flex w-full flex-wrap items-center justify-center gap-1.5 rounded-2xl bg-white/90 p-2 shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur">',
+              '          <div className="flex max-h-[min(48vh,360px)] w-full flex-wrap items-center justify-center gap-1.5 overflow-y-auto overscroll-contain rounded-2xl bg-white/90 p-2 shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur">'
+            ),
+          ]
+
+          for old, new in replacements:
+            if old not in s:
+              raise SystemExit(f"Bloc introuvable, correction annulée : {old[:80]!r}")
+            s = s.replace(old, new, 1)
+
+          p.write_text(s, encoding="utf-8")
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Vérifier TypeScript
+        run: |
+          bun install --frozen-lockfile
+          bunx tsc --noEmit
+
+      - name: Enregistrer la correction
+        run: |
+          rm -f .github/workflows/fix-construction.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/CarWashScene.tsx .github/workflows/fix-construction.yml
+          git commit -m "Corrigé mode construction tactile et placement"
+          git push origin HEAD:main
