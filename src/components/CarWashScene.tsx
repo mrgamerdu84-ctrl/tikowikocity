@@ -1541,7 +1541,7 @@ export default function CarWashScene() {
         /* Lavage terminé : la voiture sort du tunnel et paye la prestation. */
         if (!e.paid && e.d >= WASH_D1) {
           e.paid = true;
-          registerWashRef.current(6 + Math.floor(Math.random() * 7));
+          registerWashRef.current(rollReward(up.quality));
         }
 
         e.wheels.forEach((w) => {
@@ -1591,8 +1591,9 @@ export default function CarWashScene() {
       /* De temps en temps, une voiture de la ville part au lavage. */
       washCooldown -= dt;
       if (washCooldown <= 0) {
-        washCooldown = 9 + Math.random() * 12;
-        if (ctl.traffic && washCars.length < 3) sendCityCarToWash();
+        const [lo, hi] = washInterval(up.speed);
+        washCooldown = lo + Math.random() * (hi - lo + 3);
+        if (ctl.traffic && washCars.length < capacityOf(up.capacity)) sendCityCarToWash();
       }
 
       const carInWash = washCars.some((c) => c.d > WASH_D0 && c.d < WASH_D1);
