@@ -375,14 +375,32 @@ export default function CarWashScene() {
       kenneyTunnel = tunnel;
 
 
-      [-1, 1].forEach((zSide) => {
-        [1, 3].forEach((x) => {
-          const brush = makeBrush();
-          brush.position.set(x, ROAD_Y + 0.9, zSide * 1.5);
-          brush.rotation.z = Math.PI / 2;
-          scene.add(brush);
-          brushes.push(brush);
+      // Tapis roulant
+      const conveyor = makeConveyor();
+      scene.add(conveyor.group);
+      conveyorSlats.push(...conveyor.slats);
+
+      // Brosses verticales de chaque côté
+      [-1, 1].forEach((zSide, si) => {
+        [0, 2.5].forEach((offset, oi) => {
+          const pivot = new THREE.Group();
+          const spin = makeBrush();
+          pivot.add(spin);
+          pivot.position.set(WASH_ZONE[0] + 1.2 + offset, ROAD_Y + 1.05, zSide * 1.5);
+          scene.add(pivot);
+          brushes.push({ pivot, spin, dir: (si + oi) % 2 === 0 ? 1 : -1 });
         });
+      });
+
+      // Brosse horizontale au-dessus du tapis
+      [1.2, 3.8].forEach((x, i) => {
+        const pivot = new THREE.Group();
+        pivot.rotation.x = Math.PI / 2;
+        const spin = makeBrush();
+        pivot.add(spin);
+        pivot.position.set(x, ROAD_Y + 2.1, 0);
+        scene.add(pivot);
+        brushes.push({ pivot, spin, dir: i % 2 === 0 ? -1 : 1 });
       });
 
       for (let i = 0; i < 2; i++) {
@@ -392,14 +410,66 @@ export default function CarWashScene() {
         foamSprites.push(foam);
       }
 
-      const taxi = models["taxi"]!.clone(true);
-      taxi.rotation.y = Math.PI / 2;
-      taxi.position.set(-9, CAR_Y, -2.6);
-      setShadow(taxi);
-      tintCar(taxi, 1);
-      scene.add(taxi);
-
       spawnSedan();
+
+      // ----- Ville : avenues, immeubles et circulation -----
+      [-9, 9].forEach((zRow) => {
+        for (let x = -13; x <= 13; x += 1) {
+          place(models["roadStraight"]!, x, ROAD_Y, zRow, 0);
+        }
+      });
+
+      const buildingMats = [0xdfe6ee, 0xf3d6a8, 0xcfe3d0, 0xefc4c4, 0xd8d2ef].map(
+        (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.85 }),
+      );
+      const windowMat = new THREE.MeshStandardMaterial({
+        color: 0x8fd3ff,
+        roughness: 0.25,
+        metalness: 0.1,
+      });
+      const makeBuilding = (x: number, z: number, w: number, h: number, d: number, mi: number) => {
+        const g = new THREE.Group();
+        const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), buildingMats[mi]!);
+        body.position.y = h / 2;
+        g.add(body);
+        for (let fy = 0.8; fy < h - 0.5; fy += 1.1) {
+          for (let fx = -w / 2 + 0.5; fx < w / 2 - 0.2; fx += 0.9) {
+            const win = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.55, 0.06), windowMat);
+            win.position.set(fx, fy, d / 2 + 0.03);
+            g.add(win);
+            const back = win.clone();
+            back.position.z = -d / 2 - 0.03;
+            g.add(back);
+          }
+        }
+        g.position.set(x, 0, z);
+        setShadow(g);
+        scene.add(g);
+      };
+
+      for (let i = 0; i < 9; i++) {
+        const x = -13 + i * 3.2;
+        makeBuilding(x, 13 + (i % 2) * 1.6, 2.6, 3 + ((i * 7) % 5) * 1.3, 2.6, i % 5);
+        makeBuilding(x + 1.2, -13 - (i % 2) * 1.6, 2.4, 3.5 + ((i * 3) % 4) * 1.5, 2.4, (i + 2) % 5);
+      }
+
+      // Voitures qui circulent en ville
+      const cityTemplates = [models["taxi"]!, models["sedan"]!];
+      for (let i = 0; i < 8; i++) {
+        const dir = i % 2 === 0 ? 1 : -1;
+        const zRow = i % 2 === 0 ? -9.35 : 9.35;
+        const car = cityTemplates[i % cityTemplates.length]!.clone(true);
+        car.rotation.y = dir > 0 ? Math.PI / 2 : -Math.PI / 2;
+        car.position.set(-13 + (i * 3.7) % 26, CAR_Y, zRow);
+        setShadow(car);
+        scene.add(car);
+        trafficCars.push({
+          car,
+          dir,
+          speed: 2.6 + Math.random() * 1.8,
+        });
+      }
+
 
       const houseSpots: Array<[number, number]> = [
         [-11, 4],
