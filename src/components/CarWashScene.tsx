@@ -17,7 +17,23 @@ import modelsAsset from "@/assets/car-wash-models.json.asset.json";
 
 import tunnelAsset from "@/assets/tunnel.glb.asset.json";
 import kenneyPackAsset from "@/assets/kenney-pack.glb.asset.json";
-import { CityPlan, type SerializedPlan, type SerializedHouses } from "@/game/cityPlan";
+import {
+  CityPlan,
+  type SerializedPlan,
+  type SerializedHouses,
+  type SerializedDecor,
+} from "@/game/cityPlan";
+import {
+  
+  decorDef,
+  decorOf,
+  DEFAULT_WASH_STYLE,
+  sanitizeWashStyle,
+  WASH_COLORS,
+  type DecorCategory,
+  type DecorKind,
+  type WashStyle,
+} from "@/game/decor";
 import {
   TILE,
   DIR_VEC,
@@ -244,16 +260,47 @@ export default function CarWashScene() {
   const toolRef = useRef<BuildTool>("straight");
   const rotRef = useRef(0);
   const buildApplyRef = useRef<(on: boolean) => void>(() => {});
+  /* Décor sélectionné dans chaque catégorie + personnalisation du car wash */
+  const [decorKind, setDecorKind] = useState<Record<DecorCategory, DecorKind>>({
+    park: "park",
+    parking: "parking",
+  });
+  const decorKindRef = useRef<DecorKind>("park");
+  const [washStyle, setWashStyle] = useState<WashStyle>(DEFAULT_WASH_STYLE);
+  const washStyleRef = useRef<WashStyle>(DEFAULT_WASH_STYLE);
+  const washApplyRef = useRef<(s: WashStyle) => void>(() => {});
   const planIoRef = useRef<{
     save: () => SerializedPlan;
     load: (data: SerializedPlan) => void;
     saveHouses: () => SerializedHouses;
     loadHouses: (data: SerializedHouses) => void;
-  }>({ save: () => [], load: () => {}, saveHouses: () => [], loadHouses: () => {} });
+    saveDecor: () => SerializedDecor;
+    loadDecor: (data: SerializedDecor) => void;
+  }>({
+    save: () => [],
+    load: () => {},
+    saveHouses: () => [],
+    loadHouses: () => {},
+    saveDecor: () => [],
+    loadDecor: () => {},
+  });
+
+  const chooseDecor = (kind: DecorKind) => {
+    const def = decorDef(kind);
+    decorKindRef.current = kind;
+    setDecorKind((prev) => ({ ...prev, [def.category]: kind }));
+  };
+  const applyWashStyle = (patch: Partial<WashStyle>) => {
+    const next = { ...washStyleRef.current, ...patch };
+    washStyleRef.current = next;
+    setWashStyle(next);
+    washApplyRef.current(next);
+  };
 
   const chooseTool = (t: BuildTool) => {
     toolRef.current = t;
     setTool(t);
+    if (t === "park" || t === "parking") decorKindRef.current = decorKind[t];
   };
   const toggleBuild = () => {
     setBuildMode((prev) => {
@@ -314,6 +361,8 @@ export default function CarWashScene() {
               cinema: cinemaStateRef.current,
               city: planIoRef.current.save(),
               houses: planIoRef.current.saveHouses(),
+              decor: planIoRef.current.saveDecor(),
+              washStyle: washStyleRef.current,
               residents: residentsRef.current,
               economy: economyRef.current,
               history: historyRef.current,
@@ -354,6 +403,8 @@ export default function CarWashScene() {
         cinema?: unknown;
         city?: SerializedPlan;
         houses?: SerializedHouses;
+        decor?: SerializedDecor;
+        washStyle?: unknown;
         residents?: unknown;
         economy?: { money?: unknown; washes?: unknown };
         history?: unknown;
@@ -373,6 +424,13 @@ export default function CarWashScene() {
       }
       if (Array.isArray(state.city)) planIoRef.current.load(state.city);
       if (Array.isArray(state.houses)) planIoRef.current.loadHouses(state.houses);
+      if (Array.isArray(state.decor)) planIoRef.current.loadDecor(state.decor);
+      if (state.washStyle) {
+        const s = sanitizeWashStyle(state.washStyle);
+        washStyleRef.current = s;
+        setWashStyle(s);
+        washApplyRef.current(s);
+      }
       if (typeof state.residents === "number" && Number.isFinite(state.residents)) {
         const r = Math.max(0, Math.round(state.residents));
         residentsRef.current = r;
@@ -1066,6 +1124,293 @@ export default function CarWashScene() {
       cityStatsRef.current(plan.houseLevels());
     };
 
+    /* ---------- Décor du joueur : parcs et parkings ---------- */
+    const decorGroup = new THREE.Group();
+    scene.add(decorGroup);
+
+    const grassMat = new THREE.MeshStandardMaterial({ color: 0x74c46a, roughness: 1 });
+    const sandMat = new THREE.MeshStandardMaterial({ color: 0xe3cf9c, roughness: 1 });
+    const tarmacMat = new THREE.MeshStandardMaterial({ color: 0x6d747c, roughness: 1 });
+    const paintMat = new THREE.MeshStandardMaterial({ color: 0xf3f2ea, roughness: 0.8 });
+    const woodMat = new THREE.MeshStandardMaterial({ color: 0x8a5a34, roughness: 0.9 });
+
+    const groundTile = (mat: THREE.Material, size = TILE * 0.96, y = 0.02) => {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(size, size), mat);
+      m.rotation.x = -Math.PI / 2;
+      m.position.y = y;
+      m.receiveShadow = true;
+      return m;
+    };
+
+    const makeBench = () => {
+      const g = new THREE.Group();
+      const seat = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.12, 0.5), woodMat);
+      seat.position.y = 0.45;
+      const back = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.5, 0.12), woodMat);
+      back.position.set(0, 0.72, -0.2);
+      g.add(seat, back);
+      return g;
+    };
+
+    const makeDecor = (kind: DecorKind, seed: number) => {
+      const g = new THREE.Group();
+      const rnd = (i: number) => ((Math.sin(seed * 12.9898 + i * 78.233) + 1) % 1);
+      if (kind === "park" || kind === "garden" || kind === "fountain" || kind === "playground") {
+        g.add(groundTile(grassMat));
+      }
+      if (kind === "park") {
+        for (let i = 0; i < 4; i++) {
+          const t = makeTree();
+          t.position.set((rnd(i) - 0.5) * 4.4, 0, (rnd(i + 9) - 0.5) * 4.4);
+          t.scale.setScalar(0.8 + rnd(i + 3) * 0.4);
+          g.add(t);
+        }
+        const b = makeBench();
+        b.position.set(1.4, 0, 1.9);
+        b.rotation.y = Math.PI;
+        g.add(b);
+      } else if (kind === "garden") {
+        const flowerMats = [0xe4657a, 0xf0c246, 0xa46ee0, 0xffffff].map(
+          (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.8 }),
+        );
+        const bed = new THREE.Mesh(
+          new THREE.BoxGeometry(TILE * 0.72, 0.22, TILE * 0.72),
+          new THREE.MeshStandardMaterial({ color: 0x6b4a2f, roughness: 1 }),
+        );
+        bed.position.y = 0.11;
+        g.add(bed);
+        for (let i = 0; i < 16; i++) {
+          const f = new THREE.Mesh(
+            new THREE.SphereGeometry(0.16, 8, 8),
+            flowerMats[i % flowerMats.length]!,
+          );
+          f.position.set((rnd(i) - 0.5) * 3.8, 0.3, (rnd(i + 5) - 0.5) * 3.8);
+          g.add(f);
+        }
+        const b = makeBench();
+        b.position.set(0, 0, 2.3);
+        g.add(b);
+      } else if (kind === "fountain") {
+        const basin = new THREE.Mesh(
+          new THREE.CylinderGeometry(2, 2.2, 0.5, 20),
+          new THREE.MeshStandardMaterial({ color: 0xd8d3c6, roughness: 0.9 }),
+        );
+        basin.position.y = 0.25;
+        const water = new THREE.Mesh(
+          new THREE.CylinderGeometry(1.75, 1.75, 0.1, 20),
+          new THREE.MeshStandardMaterial({
+            color: 0x4fb3e8,
+            roughness: 0.15,
+            metalness: 0.1,
+          }),
+        );
+        water.position.y = 0.52;
+        const jet = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.16, 0.24, 1.5, 10),
+          new THREE.MeshStandardMaterial({ color: 0xbfe6f7, roughness: 0.3 }),
+        );
+        jet.position.y = 1.2;
+        g.add(basin, water, jet);
+      } else if (kind === "playground") {
+        g.add(groundTile(sandMat, TILE * 0.7, 0.025));
+        const frameMat = new THREE.MeshStandardMaterial({ color: 0xe0574c, roughness: 0.7 });
+        const slide = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.12, 3.2), frameMat);
+        slide.position.set(-1.2, 0.9, 0);
+        slide.rotation.x = 0.5;
+        const tower = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.6, 1.4), woodMat);
+        tower.position.set(-1.2, 0.8, -1.9);
+        const barMat = new THREE.MeshStandardMaterial({ color: 0x3f7fae, roughness: 0.6 });
+        const bar = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.16, 3), barMat);
+        bar.position.set(1.6, 1.6, 0);
+        for (const sz of [-1.4, 1.4]) {
+          const leg = new THREE.Mesh(new THREE.BoxGeometry(0.16, 1.7, 0.16), barMat);
+          leg.position.set(1.6, 0.85, sz);
+          g.add(leg);
+        }
+        for (const sz of [-0.6, 0.6]) {
+          const swing = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.1, 0.3), frameMat);
+          swing.position.set(1.6, 0.55, sz);
+          g.add(swing);
+        }
+        g.add(slide, tower, bar);
+      } else if (kind === "parking" || kind === "truckstop") {
+        g.add(groundTile(tarmacMat));
+        const slots = kind === "truckstop" ? 3 : 4;
+        const step = (TILE * 0.9) / slots;
+        for (let i = 0; i <= slots; i++) {
+          const line = new THREE.Mesh(
+            new THREE.PlaneGeometry(0.14, TILE * 0.72),
+            paintMat,
+          );
+          line.rotation.x = -Math.PI / 2;
+          line.position.set(-TILE * 0.45 + i * step, 0.03, 0);
+          g.add(line);
+        }
+        const parkedCount = kind === "truckstop" ? 1 : 2;
+        for (let i = 0; i < parkedCount; i++) {
+          const c = kitCar(Math.floor(rnd(i) * 8) + i).clone(true);
+          c.rotation.y = Math.PI / 2;
+          if (kind === "truckstop") c.scale.setScalar(1.4);
+          c.position.set(-TILE * 0.45 + step * (i + 0.5) + step * i, 0.02, 0);
+          g.add(c);
+        }
+      } else if (kind === "carport") {
+        g.add(groundTile(tarmacMat));
+        const roof = new THREE.Mesh(
+          new THREE.BoxGeometry(TILE * 0.9, 0.22, TILE * 0.7),
+          new THREE.MeshStandardMaterial({ color: 0xcfd6de, roughness: 0.6 }),
+        );
+        roof.position.y = 2.7;
+        g.add(roof);
+        const pillarMat = new THREE.MeshStandardMaterial({ color: 0x8a929b, roughness: 0.8 });
+        for (const sx of [-TILE * 0.4, TILE * 0.4]) {
+          for (const sz of [-TILE * 0.3, TILE * 0.3]) {
+            const p = new THREE.Mesh(new THREE.BoxGeometry(0.24, 2.7, 0.24), pillarMat);
+            p.position.set(sx, 1.35, sz);
+            g.add(p);
+          }
+        }
+        const c = kitCar(Math.floor(rnd(2) * 8)).clone(true);
+        c.rotation.y = Math.PI / 2;
+        c.position.set(0, 0.02, 0);
+        g.add(c);
+      }
+      setShadow(g);
+      return g;
+    };
+
+    const renderDecor = () => {
+      [...decorGroup.children].forEach((c) => decorGroup.remove(c));
+      plan.decor.forEach((d, k) => {
+        const [cx, cz] = parseKey(k);
+        const obj = makeDecor(d.kind, cx * 31 + cz * 17);
+        obj.position.set(cx * TILE, 0, cz * TILE);
+        obj.rotation.y = (d.rot * Math.PI) / 2;
+        decorGroup.add(obj);
+      });
+    };
+
+    /* ---------- Personnalisation du car wash ---------- */
+    const washDecor = new THREE.Group();
+    washDecor.position.z = WASH_SITE_Z;
+    scene.add(washDecor);
+
+    const signTexture = (label: string, hex: number) => {
+      const cv = document.createElement("canvas");
+      cv.width = 512;
+      cv.height = 160;
+      const ctx = cv.getContext("2d")!;
+      ctx.fillStyle = `#${hex.toString(16).padStart(6, "0")}`;
+      ctx.fillRect(0, 0, cv.width, cv.height);
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 76px system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(label.slice(0, 16).toUpperCase(), cv.width / 2, cv.height / 2 + 4);
+      const tex = new THREE.CanvasTexture(cv);
+      tex.anisotropy = 4;
+      return tex;
+    };
+
+    const rebuildWashDecor = (style: WashStyle) => {
+      [...washDecor.children].forEach((c) => washDecor.remove(c));
+      const hex = WASH_COLORS[style.color]?.hex ?? WASH_COLORS[0]!.hex;
+      const themeMat = new THREE.MeshStandardMaterial({ color: hex, roughness: 0.65 });
+
+      // auvent coloré au-dessus de l'entrée : la couleur du car wash
+      const canopy = new THREE.Mesh(new THREE.BoxGeometry(9, 0.4, 4), themeMat);
+      canopy.position.set(0, 4.6, -3.4);
+      washDecor.add(canopy);
+      for (const sx of [-4, 4]) {
+        const post = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.18, 0.18, 4.6, 10),
+          themeMat,
+        );
+        post.position.set(sx, 2.3, -3.4);
+        washDecor.add(post);
+      }
+
+      if (style.sign) {
+        const panel = new THREE.Mesh(
+          new THREE.PlaneGeometry(9, 2.6),
+          new THREE.MeshBasicMaterial({
+            map: signTexture(`${player?.name ?? "Tikowiko"} WASH`, hex),
+            side: THREE.DoubleSide,
+          }),
+        );
+        panel.position.set(0, 6.4, -3.4);
+        washDecor.add(panel);
+        for (const sx of [-4, 4]) {
+          const mast = new THREE.Mesh(
+            new THREE.BoxGeometry(0.2, 1.6, 0.2),
+            themeMat,
+          );
+          mast.position.set(sx, 5.3, -3.4);
+          washDecor.add(mast);
+        }
+      }
+
+      if (style.neon) {
+        const glow = new THREE.Mesh(
+          new THREE.TorusGeometry(2.4, 0.14, 8, 28),
+          new THREE.MeshStandardMaterial({
+            color: hex,
+            emissive: hex,
+            emissiveIntensity: 1.6,
+            roughness: 0.3,
+          }),
+        );
+        glow.position.set(0, 3.2, 3.6);
+        washDecor.add(glow);
+        const lamp = new THREE.PointLight(hex, 18, 22);
+        lamp.position.set(0, 3.4, 3.6);
+        washDecor.add(lamp);
+      }
+
+      if (style.plants) {
+        const potMat = new THREE.MeshStandardMaterial({ color: 0xc96a4e, roughness: 0.9 });
+        for (const [px, pz] of [
+          [-9, -5],
+          [9, -5],
+          [-9, 4],
+          [9, 4],
+        ] as const) {
+          const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.55, 0.9, 12), potMat);
+          pot.position.set(px, 0.45, pz);
+          const bush = new THREE.Mesh(
+            new THREE.IcosahedronGeometry(0.85, 0),
+            new THREE.MeshStandardMaterial({ color: 0x3f9142, roughness: 1 }),
+          );
+          bush.position.set(px, 1.5, pz);
+          washDecor.add(pot, bush);
+        }
+      }
+
+      if (style.flags) {
+        const flagMat = new THREE.MeshStandardMaterial({
+          color: hex,
+          roughness: 0.8,
+          side: THREE.DoubleSide,
+        });
+        for (let i = 0; i < 10; i++) {
+          const x = -13.5 + i * 3;
+          const pole = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.06, 0.06, 3.2, 6),
+            new THREE.MeshStandardMaterial({ color: 0xd7dbe0, roughness: 0.5 }),
+          );
+          pole.position.set(x, 1.6, 6.2);
+          const flag = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.7), flagMat);
+          flag.position.set(x + 0.55, 2.9, 6.2);
+          washDecor.add(pole, flag);
+        }
+      }
+
+      setShadow(washDecor);
+    };
+    washApplyRef.current = rebuildWashDecor;
+    rebuildWashDecor(washStyleRef.current);
+
+
     const renderPlan = () => {
       [...roadsGroup.children].forEach((c) => roadsGroup.remove(c));
       [...propsGroup.children].forEach((c) => propsGroup.remove(c));
@@ -1574,34 +1919,77 @@ export default function CarWashScene() {
     const isRoadTool = (t: BuildTool): t is RoadHint =>
       t === "straight" || t === "bend" || t === "intersection" || t === "crossroad";
     /** outils qui se manipulent en glissant sur la grille */
-    const isDragTool = (t: BuildTool) => isRoadTool(t) || t === "bulldoze";
+    const isDragTool = (t: BuildTool) =>
+      isRoadTool(t) || t === "bulldoze" || t === "erase";
+
+    /* Rendus à rafraîchir après une série d'actions. */
+    const dirty = { plan: false, houses: false, decor: false };
+    const flushRender = () => {
+      if (dirty.plan) renderPlan();
+      if (dirty.houses) renderHouses();
+      if (dirty.decor) renderDecor();
+      dirty.plan = dirty.houses = dirty.decor = false;
+    };
+
+    /** Gomme universelle : retire n'importe quel élément posé sur la case. */
+    const eraseAt = (cx: number, cz: number) => {
+      let done = false;
+      if (plan.removeDecor(cx, cz)) {
+        dirty.decor = true;
+        done = true;
+      }
+      if (plan.removeHouse(cx, cz)) {
+        dirty.houses = true;
+        done = true;
+      }
+      if (done) return true;
+      const cell = plan.get(cx, cz);
+      if (cell && (cell.light || cell.lamp)) {
+        cell.light = false;
+        cell.lamp = false;
+        dirty.plan = true;
+        return true;
+      }
+      if (plan.removeForce(cx, cz)) {
+        dirty.plan = true;
+        return true;
+      }
+      return false;
+    };
 
     /** Applique l'outil courant sur une case (pose ou démolition). */
     const applyAt = (cx: number, cz: number) => {
       const tool = toolRef.current;
+      if (tool === "erase") return eraseAt(cx, cz);
       if (tool === "bulldoze") {
         const done = plan.removeForce(cx, cz);
         if (done) plan.removeHouse(cx, cz);
+        if (done) {
+          dirty.plan = true;
+          dirty.houses = true;
+        }
         return done;
       }
       if (!canBuild(cx, cz)) return false;
+      if (plan.decorAt(cx, cz) || plan.house(cx, cz)) return false;
       plan.place(cx, cz, isRoadTool(tool) ? tool : "straight", rotRef.current);
+      dirty.plan = true;
       return true;
     };
 
 
     const traceRoadTo = (target: { cx: number; cz: number }) => {
-      let changed = false;
       if (!roadDragLast) {
-        changed = applyAt(target.cx, target.cz);
+        applyAt(target.cx, target.cz);
         roadDragLast = { ...target };
-        if (changed) renderPlan();
+        flushRender();
         return;
       }
 
       let cx = roadDragLast.cx;
       let cz = roadDragLast.cz;
       let guard = 0;
+      const destructive = toolRef.current === "bulldoze" || toolRef.current === "erase";
       while ((cx !== target.cx || cz !== target.cz) && guard++ < 80) {
         const dx = target.cx - cx;
         const dz = target.cz - cz;
@@ -1610,10 +1998,10 @@ export default function CarWashScene() {
         else if (dz !== 0) cz += Math.sign(dz);
 
         roadDragLast = { cx, cz };
-        if (toolRef.current !== "bulldoze" && !canBuild(cx, cz)) break;
-        if (applyAt(cx, cz)) changed = true;
+        if (!destructive && !canBuild(cx, cz)) break;
+        applyAt(cx, cz);
       }
-      if (changed) renderPlan();
+      flushRender();
     };
 
     const onPointerMove = (ev: PointerEvent) => {
@@ -1629,19 +2017,26 @@ export default function CarWashScene() {
       ghost.visible = true;
       ghost.position.set(c.cx * TILE, 0.07, c.cz * TILE);
       const existing = plan.get(c.cx, c.cz);
+      const occupied =
+        !!existing || !!plan.house(c.cx, c.cz) || !!plan.decorAt(c.cx, c.cz);
       const tool = toolRef.current;
+      const destructive = tool === "bulldoze" || tool === "erase";
       const ok =
         tool === "bulldoze"
           ? !!existing
           : tool === "erase"
-            ? !!existing && !existing.locked
+            ? occupied
             : tool === "light" || tool === "lamp"
               ? !!existing
               : tool === "house"
                 ? plan.canPlaceHouse(c.cx, c.cz) || !!plan.house(c.cx, c.cz)
-                : canBuild(c.cx, c.cz);
+                : tool === "park" || tool === "parking"
+                  ? canBuild(c.cx, c.cz) && plan.canPlaceDecor(c.cx, c.cz)
+                  : tool === "wash"
+                    ? false
+                    : canBuild(c.cx, c.cz) && !occupied;
       (ghost.material as THREE.MeshBasicMaterial).color.set(
-        tool === "bulldoze" ? (ok ? 0xe05252 : 0x9aa5ad) : ok ? 0x2bd07c : 0xe05252,
+        destructive ? (ok ? 0xe05252 : 0x9aa5ad) : ok ? 0x2bd07c : 0xe05252,
       );
       if (downAt?.id === ev.pointerId && isDragTool(toolRef.current)) {
         ev.preventDefault();
@@ -1688,19 +2083,28 @@ export default function CarWashScene() {
       if (isDragTool(tool)) {
         if (c) traceRoadTo(c);
         roadDragLast = null;
-        renderHouses();
+        flushRender();
         return;
       }
+      if (tool === "wash") return;
 
       const tapTolerance = start.type === "touch" || start.type === "pen" ? 24 : 8;
       if (Math.hypot(ev.clientX - start.x, ev.clientY - start.y) > tapTolerance) return;
       if (!c) return;
-      if (tool === "erase") {
-        if (plan.removeHouse(c.cx, c.cz)) {
-          renderHouses();
+      if (tool === "park" || tool === "parking") {
+        const kind = decorKindRef.current;
+        const def = decorDef(kind);
+        const existingDecor = plan.decorAt(c.cx, c.cz);
+        if (existingDecor) {
+          // reclic sur un décor : rotation d'un quart de tour
+          plan.placeDecor(c.cx, c.cz, existingDecor.kind, (existingDecor.rot + 1) % 4);
+          renderDecor();
           return;
         }
-        if (plan.remove(c.cx, c.cz)) renderPlan();
+        if (!canBuild(c.cx, c.cz) || !plan.canPlaceDecor(c.cx, c.cz)) return;
+        if (!spendRef.current(def.cost)) return;
+        plan.placeDecor(c.cx, c.cz, kind, rotRef.current);
+        renderDecor();
         return;
       }
       if (tool === "house") {
@@ -1729,6 +2133,7 @@ export default function CarWashScene() {
         return;
       }
       if (!canBuild(c.cx, c.cz)) return;
+      if (plan.decorAt(c.cx, c.cz) || plan.house(c.cx, c.cz)) return;
       plan.place(c.cx, c.cz, tool, rotRef.current);
       renderPlan();
     };
@@ -1762,6 +2167,11 @@ export default function CarWashScene() {
       loadHouses: (data) => {
         plan.loadHouses(data);
         renderHouses();
+      },
+      saveDecor: () => plan.serializeDecor(),
+      loadDecor: (data) => {
+        plan.loadDecor(data);
+        renderDecor();
       },
     };
 
@@ -2450,35 +2860,39 @@ export default function CarWashScene() {
           🏗️ {buildMode ? "Quitter la construction" : "Construire"}
         </button>
         {buildMode && (
-          <div className="flex max-h-[min(48vh,360px)] w-full flex-wrap items-center justify-center gap-1.5 overflow-y-auto overscroll-contain rounded-2xl bg-white/90 p-2 shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur">
+          <div className="flex max-h-[min(56vh,420px)] w-full flex-col gap-2 overflow-y-auto overscroll-contain rounded-2xl bg-white/90 p-2 shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur">
             {(
               [
-                "straight",
-                "bend",
-                "intersection",
-                "crossroad",
-                "light",
-                "lamp",
-                "house",
-                "bulldoze",
-                "erase",
-
-              ] as BuildTool[]
-            ).map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => chooseTool(t)}
-                aria-pressed={tool === t}
-                className={`rounded-xl px-2.5 py-1.5 text-[11.5px] font-semibold transition-colors ${
-                  tool === t ? "bg-splash text-splash-foreground" : "bg-ink/10 text-ink"
-                }`}
-              >
-                {TOOL_LABEL[t]}
-              </button>
+                ["Routes", ["straight", "bend", "intersection", "crossroad"]],
+                ["Mobilier", ["light", "lamp"]],
+                ["Bâtiments", ["house"]],
+                ["Espaces", ["park", "parking"]],
+                ["Station", ["wash"]],
+                ["Outils", ["bulldoze", "erase"]],
+              ] as Array<[string, BuildTool[]]>
+            ).map(([group, tools]) => (
+              <div key={group} className="flex w-full flex-wrap items-center gap-1.5">
+                <span className="w-full text-[10px] font-bold uppercase tracking-wide text-ink/50">
+                  {group}
+                </span>
+                {tools.map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => chooseTool(t)}
+                    aria-pressed={tool === t}
+                    className={`rounded-xl px-2.5 py-1.5 text-[11.5px] font-semibold transition-colors ${
+                      tool === t ? "bg-splash text-splash-foreground" : "bg-ink/10 text-ink"
+                    }`}
+                  >
+                    {TOOL_LABEL[t]}
+                  </button>
+                ))}
+              </div>
             ))}
+
             {tool === "house" && (
-              <div className="flex w-full items-center justify-center gap-1.5 border-t border-ink/10 pt-1.5">
+              <div className="flex w-full flex-wrap items-center justify-center gap-1.5 border-t border-ink/10 pt-1.5">
                 {HOUSE_LEVELS.map((h) => (
                   <button
                     key={h.level}
@@ -2499,6 +2913,77 @@ export default function CarWashScene() {
                 </span>
               </div>
             )}
+
+            {(tool === "park" || tool === "parking") && (
+              <div className="flex w-full flex-wrap items-center justify-center gap-1.5 border-t border-ink/10 pt-1.5">
+                {decorOf(tool as DecorCategory).map((d) => (
+                  <button
+                    key={d.kind}
+                    type="button"
+                    onClick={() => chooseDecor(d.kind)}
+                    aria-pressed={decorKind[tool as DecorCategory] === d.kind}
+                    className={`rounded-xl px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${
+                      decorKind[tool as DecorCategory] === d.kind
+                        ? "bg-sunny text-sunny-foreground"
+                        : "bg-ink/10 text-ink"
+                    }`}
+                  >
+                    {d.icon} {d.label} · {d.cost} €
+                  </button>
+                ))}
+                <span className="w-full text-center text-[10.5px] opacity-70">
+                  Pose sur une case libre · reclique pour pivoter · 🧹 Gomme pour retirer
+                </span>
+              </div>
+            )}
+
+            {tool === "wash" && (
+              <div className="flex w-full flex-col items-center gap-1.5 border-t border-ink/10 pt-1.5">
+                <span className="w-full text-[10.5px] font-semibold opacity-70">
+                  Couleur de la station
+                </span>
+                <div className="flex w-full flex-wrap items-center gap-1.5">
+                  {WASH_COLORS.map((c, i) => (
+                    <button
+                      key={c.label}
+                      type="button"
+                      onClick={() => applyWashStyle({ color: i })}
+                      aria-pressed={washStyle.color === i}
+                      aria-label={c.label}
+                      className={`h-7 w-7 rounded-full border-2 transition-transform ${
+                        washStyle.color === i
+                          ? "scale-110 border-ink"
+                          : "border-white/70"
+                      }`}
+                      style={{ backgroundColor: `#${c.hex.toString(16).padStart(6, "0")}` }}
+                    />
+                  ))}
+                </div>
+                <div className="flex w-full flex-wrap items-center gap-1.5">
+                  {(
+                    [
+                      ["sign", "🪧 Enseigne"],
+                      ["neon", "✨ Néon"],
+                      ["plants", "🪴 Plantes"],
+                      ["flags", "🎏 Fanions"],
+                    ] as Array<[keyof WashStyle, string]>
+                  ).map(([k, label]) => (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => applyWashStyle({ [k]: !washStyle[k] } as Partial<WashStyle>)}
+                      aria-pressed={!!washStyle[k]}
+                      className={`rounded-xl px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${
+                        washStyle[k] ? "bg-splash text-splash-foreground" : "bg-ink/10 text-ink"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <button
               type="button"
               onClick={() => {
@@ -2506,7 +2991,7 @@ export default function CarWashScene() {
                 rotRef.current = next;
                 setRot(next);
               }}
-              className="rounded-xl bg-sunny px-2.5 py-1.5 text-[11.5px] font-bold text-sunny-foreground"
+              className="self-center rounded-xl bg-sunny px-2.5 py-1.5 text-[11.5px] font-bold text-sunny-foreground"
             >
               🔄 {rot * 90}°
             </button>

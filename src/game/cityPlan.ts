@@ -1,5 +1,6 @@
 import { key, opposite, type Dir, DIR_VEC } from "./grid";
 import { variantFor, type RoadHint } from "./catalog";
+import { isDecorKind, type DecorKind } from "./decor";
 
 export type PlanCell = {
   hint: RoadHint;
@@ -17,6 +18,10 @@ export type SerializedPlan = Array<
 
 export type SerializedHouses = Array<[number, number, number]>;
 
+export type SerializedDecor = Array<[number, number, DecorKind, number]>;
+
+export type DecorCell = { kind: DecorKind; rot: number };
+
 export type HouseCell = { level: number };
 
 /** Plan de ville du joueur : uniquement des données, aucun objet Three.js. */
@@ -24,6 +29,43 @@ export class CityPlan {
   cells = new Map<string, PlanCell>();
   /** maisons du joueur (cases hors route, en bord de rue) */
   houses = new Map<string, HouseCell>();
+  /** décor du joueur : parcs, parkings… (cases libres) */
+  decor = new Map<string, DecorCell>();
+
+  /* ---------- Décor ---------- */
+  decorAt(cx: number, cz: number) {
+    return this.decor.get(key(cx, cz));
+  }
+
+  canPlaceDecor(cx: number, cz: number) {
+    const k = key(cx, cz);
+    return !this.cells.has(k) && !this.houses.has(k) && !this.decor.has(k);
+  }
+
+  placeDecor(cx: number, cz: number, kind: DecorKind, rot = 0) {
+    this.decor.set(key(cx, cz), { kind, rot });
+  }
+
+  removeDecor(cx: number, cz: number) {
+    return this.decor.delete(key(cx, cz));
+  }
+
+  serializeDecor(): SerializedDecor {
+    const out: SerializedDecor = [];
+    this.decor.forEach((d, k) => {
+      const [cx, cz] = k.split(",").map(Number);
+      out.push([cx!, cz!, d.kind, d.rot]);
+    });
+    return out;
+  }
+
+  loadDecor(data: SerializedDecor) {
+    this.decor.clear();
+    data.forEach(([cx, cz, kind, rot]) => {
+      if (!isDecorKind(kind)) return;
+      this.decor.set(key(cx, cz), { kind, rot: typeof rot === "number" ? rot : 0 });
+    });
+  }
 
   get(cx: number, cz: number) {
     return this.cells.get(key(cx, cz));
@@ -109,6 +151,7 @@ export class CityPlan {
   /** Une maison ne se pose que sur une case libre bordant une route. */
   canPlaceHouse(cx: number, cz: number) {
     if (this.has(cx, cz) || this.houses.has(key(cx, cz))) return false;
+    if (this.decor.has(key(cx, cz))) return false;
     return this.maskAt(cx, cz) !== 0;
   }
 
