@@ -371,8 +371,6 @@ export default function CarWashScene() {
     const washSite = new THREE.Group();
     washSite.position.z = WASH_SITE_Z;
     scene.add(washSite);
-    const CITY_MIN = -33;
-    const CITY_MAX = 33;
 
 
 
