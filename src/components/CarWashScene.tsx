@@ -240,7 +240,7 @@ export default function CarWashScene() {
       0.1,
       2000,
     );
-    if (isPortrait()) camera.position.set(-21, 17, WASH_SITE_Z + 26);
+    if (isPortrait()) camera.position.set(-30, 25, WASH_SITE_Z + 36);
     else camera.position.set(-34, 26, WASH_SITE_Z + 40);
 
 
