@@ -403,6 +403,8 @@ export default function CarWashScene() {
         cinema?: unknown;
         city?: SerializedPlan;
         houses?: SerializedHouses;
+        decor?: SerializedDecor;
+        washStyle?: unknown;
         residents?: unknown;
         economy?: { money?: unknown; washes?: unknown };
         history?: unknown;
