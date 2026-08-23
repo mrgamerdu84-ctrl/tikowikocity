@@ -1810,6 +1810,25 @@ export default function CarWashScene() {
           </div>
         )}
 
+        <div className="relative mt-2 flex items-center gap-2 rounded-xl bg-sunny/25 px-2 py-1.5 ring-1 ring-ink/10">
+          <span aria-hidden className="text-[15px]">💰</span>
+          <span className="text-[15px] font-extrabold tabular-nums sm:text-[17px]">
+            {economy.money.toLocaleString("fr-FR")} €
+          </span>
+          <span className="ml-auto text-[11px] font-semibold opacity-70">
+            {economy.washes} lavage{economy.washes > 1 ? "s" : ""}
+          </span>
+          {gain && (
+            <span
+              key={gain.id}
+              className="absolute -top-3 right-1 animate-bounce text-[13px] font-extrabold text-splash"
+            >
+              +{gain.amount} €
+            </span>
+          )}
+        </div>
+
+
         <p className="mt-1 hidden text-[12.5px] leading-relaxed opacity-80 sm:block">
           Construit avec les kits Kenney (voitures, routes, bâtiments). Glisse pour tourner la
           caméra, molette pour zoomer.
