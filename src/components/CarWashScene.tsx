@@ -1966,6 +1966,52 @@ export default function CarWashScene() {
     ghost.visible = false;
     scene.add(ghost);
 
+    /* Aperçu 3D translucide de l'objet sélectionné : il suit le curseur et
+       tourne en direct avec le bouton de rotation, avant la pose. */
+    const previewGroup = new THREE.Group();
+    previewGroup.visible = false;
+    scene.add(previewGroup);
+    let previewKey = "";
+    const makeTranslucent = (obj: THREE.Object3D) => {
+      obj.traverse((o) => {
+        const mesh = o as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        mesh.castShadow = false;
+        mesh.receiveShadow = false;
+        const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        mesh.material = mats.map((m) => {
+          const c = (m as THREE.Material).clone() as THREE.MeshStandardMaterial;
+          c.transparent = true;
+          c.opacity = 0.55;
+          c.depthWrite = false;
+          return c;
+        }) as unknown as THREE.Material;
+        if (Array.isArray(mesh.material) && (mesh.material as THREE.Material[]).length === 1) {
+          mesh.material = (mesh.material as THREE.Material[])[0]!;
+        }
+      });
+    };
+    /** Modèle d'aperçu pour l'outil courant (null si l'outil n'en a pas). */
+    const buildPreview = () => {
+      const tool = toolRef.current;
+      const key =
+        tool === "house"
+          ? `house:${houseLevelRef.current}`
+          : tool === "park" || tool === "parking"
+            ? `decor:${decorKindRef.current}`
+            : "";
+      if (key === previewKey) return;
+      previewKey = key;
+      [...previewGroup.children].forEach((c) => previewGroup.remove(c));
+      if (!key) return;
+      const obj = key.startsWith("house")
+        ? makeHouse(houseLevelRef.current)
+        : makeDecor(decorKindRef.current, 7);
+      makeTranslucent(obj);
+      previewGroup.add(obj);
+    };
+
+
     const BUILD_MIN_CZ = MAIN_CZ_START + 1;
     const BUILD_MAX_CZ = MAIN_CZ_END + 2;
     const BUILD_MAX_CX = 12;
