@@ -99,6 +99,27 @@ export default function CarWashScene() {
     traffic: true,
   });
   const machinesRef = useRef(machines);
+
+  /* ----- Économie : chaque lavage terminé rapporte de l'argent.
+     Les routes restent gratuites (aucun coût de construction). ----- */
+  const [economy, setEconomy] = useState({ money: 0, washes: 0 });
+  const economyRef = useRef(economy);
+  const [gain, setGain] = useState<{ id: number; amount: number } | null>(null);
+  const registerWashRef = useRef<(amount: number) => void>(() => {});
+  registerWashRef.current = (amount: number) => {
+    setEconomy((prev) => {
+      const next = { money: prev.money + amount, washes: prev.washes + 1 };
+      economyRef.current = next;
+      return next;
+    });
+    setGain({ id: Date.now() + Math.random(), amount });
+  };
+  useEffect(() => {
+    if (!gain) return;
+    const id = window.setTimeout(() => setGain(null), 1600);
+    return () => window.clearTimeout(id);
+  }, [gain]);
+
   const toggleMachine = (key: keyof typeof machines) => {
     setMachines((prev) => {
       const next = { ...prev, [key]: !prev[key] };
