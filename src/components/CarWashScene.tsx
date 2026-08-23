@@ -260,7 +260,7 @@ export default function CarWashScene() {
     let disposed = false;
     let frame = 0;
     let waterSurface: THREE.Mesh | null = null;
-    let pondSurface: THREE.Mesh | null = null;
+    
 
     /* GLTFLoader décode les textures via ImageBitmapLoader (fetch), ce que
        l'iframe de prévisualisation peut bloquer : on force le décodage <img>. */
