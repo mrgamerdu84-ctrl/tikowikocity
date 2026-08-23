@@ -1341,7 +1341,12 @@ export default function CarWashScene() {
       await load(tunnelAsset.url)
         .then((raw) => {
           if (disposed) return;
-          const meshyTunnel = normalizeModel(raw, 13);
+          const meshyTunnel = normalizeModel(raw, 11);
+          // On le contient sous la toiture du hall
+          const tb = new THREE.Box3().setFromObject(meshyTunnel);
+          const th = tb.max.y - tb.min.y;
+          const maxH = 4.6;
+          if (th > maxH) meshyTunnel.scale.multiplyScalar(maxH / th);
           meshyTunnel.position.set(2, 0, 0);
           setShadow(meshyTunnel);
           washSite.add(meshyTunnel);
