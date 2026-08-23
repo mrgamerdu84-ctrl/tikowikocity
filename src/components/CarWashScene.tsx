@@ -2883,7 +2883,8 @@ export default function CarWashScene() {
                       </div>
                       <button
                         type="button"
-                        disabled={maxed || !affordable}
+                        disabled={maxed}
+
                         onClick={() => buyUpgrade(u.key)}
                         className={`ml-auto shrink-0 rounded-full px-3 py-2 text-[12px] font-bold transition-transform active:translate-y-0.5 ${
                           maxed
