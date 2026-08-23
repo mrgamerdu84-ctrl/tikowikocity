@@ -748,6 +748,8 @@ export default function CarWashScene() {
 
 
     const buildScene = () => {
+      buildLandscape();
+
 
 
       /* ----- Grand portique de lavage (structure bien visible) ----- */
