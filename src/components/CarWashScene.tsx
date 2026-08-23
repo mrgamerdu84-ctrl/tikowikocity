@@ -468,6 +468,46 @@ export default function CarWashScene() {
 
 
 
+    /* ----- Itinéraire routier complet : ville → voie d'accès → tunnel → retour ----- */
+    const CITY_SOUTH = -24; // rue la plus au sud de la grille
+    const SITE_ROAD_Z = WASH_SITE_Z + 13; // rue est-ouest de la parcelle
+    const WASH_IN_X = PATH_START;
+    const WASH_OUT_X = PATH_END;
+    const ROUTE: Array<[number, number]> = [
+      [WASH_ACCESS_X - 1.25, CITY_SOUTH],
+      [WASH_ACCESS_X - 1.25, SITE_ROAD_Z - 1.25],
+      [WASH_IN_X, SITE_ROAD_Z - 1.25],
+      [WASH_IN_X, WASH_SITE_Z],
+      [WASH_OUT_X, WASH_SITE_Z],
+      [WASH_OUT_X, SITE_ROAD_Z + 1.25],
+      [WASH_ACCESS_X + 1.25, SITE_ROAD_Z + 1.25],
+      [WASH_ACCESS_X + 1.25, CITY_SOUTH],
+    ];
+    const ROUTE_CUM: number[] = [0];
+    for (let i = 1; i < ROUTE.length; i++) {
+      const a = ROUTE[i - 1]!;
+      const b = ROUTE[i]!;
+      ROUTE_CUM.push(ROUTE_CUM[i - 1]! + Math.hypot(b[0] - a[0], b[1] - a[1]));
+    }
+    const ROUTE_LEN = ROUTE_CUM[ROUTE_CUM.length - 1]!;
+    // portion de l'itinéraire correspondant à la zone de lavage
+    const WASH_D0 = ROUTE_CUM[3]! + (WASH_ZONE[0] - WASH_IN_X);
+    const WASH_D1 = ROUTE_CUM[3]! + (WASH_ZONE[1] - WASH_IN_X);
+
+    const posAt = (d: number) => {
+      const dd = Math.min(Math.max(d, 0), ROUTE_LEN);
+      let i = 1;
+      while (i < ROUTE_CUM.length - 1 && ROUTE_CUM[i]! < dd) i++;
+      const a = ROUTE[i - 1]!;
+      const b = ROUTE[i]!;
+      const segLen = ROUTE_CUM[i]! - ROUTE_CUM[i - 1]!;
+      const k = segLen > 0 ? (dd - ROUTE_CUM[i - 1]!) / segLen : 0;
+      const x = a[0] + (b[0] - a[0]) * k;
+      const z = a[1] + (b[1] - a[1]) * k;
+      const heading = Math.atan2(b[0] - a[0], b[1] - a[1]);
+      return { x, z, heading };
+    };
+
     const spawnSedan = () => {
       const template =
         meshyCars.length > 0
@@ -477,18 +517,22 @@ export default function CarWashScene() {
       const sedan = template.clone(true);
       setShadow(sedan);
       const isKenney = template === models["sedan"];
-      // la voiture roule vers +X : on oriente le capot dans ce sens
-      sedan.rotation.y = Math.PI / 2 + (isKenney ? 0 : MESHY_YAW);
       const baseY = isKenney ? CAR_Y : 0.06;
-      sedan.userData["baseY"] = baseY;
-      sedan.position.set(PATH_START, baseY, 0);
-      sedan.userData["wheels"] = findWheels(sedan);
+      const start = posAt(0);
+      sedan.position.set(start.x, baseY, start.z);
       tintCar(sedan, 1);
-      washSite.add(sedan);
-
-      sedanCars.push(sedan);
+      scene.add(sedan);
+      washCars.push({
+        car: sedan,
+        d: 0,
+        speed: 5.2,
+        yaw: isKenney ? 0 : MESHY_YAW,
+        baseY,
+        wheels: findWheels(sedan),
+      });
     };
     spawnRef.current = spawnSedan;
+
 
 
 
