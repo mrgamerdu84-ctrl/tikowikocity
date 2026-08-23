@@ -53,9 +53,8 @@ jobs:
       baseEmissiveIntensity: number;
     };
 
-    /* Chaque voiture garde maintenant sa palette Kenney d'origine. La saleté
-       n'est qu'une légère teinte temporaire et le lavage restaure exactement
-       les couleurs, vitres, roues et détails du modèle. */
+    /* Chaque voiture garde sa palette Kenney d'origine. La saleté est seulement
+       une légère teinte temporaire ; le lavage restaure exactement les couleurs. */
     const isolateMaterials = (car: THREE.Object3D) => {
       const materials: CarMaterialState[] = [];
       car.traverse((n) => {
@@ -84,17 +83,10 @@ jobs:
       const materials = data.materials ?? isolateMaterials(car);
       data.materials = materials;
       const dirt = THREE.MathUtils.clamp(dirtiness, 0, 1);
-      const clean = 1 - dirt;
       materials.forEach((state) => {
         const m = state.material;
-        /* On ne détruit plus la couleur Kenney : 0 = couleur exacte,
-           1 = seulement 28 % de teinte poussière. */
-        m.color.copy(state.baseColor).lerp(DIRT_COLOR, dirt * 0.28);
-        m.roughness = THREE.MathUtils.clamp(
-          state.baseRoughness + dirt * 0.16 - clean * 0.04,
-          0.08,
-          1,
-        );
+        m.color.copy(state.baseColor).lerp(DIRT_COLOR, dirt * 0.22);
+        m.roughness = THREE.MathUtils.clamp(state.baseRoughness + dirt * 0.14, 0.08, 1);
         m.metalness = state.baseMetalness;
         m.emissive.copy(state.baseEmissive);
         m.emissiveIntensity = state.baseEmissiveIntensity;
