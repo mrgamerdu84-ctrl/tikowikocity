@@ -497,16 +497,39 @@ export default function CarWashScene() {
       const dt = Math.min(clock.getDelta(), 0.05);
       const t = clock.elapsedTime;
 
-      const SPEED = 2.2;
-      for (let i = sedanCars.length - 1; i >= 0; i--) {
+      const SPEED = 2.6;
+      const BELT_SPEED = 1.1;
+      const GAP = 3.2;
+      const [zoneStart, zoneEnd] = WASH_ZONE;
+
+      // La voiture la plus avancée est en tête de file (ordre d'arrivée)
+      let aheadX = Number.POSITIVE_INFINITY;
+      const occupied = sedanCars.some(
+        (c) => c.position.x > zoneStart - 0.2 && c.position.x < zoneEnd,
+      );
+
+      for (let i = 0; i < sedanCars.length; i++) {
         const car = sedanCars[i]!;
-        car.position.x += dt * SPEED;
+        const onBelt = car.position.x >= zoneStart && car.position.x <= zoneEnd;
+        const wantSpeed = onBelt ? BELT_SPEED : SPEED;
+
+        // Limite : garder une distance de sécurité avec la voiture devant
+        let limit = aheadX - GAP;
+        // Portail d'entrée : on attend que le tunnel se libère
+        if (!onBelt && car.position.x < zoneStart && occupied) {
+          limit = Math.min(limit, zoneStart - 0.6);
+        }
+
+        const target = Math.min(car.position.x + dt * wantSpeed, limit);
+        const moved = Math.max(target - car.position.x, 0);
+        car.position.x += moved;
+        const waiting = moved < dt * wantSpeed * 0.35;
+        car.userData["waiting"] = waiting;
 
         (car.userData["wheels"] as THREE.Object3D[]).forEach((w) => {
-          w.rotation.x -= dt * SPEED * 3.2;
+          w.rotation.x -= (moved / 0.35) * 2;
         });
 
-        const [zoneStart, zoneEnd] = WASH_ZONE;
         let dirtiness: number;
         if (car.position.x <= zoneStart) dirtiness = 1;
         else if (car.position.x >= zoneEnd) dirtiness = 0;
@@ -514,12 +537,13 @@ export default function CarWashScene() {
         tintCar(car, dirtiness);
 
         const baseY = (car.userData["baseY"] as number | undefined) ?? CAR_Y;
-        car.position.y =
-          car.position.x > zoneStart && car.position.x < zoneEnd
-            ? baseY + Math.sin(t * 30) * 0.01
-            : baseY;
+        car.position.y = onBelt ? baseY + 0.14 + Math.sin(t * 30) * 0.012 : baseY;
 
+        aheadX = car.position.x;
+      }
 
+      for (let i = sedanCars.length - 1; i >= 0; i--) {
+        const car = sedanCars[i]!;
         if (car.position.x > PATH_END) {
           scene.remove(car);
           sedanCars.splice(i, 1);
@@ -527,10 +551,27 @@ export default function CarWashScene() {
       }
 
       const carInWash = sedanCars.some(
-        (c) => c.position.x > WASH_ZONE[0] && c.position.x < WASH_ZONE[1],
+        (c) => c.position.x > zoneStart && c.position.x < zoneEnd,
       );
-      brushes.forEach((b, i) => {
-        b.rotation.x += dt * (carInWash ? 10 : 1.5) * (i % 2 === 0 ? 1 : -1);
+
+      // Rouleaux : ils tournent en continu, plus vite quand une voiture passe
+      const brushSpeed = carInWash ? 9 : 2;
+      brushes.forEach((b) => {
+        b.spin.rotation.y += dt * brushSpeed * b.dir;
+      });
+
+      // Tapis roulant : les lattes défilent en boucle
+      const beltLen = zoneEnd - zoneStart;
+      conveyorSlats.forEach((s) => {
+        s.position.x += dt * BELT_SPEED;
+        if (s.position.x > zoneEnd) s.position.x -= beltLen;
+      });
+
+      // Circulation en ville
+      trafficCars.forEach(({ car, dir, speed }) => {
+        car.position.x += dt * speed * dir;
+        if (car.position.x > 14) car.position.x = -14;
+        if (car.position.x < -14) car.position.x = 14;
       });
 
       foamSprites.forEach((f) => {
@@ -539,6 +580,7 @@ export default function CarWashScene() {
         });
         f.visible = carInWash;
       });
+
 
       if (cinemaMode) {
         const angle = t * 0.18;
