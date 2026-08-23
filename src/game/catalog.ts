@@ -42,6 +42,9 @@ export const TOOL_LABEL: Record<BuildTool, string> = {
   light: "🚦 Feu",
   lamp: "💡 Lampadaire",
   house: "🏠 Maison",
+  park: "🌳 Parc",
+  parking: "🅿️ Parking",
+  wash: "🧼 Car wash",
   bulldoze: "🧨 Détruire route",
   erase: "🧹 Gomme",
 };
