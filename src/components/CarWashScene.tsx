@@ -394,20 +394,74 @@ export default function CarWashScene() {
       setCinema(cinemaMode);
     };
 
-    const buildHouse = (x: number, z: number) => {
-      place(models["hFloor"]!, x, 0, z);
-      place(models["hWallWindow"]!, x - 1, 0, z, 0);
-      place(models["hWallWindow"]!, x + 1, 0, z, Math.PI);
-      place(models["hWallWindow"]!, x, 0, z + 1, Math.PI / 2);
-      place(models["hWallWindow"]!, x, 0, z - 1, -Math.PI / 2);
-      place(models["hRoof"]!, x, 2.4, z);
+    /* Maison procédurale : 4 murs pleins + toit à deux pentes posé dessus. */
+    const houseWallMats = [0xf6ece0, 0xe8dcc8, 0xf1e3d3, 0xe3ead9].map(
+      (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.9 }),
+    );
+    const roofMats = [0xc1543f, 0xa9563f, 0x8f4f6b, 0x4f6f8f].map(
+      (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.85 }),
+    );
+    const doorMat = new THREE.MeshStandardMaterial({ color: 0x6b4a2f, roughness: 0.8 });
+    const houseWinMat = new THREE.MeshStandardMaterial({
+      color: 0x9ad8ff,
+      roughness: 0.3,
+    });
+
+    const buildHouse = (x: number, z: number, rotY = 0, variant = 0) => {
+      const g = new THREE.Group();
+      const w = 3.4;
+      const d = 3;
+      const h = 2.2;
+      const body = new THREE.Mesh(
+        new THREE.BoxGeometry(w, h, d),
+        houseWallMats[variant % houseWallMats.length]!,
+      );
+      body.position.y = h / 2;
+      g.add(body);
+
+      // Toit à deux pentes : prisme triangulaire qui repose exactement sur les murs
+      const rh = 1.1;
+      const overhang = 0.22;
+      const roofGeo = new THREE.CylinderGeometry(
+        0.0001,
+        Math.SQRT2 * (d / 2 + overhang),
+        rh,
+        4,
+        1,
+      );
+      const roof = new THREE.Mesh(roofGeo, roofMats[variant % roofMats.length]!);
+      roof.rotation.z = Math.PI / 2;
+      roof.rotation.y = Math.PI / 4;
+      roof.scale.set(1, (w + overhang * 2) / rh, 1);
+      roof.position.y = h + rh / 2;
+      g.add(roof);
+
+      const door = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.1, 0.08), doorMat);
+      door.position.set(0, 0.55, d / 2 + 0.04);
+      g.add(door);
+      [-1, 1].forEach((sx) => {
+        const win = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.55, 0.08), houseWinMat);
+        win.position.set(sx * 1.1, 1.3, d / 2 + 0.04);
+        g.add(win);
+        const back = win.clone();
+        back.position.z = -d / 2 - 0.04;
+        g.add(back);
+      });
+
+      g.position.set(x, 0, z);
+      g.rotation.y = rotY;
+      setShadow(g);
+      scene.add(g);
     };
+
+    // Grille de rues régulière (rues nord-sud et est-ouest)
+    const X_STREETS = [-30, -18, -6, 6, 18, 30];
+    const Z_STREETS = [-24, -12, 0, 12, 24];
+    const STREET_W = 6;
+    const LANE = 1.5;
 
     const buildScene = () => {
 
-      for (let x = -13; x <= 13; x += 1) {
-        [-1, 0, 1].forEach((z) => place(models["roadStraight"]!, x, ROAD_Y, z, 0));
-      }
 
       const tunnel = models["tunnel"]!.clone(true);
       tunnel.rotation.y = Math.PI / 2;
