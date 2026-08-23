@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { saveToDrive, loadFromDrive } from "@/lib/drive.functions";
+import { avatarSrc, usePlayer } from "@/lib/player";
+
 
 const SAVE_VERSION = 1;
 
