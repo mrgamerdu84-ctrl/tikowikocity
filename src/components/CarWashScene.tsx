@@ -5,7 +5,7 @@ import { saveToDrive, loadFromDrive } from "@/lib/drive.functions";
 import { avatarSrc, usePlayer } from "@/lib/player";
 
 
-const SAVE_VERSION = 1;
+const SAVE_VERSION = 2;
 
 
 import * as THREE from "three";
@@ -141,6 +141,7 @@ function b64ToArrayBuffer(b64: string) {
 
 export default function CarWashScene() {
   const wrapRef = useRef<HTMLDivElement>(null);
+  const gameTimeRef = useRef<HTMLSpanElement>(null);
   const { player } = usePlayer();
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState(MESSAGES[0]!);
@@ -603,11 +604,18 @@ export default function CarWashScene() {
     sctx.fillRect(0, 0, 4, 256);
     const skyTex = new THREE.CanvasTexture(skyCanvas);
     skyTex.colorSpace = THREE.SRGBColorSpace;
-    const skyDome = new THREE.Mesh(
-      new THREE.SphereGeometry(760, 32, 16),
-      new THREE.MeshBasicMaterial({ map: skyTex, side: THREE.BackSide, fog: false }),
-    );
+    const skyMat = new THREE.MeshBasicMaterial({
+      map: skyTex,
+      side: THREE.BackSide,
+      fog: false,
+      color: 0xffffff,
+    });
+    const skyDome = new THREE.Mesh(new THREE.SphereGeometry(760, 32, 16), skyMat);
     scene.add(skyDome);
+    const dayFog = new THREE.Color(0xd9eefb);
+    const nightFog = new THREE.Color(0x071426);
+    const daySkyTint = new THREE.Color(0xffffff);
+    const nightSkyTint = new THREE.Color(0x07152d);
 
     /* Cadrage responsive : en portrait (mobile) on rapproche la caméra
        et on élargit le champ pour que la ville et le car wash remplissent l'écran. */
@@ -647,7 +655,8 @@ export default function CarWashScene() {
     controls.maxPolarAngle = Math.PI * 0.49;
     controls.update();
 
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x8fae7a, 0.9));
+    const hemi = new THREE.HemisphereLight(0xffffff, 0x8fae7a, 0.9);
+    scene.add(hemi);
 
     const sun = new THREE.DirectionalLight(0xfff3d6, 1.6);
     sun.position.set(-15, 25, 10);
@@ -660,6 +669,15 @@ export default function CarWashScene() {
     sun.shadow.camera.far = 120;
     sun.shadow.bias = -0.0015;
     scene.add(sun);
+
+    /* Lumière lunaire faible : la ville reste lisible sans transformer la nuit en jour. */
+    const moon = new THREE.DirectionalLight(0x8eb8ff, 0);
+    moon.position.set(20, 30, -20);
+    scene.add(moon);
+
+    /* Ces listes sont reconstruites avec le plan et servent au cycle nocturne. */
+    const streetLampLights: THREE.PointLight[] = [];
+    const houseLights: THREE.PointLight[] = [];
 
     const ground = new THREE.Mesh(
       new THREE.PlaneGeometry(900, 900),
@@ -1271,52 +1289,95 @@ export default function CarWashScene() {
     const housesGroup = new THREE.Group();
     scene.add(housesGroup);
 
-    /* Maison stylisée Kenney-like : corps + toit à deux pentes + détails. */
+    /* Maisons assemblées avec les vrais modules du building-kit Kenney.
+       On conserve les textures/materials du pack au lieu de recréer une fausse maison. */
+    const KENNEY_CELL = 2;
+    const KENNEY_FLOOR_H = 2.4;
     const makeHouse = (level: number) => {
-      const def = houseDef(level);
       const g = new THREE.Group();
-      const wallMat = new THREE.MeshStandardMaterial({ color: def.color, roughness: 0.95 });
-      const roofMat = new THREE.MeshStandardMaterial({ color: def.roof, roughness: 0.9 });
-      const floors = level === 3 ? 3 : level === 2 ? 2 : 1;
-      const w = level === 3 ? 3.1 : 2.7;
-      const h = 1.5 * floors;
-      const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, w), wallMat);
-      body.position.y = h / 2;
-      g.add(body);
+      const floorTpl = kit["floor"] ?? models["hFloor"];
+      const wallTpl = kit["wall-window-square"] ?? models["hWallWindow"];
+      const roofTpl = kit["roof-flat-center"] ?? floorTpl;
+      const doorTpl = kit["wall-doorway-square"] ?? wallTpl;
+      if (!floorTpl || !wallTpl || !roofTpl || !doorTpl) return g;
 
-      const roof = new THREE.Mesh(new THREE.ConeGeometry(w * 0.86, 1.25, 4), roofMat);
-      roof.position.y = h + 0.6;
-      roof.rotation.y = Math.PI / 4;
-      g.add(roof);
+      const cols = level === 1 ? 1 : 2;
+      const rows = level >= 3 ? 2 : 1;
+      const floors = level;
+      const ox = (-(cols - 1) * KENNEY_CELL) / 2;
+      const oz = (-(rows - 1) * KENNEY_CELL) / 2;
 
-      // fenêtres
-      const winMat = new THREE.MeshStandardMaterial({ color: 0x9fd7f2, roughness: 0.4 });
-      const winGeo = new THREE.BoxGeometry(0.55, 0.55, 0.06);
+      const clonePart = (tpl: THREE.Object3D) => {
+        const obj = tpl.clone(true);
+        obj.traverse((n) => {
+          const mesh = n as THREE.Mesh;
+          if (!mesh.isMesh) return;
+          const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+          mesh.material = mats.map((base) => {
+            const mat = base.clone() as THREE.MeshStandardMaterial;
+            const tag = `${mesh.name} ${mat.name}`.toLowerCase();
+            if (tag.includes("window") || tag.includes("glass")) {
+              mat.emissive = new THREE.Color(0xffc56e);
+              mat.emissiveIntensity = 0.08;
+              mat.userData['nightWindow'] = true;
+            }
+            return mat;
+          }) as unknown as THREE.Material;
+          if (Array.isArray(mesh.material) && (mesh.material as THREE.Material[]).length === 1) {
+            mesh.material = (mesh.material as THREE.Material[])[0]!;
+          }
+        });
+        return obj;
+      };
+
       for (let f = 0; f < floors; f++) {
-        for (const sx of [-0.65, 0.65]) {
-          const win = new THREE.Mesh(winGeo, winMat);
-          win.position.set(sx, 0.85 + f * 1.5, w / 2 + 0.02);
-          g.add(win);
+        const y = f * KENNEY_FLOOR_H;
+        for (let i = 0; i < cols; i++) {
+          for (let j = 0; j < rows; j++) {
+            const x = ox + i * KENNEY_CELL;
+            const z = oz + j * KENNEY_CELL;
+            const slab = clonePart(floorTpl);
+            slab.position.set(x, y, z);
+            g.add(slab);
+            const wall = (wx: number, wz: number, wr: number, door = false) => {
+              const w = clonePart(door ? doorTpl : wallTpl);
+              w.position.set(wx, y, wz);
+              w.rotation.y = wr;
+              g.add(w);
+            };
+            if (i === 0) wall(x - KENNEY_CELL / 2, z, 0);
+            if (i === cols - 1) wall(x + KENNEY_CELL / 2, z, 0);
+            if (j === 0) wall(x, z - KENNEY_CELL / 2, Math.PI / 2, f === 0 && i === 0);
+            if (j === rows - 1) wall(x, z + KENNEY_CELL / 2, Math.PI / 2);
+          }
         }
       }
-      const door = new THREE.Mesh(
-        new THREE.BoxGeometry(0.6, 0.95, 0.08),
-        new THREE.MeshStandardMaterial({ color: 0x7a5230, roughness: 0.9 }),
-      );
-      door.position.set(0, 0.475, w / 2 + 0.02);
-      g.add(door);
+      const top = floors * KENNEY_FLOOR_H;
+      for (let i = 0; i < cols; i++) {
+        for (let j = 0; j < rows; j++) {
+          const roof = clonePart(roofTpl);
+          roof.position.set(ox + i * KENNEY_CELL, top, oz + j * KENNEY_CELL);
+          g.add(roof);
+        }
+      }
       setShadow(g);
       return g;
     };
 
     const renderHouses = () => {
       [...housesGroup.children].forEach((c) => housesGroup.remove(c));
+      houseLights.length = 0;
       plan.houses.forEach((h, k) => {
         const [cx, cz] = parseKey(k);
         const m = makeHouse(h.level);
         m.position.set(cx * TILE, 0, cz * TILE);
-        // légère variation d'orientation pour casser la rigidité
-        m.rotation.y = ((h.rot ?? 0) * Math.PI) / 2 + ((cx * 7 + cz * 13) % 4) * 0.06;
+        m.rotation.y = ((h.rot ?? 0) * Math.PI) / 2;
+
+        /* Une lumière chaude par logement : elle s'allume uniquement la nuit. */
+        const homeLight = new THREE.PointLight(0xffc56e, 0, 13 + h.level * 2, 2);
+        homeLight.position.set(0, Math.min(5.4, 1.8 + h.level * 1.05), 0);
+        m.add(homeLight);
+        houseLights.push(homeLight);
         housesGroup.add(m);
       });
       cityStatsRef.current(plan.houseLevels());
@@ -1613,6 +1674,7 @@ export default function CarWashScene() {
       [...roadsGroup.children].forEach((c) => roadsGroup.remove(c));
       [...propsGroup.children].forEach((c) => propsGroup.remove(c));
       trafficLights.length = 0;
+      streetLampLights.length = 0;
       plan.cells.forEach((cell, k) => {
         const [cx, cz] = parseKey(k);
         const { model, rot } = plan.variantAt(cx, cz);
@@ -1642,14 +1704,29 @@ export default function CarWashScene() {
           });
         }
         if (cell.lamp) {
+          const lx = cx * TILE - TILE / 2 + 0.7;
+          const lz = cz * TILE + TILE / 2 - 0.7;
           const tplL = kit["light-square"];
           if (tplL) {
             const lamp = tplL.clone(true);
             lamp.scale.setScalar(6);
-            lamp.position.set(cx * TILE - TILE / 2 + 0.7, 0, cz * TILE + TILE / 2 - 0.7);
+            lamp.position.set(lx, 0, lz);
             setShadow(lamp);
             propsGroup.add(lamp);
           }
+          /* Ampoule et vraie source lumineuse : la route reçoit la lumière. */
+          const bulbMat = new THREE.MeshStandardMaterial({
+            color: 0xffe7a3,
+            emissive: 0xffc65c,
+            emissiveIntensity: 0.15,
+          });
+          const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 8), bulbMat);
+          bulb.position.set(lx, 3.65, lz);
+          propsGroup.add(bulb);
+          const light = new THREE.PointLight(0xffd27a, 0, 18, 2);
+          light.position.set(lx, 3.55, lz);
+          propsGroup.add(light);
+          streetLampLights.push(light);
         }
       });
     };
@@ -2443,6 +2520,44 @@ export default function CarWashScene() {
       const dt = Math.min(clock.getDelta(), 0.05);
       const t = clock.elapsedTime;
 
+      /* Cycle complet en 3 minutes réelles. Le jeu démarre le matin. */
+      const DAY_SECONDS = 180;
+      const dayPhase = (t / DAY_SECONDS + 0.35) % 1;
+      const sunAngle = (dayPhase - 0.25) * Math.PI * 2;
+      const sunWave = Math.sin(sunAngle);
+      const daylight = THREE.MathUtils.clamp((sunWave + 0.12) / 0.72, 0, 1);
+      const night = 1 - daylight;
+      sun.intensity = daylight * 1.6;
+      sun.position.set(Math.cos(sunAngle) * 70, Math.max(Math.sin(sunAngle) * 80, -20), 24);
+      moon.intensity = night * 0.42;
+      moon.position.set(-sun.position.x, Math.max(-sun.position.y, 18), -24);
+      hemi.intensity = 0.12 + daylight * 0.78;
+      skyMat.color.copy(nightSkyTint).lerp(daySkyTint, daylight);
+      scene.fog?.color.copy(nightFog).lerp(dayFog, daylight);
+
+      streetLampLights.forEach((light) => {
+        light.intensity = night * 5.2;
+      });
+      houseLights.forEach((light) => {
+        light.intensity = night * 2.8;
+        light.parent?.traverse((n) => {
+          const mesh = n as THREE.Mesh;
+          if (!mesh.isMesh) return;
+          const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+          mats.forEach((mat) => {
+            const m = mat as THREE.MeshStandardMaterial;
+            if (m.userData?.['nightWindow']) m.emissiveIntensity = 0.08 + night * 1.5;
+          });
+        });
+      });
+
+      const hourFloat = dayPhase * 24;
+      const hour = Math.floor(hourFloat);
+      const minute = Math.floor((hourFloat - hour) * 60);
+      if (gameTimeRef.current) {
+        gameTimeRef.current.textContent = `${night > 0.55 ? "🌙" : "☀️"} ${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+      }
+
       // aperçu 3D de l'objet à poser : suit la case visée et la rotation choisie
       if (buildRef.current) {
         buildPreview();
@@ -2885,7 +3000,10 @@ export default function CarWashScene() {
           <span className="text-[12.5px] font-semibold opacity-80">
             👥 {residents} · 🏠 {city.houses}
           </span>
-          <span className="ml-auto truncate text-[12px] font-semibold opacity-70">
+          <span ref={gameTimeRef} className="ml-auto whitespace-nowrap text-[12px] font-extrabold opacity-80">
+            ☀️ 08:00
+          </span>
+          <span className="hidden truncate text-[12px] font-semibold opacity-70 sm:inline">
             Mode construction — {TOOL_LABEL[tool]}
           </span>
         </div>
@@ -2894,9 +3012,14 @@ export default function CarWashScene() {
       <div
         className={`fixed left-2 top-2 z-40 max-w-[calc(100vw-146px)] rounded-2xl bg-white/90 ring-1 ring-ink/10 px-3 py-2 text-ink shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur sm:left-4 sm:top-4 sm:max-w-[300px] sm:px-4 sm:py-3 ${buildMode ? "hidden" : ""}`}
       >
-        <p className="flex items-center gap-2 text-[17px] font-bold tracking-wide sm:text-[22px]">
-          <span aria-hidden>🫧</span> TikowikoCity
-        </p>
+        <div className="flex items-center gap-2">
+          <p className="flex items-center gap-2 text-[17px] font-bold tracking-wide sm:text-[22px]">
+            <span aria-hidden>🫧</span> TikowikoCity
+          </p>
+          <span ref={gameTimeRef} className="ml-auto whitespace-nowrap rounded-full bg-ink/5 px-2 py-1 text-[11px] font-extrabold">
+            ☀️ 08:00
+          </span>
+        </div>
 
         {player && (
           <div className="mt-2 flex items-center gap-2 rounded-xl bg-splash/15 px-2 py-1.5">
