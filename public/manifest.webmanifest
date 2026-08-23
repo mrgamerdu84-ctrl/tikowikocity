@@ -1,0 +1,19 @@
+{
+  "name": "TikowikoCity",
+  "short_name": "TikowikoCity",
+  "description": "Construis ta ville, développe ton car wash et gère les habitants.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#8fd3f4",
+  "theme_color": "#0ea5e9",
+  "icons": [
+    {
+      "src": "/tikowikocity-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
