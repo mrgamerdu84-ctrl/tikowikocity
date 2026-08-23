@@ -42,12 +42,13 @@ function readPersisted(): Persisted {
 }
 
 export function RentalManager({ houses, balance, onIncome, onSpend }: Props) {
-  const initial = useRef<Persisted | null>(null);
-  if (!initial.current) initial.current = readPersisted();
+  const initialRef = useRef<Persisted | null>(null);
+  const initial = initialRef.current ?? readPersisted();
+  initialRef.current = initial;
 
-  const [rentals, setRentals] = useState<Rental[]>(initial.current.rentals);
-  const [offers, setOffers] = useState<RentalOffer[]>(initial.current.offers);
-  const [rejected, setRejected] = useState<string[]>(initial.current.rejected);
+  const [rentals, setRentals] = useState<Rental[]>(initial.rentals);
+  const [offers, setOffers] = useState<RentalOffer[]>(initial.offers);
+  const [rejected, setRejected] = useState<string[]>(initial.rejected);
   const [open, setOpen] = useState(false);
 
   const rentalsRef = useRef(rentals);
@@ -159,11 +160,11 @@ export function RentalManager({ houses, balance, onIncome, onSpend }: Props) {
     if (!rental?.need) return;
     if (!onSpend(rental.need.cost, `${rental.tenant} · ${rental.need.label}`)) return;
     setRentals((prev) =>
-      prev.map((r) =>
-        r.houseKey === houseKey
-          ? { ...r, happiness: Math.min(100, r.happiness + 8), need: undefined }
-          : r,
-      ),
+      prev.map((r) => {
+        if (r.houseKey !== houseKey) return r;
+        const { need: _resolvedNeed, ...withoutNeed } = r;
+        return { ...withoutNeed, happiness: Math.min(100, r.happiness + 8) };
+      }),
     );
   };
 
