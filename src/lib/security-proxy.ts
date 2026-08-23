@@ -1,9 +1,9 @@
 const GOOGLE_SECURITY_URL =
-  "https://script.google.com/macros/s/AKfycbxpTxHc7McTdbjmFKLNjw3gNHYBX7u2iC6Haft7Yqe06G8Q9GNhevwybNTsFskZliv90Q/exec";
+  "https://script.google.com/macros/s/AKfycbzputvS9vp9KNlKD0PeCYjg_CN6TbuP1fLHltmP7MI8MubnWj_ZIb30Ci88m3h1LMLH3g/exec";
 
 const APP_ID = "pixel-perfect-preview-16";
 const MAX_ATTEMPTS = 5;
-const WINDOW_MS = 5 * 60 * 1000;
+const WINDOW_MS = 60 * 1000;
 
 const failedAttempts = new Map<string, number[]>();
 
