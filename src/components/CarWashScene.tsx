@@ -10,6 +10,7 @@ import blueSuvAsset from "@/assets/blue_suv.glb.asset.json";
 import graySedanAsset from "@/assets/gray_sedan.glb.asset.json";
 import greenSportsAsset from "@/assets/green_sports.glb.asset.json";
 import yellowPickupAsset from "@/assets/yellow_pickup.glb.asset.json";
+import tunnelAsset from "@/assets/tunnel.glb.asset.json";
 
 
 const MESHY_CARS = [blueSuvAsset, graySedanAsset, greenSportsAsset, yellowPickupAsset];
