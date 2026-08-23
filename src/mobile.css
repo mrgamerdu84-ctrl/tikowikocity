@@ -1,0 +1,63 @@
+html,
+body {
+  width: 100%;
+  min-height: 100%;
+  margin: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+html.tikowiko-mobile,
+html.tikowiko-mobile body {
+  width: var(--tikowiko-vw, 100vw);
+  height: var(--tikowiko-vh, 100dvh);
+  min-height: var(--tikowiko-vh, 100dvh);
+  max-height: var(--tikowiko-vh, 100dvh);
+}
+
+html.tikowiko-mobile body {
+  position: fixed;
+  inset: 0;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+html.tikowiko-mobile canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 100vw;
+  max-height: var(--tikowiko-vh, 100dvh);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+html.tikowiko-mobile button,
+html.tikowiko-mobile [role="button"] {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (pointer: coarse) {
+  button,
+  [role="button"] {
+    min-height: 40px;
+  }
+}
+
+@media (max-width: 640px) {
+  html.tikowiko-mobile {
+    font-size: 15px;
+  }
+
+  html.tikowiko-mobile [class*="overflow-x-auto"] {
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  html.tikowiko-mobile [class*="overflow-x-auto"]::-webkit-scrollbar {
+    display: none;
+  }
+}
