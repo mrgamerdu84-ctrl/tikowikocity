@@ -571,10 +571,11 @@ export default function CarWashScene() {
         const p = cityCurveLocal.getPointAt(u);
         const tan = cityCurveLocal.getTangentAt(u);
         const n = normalAt(u);
-        const w = 3 + (i % 3) * 0.7;
-        const d = 2.8 + (i % 2) * 0.8;
-        const h = 3 + ((i * 7) % 6) * 1.4;
-        const out = p.clone().addScaledVector(n, ROAD_W / 2 + d / 2 + 1.4);
+        const w = 3.2 + (i % 3) * 0.8;
+        const d = 3 + (i % 2) * 0.9;
+        const h = 2.6 + ((i * 7) % 4) * 1.1;
+        const out = p.clone().addScaledVector(n, ROAD_W / 2 + d / 2 + 2.2);
+
         makeBuilding(out.x, out.z, w, h, d, i % 5, Math.atan2(tan.x, tan.z) + Math.PI / 2);
       }
 
