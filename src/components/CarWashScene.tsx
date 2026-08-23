@@ -319,6 +319,12 @@ export default function CarWashScene() {
     setTool(t);
     if (t === "park" || t === "parking") decorKindRef.current = decorKind[t];
   };
+  /** Onglet de construction : sélectionne aussi le premier outil de la catégorie. */
+  const chooseCategory = (cat: BuildCategory) => {
+    setBuildCat(cat);
+    const first = BUILD_CATEGORIES.find((c) => c.id === cat)?.tools[0];
+    if (first) chooseTool(first);
+  };
   const toggleBuild = () => {
     setBuildMode((prev) => {
       const next = !prev;
