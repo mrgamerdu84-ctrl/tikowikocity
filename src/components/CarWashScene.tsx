@@ -280,6 +280,8 @@ export default function CarWashScene() {
         cinema?: unknown;
         city?: SerializedPlan;
         economy?: { money?: unknown; washes?: unknown };
+        upgrades?: unknown;
+
       };
       if (state.machines && typeof state.machines === "object") {
         setMachines((prev) => {
