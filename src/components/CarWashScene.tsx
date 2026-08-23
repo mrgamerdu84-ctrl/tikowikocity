@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { saveToDrive, loadFromDrive } from "@/lib/drive.functions";
+import { avatarSrc, usePlayer } from "@/lib/player";
+
 
 const SAVE_VERSION = 1;
 
@@ -85,6 +87,7 @@ function b64ToArrayBuffer(b64: string) {
 
 export default function CarWashScene() {
   const wrapRef = useRef<HTMLDivElement>(null);
+  const { player } = usePlayer();
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState(MESSAGES[0]!);
   const cinemaRef = useRef<() => void>(() => {});
@@ -1752,11 +1755,26 @@ export default function CarWashScene() {
           <span aria-hidden>🫧</span> TikowikoCarWash
         </p>
 
+        {player && (
+          <div className="mt-2 flex items-center gap-2 rounded-xl bg-splash/15 px-2 py-1.5">
+            <img
+              src={avatarSrc(player.avatarId)}
+              alt={`Avatar de ${player.name}`}
+              loading="lazy"
+              width={512}
+              height={512}
+              className="size-8 rounded-full bg-white object-contain ring-1 ring-ink/10 sm:size-9"
+            />
+            <span className="truncate text-[13px] font-bold sm:text-[14px]">{player.name}</span>
+          </div>
+        )}
+
         <p className="mt-1 hidden text-[12.5px] leading-relaxed opacity-80 sm:block">
           Construit avec les kits Kenney (voitures, routes, bâtiments). Glisse pour tourner la
           caméra, molette pour zoomer.
         </p>
       </div>
+
 
 
       <div className="pointer-events-none fixed bottom-2 left-2 z-30 hidden max-w-[46vw] rounded-2xl bg-white/70 px-3 py-2 text-[11.5px] sm:bottom-4 sm:left-4 sm:block text-ink shadow-[0_6px_20px_rgba(6,58,94,0.14)] backdrop-blur">
