@@ -84,9 +84,6 @@ jobs:
           for a, b in replacements.items():
             s = s.replace(a, b)
 
-          # Le tunnel Meshy est la source du rendu multicolore/corrompu visible
-          # dans la station. On garde le hall, les rouleaux, l'eau et la mousse,
-          # mais on empêche ce GLB de s'ajouter à la scène.
           marker = '    const loadMeshy = async () => {\n'
           if marker not in s:
             raise SystemExit('fonction loadMeshy introuvable')
@@ -110,3 +107,4 @@ jobs:
           git add src/components/CarWashScene.tsx .github/workflows/fix-kenney-car-materials.yml
           git commit -m "Corrige voitures Kenney blanches et tunnel multicolore"
           git push origin HEAD:main
+# relance 2026-08-23
