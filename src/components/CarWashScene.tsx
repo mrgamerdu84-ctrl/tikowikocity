@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { saveToDrive, loadFromDrive } from "@/lib/drive.functions";
 import { avatarSrc, usePlayer } from "@/lib/player";
 import { RentalManager } from "@/components/RentalManager";
+import { GameDashboard } from "@/components/GameDashboard";
 
 
 const SAVE_VERSION = 2;
@@ -304,15 +305,18 @@ export default function CarWashScene() {
 
   /* ----- Mode construction (pose de routes / mobilier par le joueur) ----- */
   const [buildMode, setBuildMode] = useState(false);
+  const [buildCameraMode, setBuildCameraMode] = useState(false);
   const [tool, setTool] = useState<BuildTool>("straight");
   const [rot, setRot] = useState(0);
   const [buildCat, setBuildCat] = useState<BuildCategory>("routes");
   /** panneau machines replié par défaut sur petit écran */
   const [controlOpen, setControlOpen] = useState(false);
   const buildRef = useRef(false);
+  const buildCameraRef = useRef(false);
   const toolRef = useRef<BuildTool>("straight");
   const rotRef = useRef(0);
   const buildApplyRef = useRef<(on: boolean) => void>(() => {});
+  const buildCameraApplyRef = useRef<(on: boolean) => void>(() => {});
   /* Décor sélectionné dans chaque catégorie + personnalisation du car wash */
   const [decorKind, setDecorKind] = useState<Record<DecorCategory, DecorKind>>({
     park: "park",
@@ -361,10 +365,20 @@ export default function CarWashScene() {
     const first = BUILD_CATEGORIES.find((c) => c.id === cat)?.tools[0];
     if (first) chooseTool(first);
   };
+  const toggleBuildCamera = () => {
+    const next = !buildCameraRef.current;
+    buildCameraRef.current = next;
+    setBuildCameraMode(next);
+    buildCameraApplyRef.current(next);
+  };
   const toggleBuild = () => {
     setBuildMode((prev) => {
       const next = !prev;
       buildRef.current = next;
+      if (!next) {
+        buildCameraRef.current = false;
+        setBuildCameraMode(false);
+      }
       buildApplyRef.current(next);
       return next;
     });
@@ -387,8 +401,8 @@ export default function CarWashScene() {
   const [driveState, setDriveState] = useState<"idle" | "saving" | "done" | "error">("idle");
   const [loadState, setLoadState] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [driveMenuOpen, setDriveMenuOpen] = useState(false);
-  const saveFn = useServerFn(saveToDrive);
-  const loadFn = useServerFn(loadFromDrive);
+  const saveFn = saveToDrive;
+  const loadFn = loadFromDrive;
 
   useEffect(() => {
     if (!driveMenuOpen) return;
@@ -2408,7 +2422,7 @@ export default function CarWashScene() {
     };
 
     const onPointerMove = (ev: PointerEvent) => {
-      if (!buildRef.current) {
+      if (!buildRef.current || buildCameraRef.current) {
         ghost.visible = false;
         return;
       }
@@ -2458,7 +2472,7 @@ export default function CarWashScene() {
       }
     };
     const onPointerDown = (ev: PointerEvent) => {
-      if (!buildRef.current) return;
+      if (!buildRef.current || buildCameraRef.current) return;
       if (ev.pointerType === "mouse" && ev.button !== 0) return;
       ev.preventDefault();
       downAt = {
@@ -2553,13 +2567,21 @@ export default function CarWashScene() {
 
     buildApplyRef.current = (on: boolean) => {
       gridHelper.visible = on;
-      controls.enabled = !on;
+      controls.enabled = !on || buildCameraRef.current;
       renderer.domElement.style.touchAction = on ? "none" : "auto";
       if (!on) {
         ghost.visible = false;
         downAt = null;
         roadDragLast = null;
       }
+    };
+    buildCameraApplyRef.current = (cameraMode: boolean) => {
+      if (!buildRef.current) return;
+      controls.enabled = cameraMode;
+      ghost.visible = false;
+      downAt = null;
+      roadDragLast = null;
+      renderer.domElement.style.touchAction = "none";
     };
     planIoRef.current = {
       save: () => plan.serialize(),
@@ -3063,6 +3085,22 @@ export default function CarWashScene() {
         onIncome={receiveRentalIncome}
         onSpend={spendRentalNeed}
       />
+      <GameDashboard
+        hidden={buildMode}
+        player={player ?? null}
+        money={economy.money}
+        washes={economy.washes}
+        residents={residents}
+        houses={city.houses}
+        capacity={city.capacity}
+        machines={machines}
+        cinema={cinema}
+        onBuild={toggleBuild}
+        onShop={() => setShopOpen(true)}
+        onHistory={() => setHistoryOpen(true)}
+        onToggleMachine={toggleMachine}
+        onCinema={() => cinemaRef.current()}
+      />
 
       {loading && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[linear-gradient(180deg,var(--sky-top),var(--sky-mid)_55%,var(--sky-bottom))] transition-opacity duration-500">
@@ -3090,7 +3128,7 @@ export default function CarWashScene() {
       )}
 
       <div
-        className={`fixed left-2 top-2 z-40 max-w-[calc(100vw-146px)] rounded-2xl bg-white/90 ring-1 ring-ink/10 px-3 py-2 text-ink shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur sm:left-4 sm:top-4 sm:max-w-[230px] sm:px-3 sm:py-2 ${buildMode ? "hidden" : ""}`}
+        className={`hidden fixed left-2 top-2 z-40 max-w-[calc(100vw-146px)] rounded-2xl bg-white/90 ring-1 ring-ink/10 px-3 py-2 text-ink shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur sm:left-4 sm:top-4 sm:max-w-[230px] sm:px-3 sm:py-2 ${buildMode ? "hidden" : ""}`}
       >
         <div className="flex items-center gap-2">
           <p className="flex items-center gap-2 text-[17px] font-bold tracking-wide sm:text-[18px]">
@@ -3416,7 +3454,7 @@ export default function CarWashScene() {
 
 
       <div
-        className={`fixed right-2 top-2 z-40 w-[132px] rounded-2xl bg-white/90 ring-1 ring-ink/10 p-1.5 sm:right-4 sm:top-4 sm:w-[190px] sm:p-2 shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur ${
+        className={`hidden fixed right-2 top-2 z-40 w-[132px] rounded-2xl bg-white/90 ring-1 ring-ink/10 p-1.5 sm:right-4 sm:top-4 sm:w-[190px] sm:p-2 shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur ${
           buildMode ? "hidden" : ""
         }`}
       >
@@ -3462,7 +3500,7 @@ export default function CarWashScene() {
 
 
       <div
-        className={`fixed bottom-4 right-4 z-30 flex items-center gap-2 rounded-2xl bg-white/80 p-2.5 shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur ${
+        className={`hidden fixed bottom-4 right-4 z-30 flex items-center gap-2 rounded-2xl bg-white/80 p-2.5 shadow-[0_6px_20px_rgba(6,58,94,0.18)] backdrop-blur ${
           buildMode ? "hidden" : ""
         }`}
       >
@@ -3527,7 +3565,7 @@ export default function CarWashScene() {
 
       {/* Hors construction : bouton d'entrée en mode construction */}
       {!buildMode && (
-        <div className="fixed bottom-4 left-1/2 z-40 -translate-x-1/2">
+        <div className="hidden fixed bottom-4 left-1/2 z-40 -translate-x-1/2">
           <button
             type="button"
             onClick={toggleBuild}
@@ -3544,6 +3582,21 @@ export default function CarWashScene() {
       {buildMode && (
         <div className="fixed inset-x-0 bottom-0 z-40 border-t border-ink/10 bg-white/92 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-1.5 shadow-[0_-6px_20px_rgba(6,58,94,0.14)] backdrop-blur">
           <div className="mx-auto flex w-[min(100vw,900px)] flex-col gap-1.5 px-2">
+            <div className="flex items-center gap-2 rounded-2xl bg-slate-100 p-1.5 ring-1 ring-slate-200">
+              <button
+                type="button"
+                onClick={toggleBuildCamera}
+                aria-pressed={buildCameraMode}
+                className={`flex-1 rounded-xl px-3 py-2 text-[12px] font-extrabold transition-colors ${
+                  buildCameraMode ? "bg-slate-900 text-white" : "bg-white text-slate-900 shadow-sm"
+                }`}
+              >
+                {buildCameraMode ? "🧱 Reprendre la pose" : "✋ Déplacer / zoomer"}
+              </button>
+              <span className="hidden flex-1 text-[11px] font-semibold text-slate-600 sm:block">
+                {buildCameraMode ? "1 doigt = tourner · 2 doigts = déplacer/zoomer" : "Glisse sur la grille pour poser en continu"}
+              </span>
+            </div>
             {/* Onglets de catégories */}
             <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
               {BUILD_CATEGORIES.map((c) => (

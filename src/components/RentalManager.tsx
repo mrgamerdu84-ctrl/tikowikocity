@@ -51,6 +51,12 @@ export function RentalManager({ houses, balance, onIncome, onSpend }: Props) {
   const [rejected, setRejected] = useState<string[]>(initial.rejected);
   const [open, setOpen] = useState(false);
 
+  useEffect(() => {
+    const openFromDashboard = () => setOpen(true);
+    window.addEventListener("tikowiko:rentals-open", openFromDashboard);
+    return () => window.removeEventListener("tikowiko:rentals-open", openFromDashboard);
+  }, []);
+
   const rentalsRef = useRef(rentals);
   rentalsRef.current = rentals;
 
@@ -177,7 +183,7 @@ export function RentalManager({ houses, balance, onIncome, onSpend }: Props) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="fixed bottom-16 right-3 z-[65] rounded-full bg-white/90 px-3 py-2 text-[12px] font-extrabold text-slate-900 shadow-lg ring-1 ring-slate-900/10 backdrop-blur sm:bottom-16 sm:right-4"
+        className="hidden"
       >
         🏘️ Locations {needs > 0 ? `💬 ${needs}` : ""}
       </button>
