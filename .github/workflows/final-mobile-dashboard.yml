@@ -1,0 +1,161 @@
+name: Final mobile dashboard and autonomous assets
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/final-mobile-dashboard.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Bundle 3D assets locally
+        run: |
+          set -euo pipefail
+          mkdir -p public/__l5e/assets-v1/63fd50ef-6f12-4785-b014-6ffd65421b9e
+          mkdir -p public/__l5e/assets-v1/9c5274f0-aa40-4b17-b9ec-59b98304032c
+          mkdir -p public/__l5e/assets-v1/08f530e6-70ff-45a1-bd46-eaedca3a22fd
+          curl --fail --location --retry 3 "https://pixel-perfect-preview-16.lovable.app/__l5e/assets-v1/63fd50ef-6f12-4785-b014-6ffd65421b9e/car-wash-models.json" -o public/__l5e/assets-v1/63fd50ef-6f12-4785-b014-6ffd65421b9e/car-wash-models.json
+          curl --fail --location --retry 3 "https://pixel-perfect-preview-16.lovable.app/__l5e/assets-v1/9c5274f0-aa40-4b17-b9ec-59b98304032c/tunnel.glb" -o public/__l5e/assets-v1/9c5274f0-aa40-4b17-b9ec-59b98304032c/tunnel.glb
+          curl --fail --location --retry 3 "https://pixel-perfect-preview-16.lovable.app/__l5e/assets-v1/08f530e6-70ff-45a1-bd46-eaedca3a22fd/kenney-pack.glb" -o public/__l5e/assets-v1/08f530e6-70ff-45a1-bd46-eaedca3a22fd/kenney-pack.glb
+
+      - name: Patch dashboard and true mobile camera mode
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          scene_path = Path('src/components/CarWashScene.tsx')
+          s = scene_path.read_text()
+
+          def repl(old, new, label):
+              global s
+              if old not in s:
+                  raise SystemExit(f'missing block: {label}')
+              s = s.replace(old, new, 1)
+
+          repl('import { useServerFn } from "@tanstack/react-start";\n', '', 'useServerFn import')
+          repl(
+              'import { RentalManager } from "@/components/RentalManager";\n',
+              'import { RentalManager } from "@/components/RentalManager";\nimport { GameDashboard } from "@/components/GameDashboard";\n',
+              'dashboard import',
+          )
+
+          repl(
+              '  const [buildMode, setBuildMode] = useState(false);\n  const [tool, setTool] = useState<BuildTool>("straight");',
+              '  const [buildMode, setBuildMode] = useState(false);\n  const [buildCameraMode, setBuildCameraMode] = useState(false);\n  const [tool, setTool] = useState<BuildTool>("straight");',
+              'build camera state',
+          )
+          repl(
+              '  const buildRef = useRef(false);\n  const toolRef = useRef<BuildTool>("straight");\n  const rotRef = useRef(0);\n  const buildApplyRef = useRef<(on: boolean) => void>(() => {});',
+              '  const buildRef = useRef(false);\n  const buildCameraRef = useRef(false);\n  const toolRef = useRef<BuildTool>("straight");\n  const rotRef = useRef(0);\n  const buildApplyRef = useRef<(on: boolean) => void>(() => {});\n  const buildCameraApplyRef = useRef<(on: boolean) => void>(() => {});',
+              'build refs',
+          )
+          repl(
+              '''  const toggleBuild = () => {\n    setBuildMode((prev) => {\n      const next = !prev;\n      buildRef.current = next;\n      buildApplyRef.current(next);\n      return next;\n    });\n  };''',
+              '''  const toggleBuildCamera = () => {\n    const next = !buildCameraRef.current;\n    buildCameraRef.current = next;\n    setBuildCameraMode(next);\n    buildCameraApplyRef.current(next);\n  };\n  const toggleBuild = () => {\n    setBuildMode((prev) => {\n      const next = !prev;\n      buildRef.current = next;\n      if (!next) {\n        buildCameraRef.current = false;\n        setBuildCameraMode(false);\n      }\n      buildApplyRef.current(next);\n      return next;\n    });\n  };''',
+              'toggle build',
+          )
+          repl(
+              '  const saveFn = useServerFn(saveToDrive);\n  const loadFn = useServerFn(loadFromDrive);',
+              '  const saveFn = saveToDrive;\n  const loadFn = loadFromDrive;',
+              'standalone save functions',
+          )
+
+          repl(
+              '    const onPointerMove = (ev: PointerEvent) => {\n      if (!buildRef.current) {',
+              '    const onPointerMove = (ev: PointerEvent) => {\n      if (!buildRef.current || buildCameraRef.current) {',
+              'pointer move camera guard',
+          )
+          repl(
+              '    const onPointerDown = (ev: PointerEvent) => {\n      if (!buildRef.current) return;',
+              '    const onPointerDown = (ev: PointerEvent) => {\n      if (!buildRef.current || buildCameraRef.current) return;',
+              'pointer down camera guard',
+          )
+
+          repl(
+              '''    buildApplyRef.current = (on: boolean) => {\n      gridHelper.visible = on;\n      controls.enabled = !on;\n      renderer.domElement.style.touchAction = on ? "none" : "auto";\n      if (!on) {\n        ghost.visible = false;\n        downAt = null;\n        roadDragLast = null;\n      }\n    };''',
+              '''    buildApplyRef.current = (on: boolean) => {\n      gridHelper.visible = on;\n      controls.enabled = !on || buildCameraRef.current;\n      renderer.domElement.style.touchAction = on ? "none" : "auto";\n      if (!on) {\n        ghost.visible = false;\n        downAt = null;\n        roadDragLast = null;\n      }\n    };\n    buildCameraApplyRef.current = (cameraMode: boolean) => {\n      if (!buildRef.current) return;\n      controls.enabled = cameraMode;\n      ghost.visible = false;\n      downAt = null;\n      roadDragLast = null;\n      renderer.domElement.style.touchAction = "none";\n    };''',
+              'build controls integration',
+          )
+
+          # Insert the new dashboard immediately after RentalManager.
+          m = re.search(r'(      <RentalManager[\s\S]*?\n      />\n)', s)
+          if not m:
+              raise SystemExit('missing RentalManager JSX')
+          dashboard = '''      <GameDashboard\n        hidden={buildMode}\n        player={player ?? null}\n        money={economy.money}\n        washes={economy.washes}\n        residents={residents}\n        houses={city.houses}\n        capacity={city.capacity}\n        machines={machines}\n        cinema={cinema}\n        onBuild={toggleBuild}\n        onShop={() => setShopOpen(true)}\n        onHistory={() => setHistoryOpen(true)}\n        onToggleMachine={toggleMachine}\n        onCinema={() => cinemaRef.current()}\n      />\n'''
+          s = s[:m.end()] + dashboard + s[m.end():]
+
+          # Hide the old scattered HUD pieces now replaced by the dashboard.
+          replacements = [
+              ('className={`fixed left-2 top-2 z-40 max-w', 'className={`hidden fixed left-2 top-2 z-40 max-w'),
+              ('className={`fixed right-2 top-2 z-40 w-[132px]', 'className={`hidden fixed right-2 top-2 z-40 w-[132px]'),
+              ('className={`fixed bottom-4 right-4 z-30 flex', 'className={`hidden fixed bottom-4 right-4 z-30 flex'),
+              ('className="fixed bottom-4 left-1/2 z-40 -translate-x-1/2"', 'className="hidden fixed bottom-4 left-1/2 z-40 -translate-x-1/2"'),
+          ]
+          for old, new in replacements:
+              if old not in s:
+                  raise SystemExit(f'missing legacy HUD marker: {old}')
+              s = s.replace(old, new, 1)
+
+          build_shell = '          <div className="mx-auto flex w-[min(100vw,900px)] flex-col gap-1.5 px-2">\n'
+          if build_shell not in s:
+              raise SystemExit('missing build toolbar shell')
+          camera_row = '''          <div className="mx-auto flex w-[min(100vw,900px)] flex-col gap-1.5 px-2">\n            <div className="flex items-center gap-2 rounded-2xl bg-slate-100 p-1.5 ring-1 ring-slate-200">\n              <button\n                type="button"\n                onClick={toggleBuildCamera}\n                aria-pressed={buildCameraMode}\n                className={`flex-1 rounded-xl px-3 py-2 text-[12px] font-extrabold transition-colors ${\n                  buildCameraMode ? "bg-slate-900 text-white" : "bg-white text-slate-900 shadow-sm"\n                }`}\n              >\n                {buildCameraMode ? "🧱 Reprendre la pose" : "✋ Déplacer / zoomer"}\n              </button>\n              <span className="hidden flex-1 text-[11px] font-semibold text-slate-600 sm:block">\n                {buildCameraMode\n                  ? "Glisse pour tourner · 2 doigts pour déplacer/zoomer"\n                  : "Glisse sur la grille pour poser plusieurs éléments"}\n              </span>\n            </div>\n'''
+          s = s.replace(build_shell, camera_row, 1)
+
+          scene_path.write_text(s)
+
+          # Dashboard disappears while construction occupies the screen.
+          dash_path = Path('src/components/GameDashboard.tsx')
+          d = dash_path.read_text()
+          d = d.replace('  onCinema: () => void;\n};', '  onCinema: () => void;\n  hidden?: boolean;\n};', 1)
+          d = d.replace('  onCinema,\n}: Props) {', '  onCinema,\n  hidden = false,\n}: Props) {', 1)
+          d = d.replace('  const openRentals = () => {', '  if (hidden) return null;\n\n  const openRentals = () => {', 1)
+          dash_path.write_text(d)
+
+          # Rental screen is opened from the unified dashboard, not a stray floating button.
+          rental_path = Path('src/components/RentalManager.tsx')
+          r = rental_path.read_text()
+          marker = '  const [open, setOpen] = useState(false);\n'
+          if marker not in r:
+              raise SystemExit('missing rental open state')
+          r = r.replace(marker, marker + '''\n  useEffect(() => {\n    const openFromDashboard = () => setOpen(true);\n    window.addEventListener("tikowiko:rentals-open", openFromDashboard);\n    return () => window.removeEventListener("tikowiko:rentals-open", openFromDashboard);\n  }, []);\n''', 1)
+          old_button = '        className="fixed bottom-16 right-3 z-[65] rounded-full bg-white/90 px-3 py-2 text-[12px] font-extrabold text-slate-900 shadow-lg ring-1 ring-slate-900/10 backdrop-blur sm:bottom-16 sm:right-4"'
+          if old_button not in r:
+              raise SystemExit('missing rental floating button')
+          r = r.replace(old_button, '        className="hidden"', 1)
+          rental_path.write_text(r)
+          PY
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: TypeScript check
+        run: bunx tsc --noEmit
+
+      - name: Build autonomous mobile bundle
+        run: bun run build:mobile
+
+      - name: Commit checked changes
+        run: |
+          set -euo pipefail
+          rm .github/workflows/final-mobile-dashboard.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/CarWashScene.tsx src/components/GameDashboard.tsx src/components/RentalManager.tsx public/__l5e .github/workflows/final-mobile-dashboard.yml
+          git commit -m "Refond tableau de bord, construction mobile et assets autonomes"
+          git pull --rebase origin main
+          git push origin HEAD:main
