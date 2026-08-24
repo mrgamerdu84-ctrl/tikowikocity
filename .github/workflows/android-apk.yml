@@ -30,6 +30,29 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Bundle game assets locally
+        run: |
+          set -euo pipefail
+          mkdir -p public/__l5e/assets-v1/63fd50ef-6f12-4785-b014-6ffd65421b9e
+          mkdir -p public/__l5e/assets-v1/9c5274f0-aa40-4b17-b9ec-59b98304032c
+          mkdir -p public/__l5e/assets-v1/08f530e6-70ff-45a1-bd46-eaedca3a22fd
+
+          curl --fail --location --retry 3 \
+            "https://pixel-perfect-preview-16.lovable.app/__l5e/assets-v1/63fd50ef-6f12-4785-b014-6ffd65421b9e/car-wash-models.json" \
+            -o public/__l5e/assets-v1/63fd50ef-6f12-4785-b014-6ffd65421b9e/car-wash-models.json
+
+          curl --fail --location --retry 3 \
+            "https://pixel-perfect-preview-16.lovable.app/__l5e/assets-v1/9c5274f0-aa40-4b17-b9ec-59b98304032c/tunnel.glb" \
+            -o public/__l5e/assets-v1/9c5274f0-aa40-4b17-b9ec-59b98304032c/tunnel.glb
+
+          curl --fail --location --retry 3 \
+            "https://pixel-perfect-preview-16.lovable.app/__l5e/assets-v1/08f530e6-70ff-45a1-bd46-eaedca3a22fd/kenney-pack.glb" \
+            -o public/__l5e/assets-v1/08f530e6-70ff-45a1-bd46-eaedca3a22fd/kenney-pack.glb
+
+          test -s public/__l5e/assets-v1/63fd50ef-6f12-4785-b014-6ffd65421b9e/car-wash-models.json
+          test -s public/__l5e/assets-v1/9c5274f0-aa40-4b17-b9ec-59b98304032c/tunnel.glb
+          test -s public/__l5e/assets-v1/08f530e6-70ff-45a1-bd46-eaedca3a22fd/kenney-pack.glb
+
       - name: Build autonomous mobile game
         run: bun run build:mobile
 
