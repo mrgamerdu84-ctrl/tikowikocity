@@ -18,6 +18,7 @@ type Props = {
   capacity: number;
   machines: Machines;
   cinema: boolean;
+  hidden?: boolean;
   onBuild: () => void;
   onShop: () => void;
   onHistory: () => void;
@@ -34,6 +35,7 @@ export function GameDashboard({
   capacity,
   machines,
   cinema,
+  hidden = false,
   onBuild,
   onShop,
   onHistory,
@@ -55,51 +57,25 @@ export function GameDashboard({
     setOpen(false);
   };
 
+  if (hidden) return null;
+
   return (
     <>
       <div className="fixed left-2 right-2 top-2 z-[60] flex items-center gap-2 rounded-2xl bg-white/92 px-2.5 py-2 text-slate-900 shadow-lg ring-1 ring-slate-900/10 backdrop-blur sm:left-4 sm:right-auto sm:w-[390px]">
         {player && (
-          <img
-            src={avatarSrc(player.avatarId)}
-            alt=""
-            className="size-8 shrink-0 rounded-full bg-white object-contain ring-1 ring-slate-900/10"
-          />
+          <img src={avatarSrc(player.avatarId)} alt="" className="size-8 shrink-0 rounded-full bg-white object-contain ring-1 ring-slate-900/10" />
         )}
         <div className="min-w-0 leading-tight">
           <p className="truncate text-[12px] font-extrabold">TikowikoCity{player ? ` · ${player.name}` : ""}</p>
           <p className="text-[11px] font-semibold text-slate-600">💰 {money.toLocaleString("fr-FR")} € · 👥 {residents} · 🏠 {houses}</p>
         </div>
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className="ml-auto shrink-0 rounded-xl bg-slate-900 px-3 py-2 text-[12px] font-extrabold text-white active:scale-95"
-        >
-          ☰ Tableau
-        </button>
+        <button type="button" onClick={() => setOpen(true)} className="ml-auto shrink-0 rounded-xl bg-slate-900 px-3 py-2 text-[12px] font-extrabold text-white active:scale-95">☰ Tableau</button>
       </div>
 
       <div className="fixed bottom-[max(env(safe-area-inset-bottom),0.5rem)] left-1/2 z-[60] flex -translate-x-1/2 gap-1.5 rounded-2xl bg-white/94 p-1.5 shadow-xl ring-1 ring-slate-900/10 backdrop-blur">
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className="rounded-xl bg-slate-100 px-3 py-2 text-[12px] font-extrabold text-slate-900"
-        >
-          📊 Gestion
-        </button>
-        <button
-          type="button"
-          onClick={onBuild}
-          className="rounded-xl bg-sky-500 px-4 py-2 text-[12px] font-extrabold text-white shadow-sm active:scale-95"
-        >
-          🏗️ Construire
-        </button>
-        <button
-          type="button"
-          onClick={fullscreen}
-          className="rounded-xl bg-slate-100 px-3 py-2 text-[12px] font-extrabold text-slate-900"
-        >
-          ⛶
-        </button>
+        <button type="button" onClick={() => setOpen(true)} className="rounded-xl bg-slate-100 px-3 py-2 text-[12px] font-extrabold text-slate-900">📊 Gestion</button>
+        <button type="button" onClick={onBuild} className="rounded-xl bg-sky-500 px-4 py-2 text-[12px] font-extrabold text-white shadow-sm active:scale-95">🏗️ Construire</button>
+        <button type="button" onClick={fullscreen} className="rounded-xl bg-slate-100 px-3 py-2 text-[12px] font-extrabold text-slate-900">⛶</button>
       </div>
 
       {open && (
@@ -137,12 +113,7 @@ export function GameDashboard({
                     ["brushes", "🧽 Brosses"],
                     ["traffic", "🚦 Trafic"],
                   ] as Array<[keyof Machines, string]>).map(([key, label]) => (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => onToggleMachine(key)}
-                      className={`rounded-xl px-3 py-2 text-[12px] font-extrabold ${machines[key] ? "bg-sky-500 text-white" : "bg-slate-200 text-slate-600"}`}
-                    >
+                    <button key={key} type="button" onClick={() => onToggleMachine(key)} className={`rounded-xl px-3 py-2 text-[12px] font-extrabold ${machines[key] ? "bg-sky-500 text-white" : "bg-slate-200 text-slate-600"}`}>
                       {label}<br/><span className="text-[10px]">{machines[key] ? "ON" : "OFF"}</span>
                     </button>
                   ))}
@@ -154,9 +125,7 @@ export function GameDashboard({
                 <button type="button" onClick={fullscreen} className="rounded-2xl bg-slate-200 px-3 py-3 text-[12px] font-extrabold">⛶ Plein écran</button>
               </div>
 
-              <div className="mt-3 rounded-2xl bg-emerald-50 p-3 text-[11px] font-semibold text-emerald-800 ring-1 ring-emerald-200">
-                ✅ Sauvegarde locale automatique. La partie et l’APK restent utilisables sans publication Lovable.
-              </div>
+              <div className="mt-3 rounded-2xl bg-emerald-50 p-3 text-[11px] font-semibold text-emerald-800 ring-1 ring-emerald-200">✅ Sauvegarde locale automatique. La partie et l’APK restent utilisables sans publication Lovable.</div>
             </div>
           </div>
         </div>
