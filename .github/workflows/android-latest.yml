@@ -1,0 +1,105 @@
+name: Build Latest Autonomous APK
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/android-latest.yml"
+      - "src/**"
+      - "mobile-app/**"
+      - "package.json"
+      - "bun.lock"
+      - "capacitor.config.ts"
+      - "vite.mobile.config.ts"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tikowikocity-latest-apk
+  cancel-in-progress: true
+
+jobs:
+  build-latest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Prepare standalone source
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/components/CarWashScene.tsx')
+          s = p.read_text()
+          s = s.replace('import { useServerFn } from "@tanstack/react-start";\n', '')
+          p.write_text(s)
+          PY
+
+      - name: Bundle 3D assets in app
+        run: |
+          set -euo pipefail
+          mkdir -p public/__l5e/assets-v1/63fd50ef-6f12-4785-b014-6ffd65421b9e
+          mkdir -p public/__l5e/assets-v1/9c5274f0-aa40-4b17-b9ec-59b98304032c
+          mkdir -p public/__l5e/assets-v1/08f530e6-70ff-45a1-bd46-eaedca3a22fd
+          curl --fail --location --retry 3 "https://pixel-perfect-preview-16.lovable.app/__l5e/assets-v1/63fd50ef-6f12-4785-b014-6ffd65421b9e/car-wash-models.json" -o public/__l5e/assets-v1/63fd50ef-6f12-4785-b014-6ffd65421b9e/car-wash-models.json
+          curl --fail --location --retry 3 "https://pixel-perfect-preview-16.lovable.app/__l5e/assets-v1/9c5274f0-aa40-4b17-b9ec-59b98304032c/tunnel.glb" -o public/__l5e/assets-v1/9c5274f0-aa40-4b17-b9ec-59b98304032c/tunnel.glb
+          curl --fail --location --retry 3 "https://pixel-perfect-preview-16.lovable.app/__l5e/assets-v1/08f530e6-70ff-45a1-bd46-eaedca3a22fd/kenney-pack.glb" -o public/__l5e/assets-v1/08f530e6-70ff-45a1-bd46-eaedca3a22fd/kenney-pack.glb
+          test -s public/__l5e/assets-v1/63fd50ef-6f12-4785-b014-6ffd65421b9e/car-wash-models.json
+          test -s public/__l5e/assets-v1/9c5274f0-aa40-4b17-b9ec-59b98304032c/tunnel.glb
+          test -s public/__l5e/assets-v1/08f530e6-70ff-45a1-bd46-eaedca3a22fd/kenney-pack.glb
+
+      - name: Check TypeScript
+        run: bunx tsc --noEmit
+
+      - name: Build mobile game
+        run: bun run build:mobile
+
+      - name: Create Android project
+        run: |
+          rm -rf android
+          bunx cap add android
+          bunx cap sync android
+
+      - name: Build APK
+        working-directory: android
+        run: chmod +x gradlew && ./gradlew assembleDebug
+
+      - name: Upload latest APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TikowikoCity-latest-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+      - name: Publish latest APK
+        run: |
+          set -euo pipefail
+          mkdir -p apk
+          cp android/app/build/outputs/apk/debug/app-debug.apk apk/TikowikoCity-latest.apk
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f apk/TikowikoCity-latest.apk
+          if git diff --cached --quiet; then
+            echo "Latest APK unchanged"
+            exit 0
+          fi
+          git commit -m "Publie TikowikoCity latest APK [skip ci]"
+          git pull --rebase origin main
+          git push origin HEAD:main
