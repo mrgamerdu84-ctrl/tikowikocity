@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths-ignore:
       - "apk/**"
+      - "android-build-error.txt"
   workflow_dispatch:
 
 permissions:
@@ -19,6 +20,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -31,65 +34,127 @@ jobs:
 
       - uses: android-actions/setup-android@v3
 
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Bundle game assets locally
+      - name: Build autonomous game and APK
+        id: build
+        shell: bash
         run: |
-          set -euo pipefail
-          mkdir -p public/__l5e/assets-v1/63fd50ef-6f12-4785-b014-6ffd65421b9e
-          mkdir -p public/__l5e/assets-v1/9c5274f0-aa40-4b17-b9ec-59b98304032c
-          mkdir -p public/__l5e/assets-v1/08f530e6-70ff-45a1-bd46-eaedca3a22fd
+          set +e
+          LOG="$RUNNER_TEMP/tikowikocity-android-build.log"
+          : > "$LOG"
+          RC=0
 
-          curl --fail --location --retry 3 \
-            "https://pixel-perfect-preview-16.lovable.app/__l5e/assets-v1/63fd50ef-6f12-4785-b014-6ffd65421b9e/car-wash-models.json" \
-            -o public/__l5e/assets-v1/63fd50ef-6f12-4785-b014-6ffd65421b9e/car-wash-models.json
+          echo "=== Install dependencies ===" >> "$LOG"
+          bun install --frozen-lockfile >> "$LOG" 2>&1 || RC=$?
 
-          curl --fail --location --retry 3 \
-            "https://pixel-perfect-preview-16.lovable.app/__l5e/assets-v1/9c5274f0-aa40-4b17-b9ec-59b98304032c/tunnel.glb" \
-            -o public/__l5e/assets-v1/9c5274f0-aa40-4b17-b9ec-59b98304032c/tunnel.glb
+          if [ "$RC" -eq 0 ]; then
+            echo "=== Remove obsolete server-only import ===" >> "$LOG"
+            python3 - <<'PY' >> "$LOG" 2>&1
+          from pathlib import Path
+          p = Path('src/components/CarWashScene.tsx')
+          s = p.read_text()
+          s = s.replace('import { useServerFn } from "@tanstack/react-start";\n', '')
+          p.write_text(s)
+          PY
+          fi
 
-          curl --fail --location --retry 3 \
-            "https://pixel-perfect-preview-16.lovable.app/__l5e/assets-v1/08f530e6-70ff-45a1-bd46-eaedca3a22fd/kenney-pack.glb" \
-            -o public/__l5e/assets-v1/08f530e6-70ff-45a1-bd46-eaedca3a22fd/kenney-pack.glb
+          if [ "$RC" -eq 0 ]; then
+            echo "=== Bundle local 3D assets ===" >> "$LOG"
+            mkdir -p public/__l5e/assets-v1/63fd50ef-6f12-4785-b014-6ffd65421b9e
+            mkdir -p public/__l5e/assets-v1/9c5274f0-aa40-4b17-b9ec-59b98304032c
+            mkdir -p public/__l5e/assets-v1/08f530e6-70ff-45a1-bd46-eaedca3a22fd
 
-          test -s public/__l5e/assets-v1/63fd50ef-6f12-4785-b014-6ffd65421b9e/car-wash-models.json
-          test -s public/__l5e/assets-v1/9c5274f0-aa40-4b17-b9ec-59b98304032c/tunnel.glb
-          test -s public/__l5e/assets-v1/08f530e6-70ff-45a1-bd46-eaedca3a22fd/kenney-pack.glb
+            curl --fail --location --retry 3 \
+              "https://pixel-perfect-preview-16.lovable.app/__l5e/assets-v1/63fd50ef-6f12-4785-b014-6ffd65421b9e/car-wash-models.json" \
+              -o public/__l5e/assets-v1/63fd50ef-6f12-4785-b014-6ffd65421b9e/car-wash-models.json >> "$LOG" 2>&1 || RC=$?
+          fi
 
-      - name: Build autonomous mobile game
-        run: bun run build:mobile
+          if [ "$RC" -eq 0 ]; then
+            curl --fail --location --retry 3 \
+              "https://pixel-perfect-preview-16.lovable.app/__l5e/assets-v1/9c5274f0-aa40-4b17-b9ec-59b98304032c/tunnel.glb" \
+              -o public/__l5e/assets-v1/9c5274f0-aa40-4b17-b9ec-59b98304032c/tunnel.glb >> "$LOG" 2>&1 || RC=$?
+          fi
 
-      - name: Add Android platform
-        run: |
-          rm -rf android
-          bunx cap add android
+          if [ "$RC" -eq 0 ]; then
+            curl --fail --location --retry 3 \
+              "https://pixel-perfect-preview-16.lovable.app/__l5e/assets-v1/08f530e6-70ff-45a1-bd46-eaedca3a22fd/kenney-pack.glb" \
+              -o public/__l5e/assets-v1/08f530e6-70ff-45a1-bd46-eaedca3a22fd/kenney-pack.glb >> "$LOG" 2>&1 || RC=$?
+          fi
 
-      - name: Sync Capacitor
-        run: bunx cap sync android
+          if [ "$RC" -eq 0 ]; then
+            test -s public/__l5e/assets-v1/63fd50ef-6f12-4785-b014-6ffd65421b9e/car-wash-models.json || RC=$?
+            test -s public/__l5e/assets-v1/9c5274f0-aa40-4b17-b9ec-59b98304032c/tunnel.glb || RC=$?
+            test -s public/__l5e/assets-v1/08f530e6-70ff-45a1-bd46-eaedca3a22fd/kenney-pack.glb || RC=$?
+          fi
 
-      - name: Build debug APK
-        working-directory: android
-        run: chmod +x gradlew && ./gradlew assembleDebug
+          if [ "$RC" -eq 0 ]; then
+            echo "=== TypeScript ===" >> "$LOG"
+            bunx tsc --noEmit >> "$LOG" 2>&1 || RC=$?
+          fi
+
+          if [ "$RC" -eq 0 ]; then
+            echo "=== Vite mobile ===" >> "$LOG"
+            bun run build:mobile >> "$LOG" 2>&1 || RC=$?
+          fi
+
+          if [ "$RC" -eq 0 ]; then
+            echo "=== Capacitor Android ===" >> "$LOG"
+            rm -rf android
+            bunx cap add android >> "$LOG" 2>&1 || RC=$?
+          fi
+
+          if [ "$RC" -eq 0 ]; then
+            bunx cap sync android >> "$LOG" 2>&1 || RC=$?
+          fi
+
+          if [ "$RC" -eq 0 ]; then
+            echo "=== Gradle ===" >> "$LOG"
+            (cd android && chmod +x gradlew && ./gradlew assembleDebug) >> "$LOG" 2>&1 || RC=$?
+          fi
+
+          echo "BUILD_RC=$RC" >> "$LOG"
+          echo "rc=$RC" >> "$GITHUB_OUTPUT"
+          cp "$LOG" android-build.log
+          exit 0
 
       - name: Upload APK artifact
+        if: steps.build.outputs.rc == '0'
         uses: actions/upload-artifact@v4
         with:
-          name: tikowikocity-test-apk
+          name: tikowikocity-autonomous-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
-      - name: Publish test APK in repository
+      - name: Publish autonomous APK in repository
+        if: steps.build.outputs.rc == '0'
         run: |
+          set -euo pipefail
           mkdir -p apk
           cp android/app/build/outputs/apk/debug/app-debug.apk apk/TikowikoCity-test.apk
+          rm -f android-build-error.txt android-build.log
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f apk/TikowikoCity-test.apk
+          git add -f apk/TikowikoCity-test.apk src/components/CarWashScene.tsx
+          git add -u android-build-error.txt 2>/dev/null || true
           if git diff --cached --quiet; then
-            echo "APK identique, rien à publier"
+            echo "APK et source identiques, rien à publier"
             exit 0
           fi
           git commit -m "Publie APK autonome Android [skip ci]"
           git pull --rebase origin main
           git push origin HEAD:main
+
+      - name: Publish build diagnostic
+        if: steps.build.outputs.rc != '0'
+        run: |
+          set -euo pipefail
+          tail -n 300 android-build.log > android-build-error.txt
+          rm -f android-build.log
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add android-build-error.txt
+          if ! git diff --cached --quiet; then
+            git commit -m "Diagnostic APK autonome [skip ci]"
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
+          exit 1
