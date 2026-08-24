@@ -13,7 +13,6 @@ import "@/lib/runtime-visual-fix";
 import "@/lib/runtime-car-color-lock";
 import "@/lib/mobile-compat";
 import "@/lib/runtime-build-smooth";
-import "@/lib/runtime-game-ui";
 import "../mobile.css";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
