@@ -1,26 +1,19 @@
-import { createServerFn } from "@tanstack/react-start";
-
 type SaveInput = { fileName: string; payload: unknown };
 
+type SaveCall = (args: { data: SaveInput }) => Promise<never>;
+type LoadCall = (args?: { data?: undefined }) => Promise<{ found: false }>;
+
 /**
- * La sauvegarde Google Drive est désactivée dans la version publique.
- * Le jeu conserve sa sauvegarde locale automatique.
+ * Google Drive est désactivé dans la version publique.
+ * Ces fonctions sont de simples stubs côté application : aucun endpoint serveur,
+ * aucune clé et aucune passerelle externe ne sont exposés.
+ * La sauvegarde locale automatique du jeu reste active.
  */
-export const saveToDrive = createServerFn({ method: "POST" })
-  .inputValidator((input: SaveInput) => {
-    if (!input || typeof input.fileName !== "string" || input.fileName.length > 120) {
-      throw new Error("Nom de fichier invalide.");
-    }
-    return {
-      fileName: input.fileName.replace(/[/\\]/g, "-"),
-      payload: input.payload,
-    };
-  })
-  .handler(async () => {
-    throw new Error(
-      "Sauvegarde Google Drive désactivée pour la version publique. La sauvegarde locale automatique reste active.",
-    );
-  });
+export const saveToDrive = (async (_args: { data: SaveInput }) => {
+  throw new Error(
+    "Sauvegarde Google Drive désactivée pour la version publique. La sauvegarde locale automatique reste active.",
+  );
+}) as SaveCall;
 
 export type SaveEnvelope = {
   version: number;
@@ -29,6 +22,6 @@ export type SaveEnvelope = {
   state: Record<string, unknown>;
 };
 
-export const loadFromDrive = createServerFn({ method: "POST" }).handler(async () => ({
+export const loadFromDrive = (async (_args?: { data?: undefined }) => ({
   found: false as const,
-}));
+})) as LoadCall;
