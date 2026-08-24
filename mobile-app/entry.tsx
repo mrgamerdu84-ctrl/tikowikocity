@@ -8,6 +8,7 @@ import "../src/lib/runtime-visual-fix";
 import "../src/lib/runtime-car-color-lock";
 import "../src/lib/mobile-compat";
 import "../src/lib/runtime-build-smooth";
+import "../src/lib/runtime-game-ui";
 
 import CarWashScene from "../src/components/CarWashScene";
 import PlayerSetup from "../src/components/PlayerSetup";
