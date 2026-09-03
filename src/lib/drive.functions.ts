@@ -1,13 +1,30 @@
 type SaveInput = { fileName: string; payload: unknown };
 
-type SaveCall = (args: { data: SaveInput }) => Promise<never>;
-type LoadCall = (args?: { data?: undefined }) => Promise<{ found: false }>;
+type SaveResult = {
+  name: string;
+  webViewLink?: string;
+};
+
+type LoadResult =
+  | { found: false }
+  | {
+      found: true;
+      stateJson: string;
+      fileName?: string;
+    };
+
+type SaveCall = (args: { data: SaveInput }) => Promise<SaveResult>;
+type LoadCall = (args?: { data?: undefined }) => Promise<LoadResult>;
 
 /**
  * Google Drive est désactivé dans la version publique.
  * Ces fonctions sont de simples stubs côté application : aucun endpoint serveur,
  * aucune clé et aucune passerelle externe ne sont exposés.
  * La sauvegarde locale automatique du jeu reste active.
+ *
+ * Les types gardent la forme historique des réponses Drive afin que l'interface
+ * existante reste compilable, même si ces branches ne sont jamais utilisées
+ * dans l'APK autonome.
  */
 export const saveToDrive = (async (_args: { data: SaveInput }) => {
   throw new Error(
