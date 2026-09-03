@@ -23,6 +23,7 @@ if (
   const minInterval = coarsePointer ? 1000 / 30 : 1000 / 60;
 
   EventTarget.prototype.addEventListener = function patchedAddEventListener(
+    this: EventTarget,
     type: string,
     listener: Listener | null,
     options?: boolean | AddEventListenerOptions,
@@ -78,6 +79,7 @@ if (
   } as typeof EventTarget.prototype.addEventListener;
 
   EventTarget.prototype.removeEventListener = function patchedRemoveEventListener(
+    this: EventTarget,
     type: string,
     listener: Listener | null,
     options?: boolean | EventListenerOptions,
