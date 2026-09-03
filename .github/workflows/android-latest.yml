@@ -101,5 +101,9 @@ jobs:
             exit 0
           fi
           git commit -m "Publie TikowikoCity latest APK [skip ci]"
+          # Le build modifie temporairement des fichiers source et télécharge des assets.
+          # On nettoie le worktree après le commit APK afin que le rebase puisse s'exécuter.
+          git reset --hard HEAD
+          git clean -fd
           git pull --rebase origin main
           git push origin HEAD:main
