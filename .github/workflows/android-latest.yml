@@ -42,6 +42,62 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Integrate automatic city growth
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path('src/components/CarWashScene.tsx')
+          s = p.read_text()
+
+          if 'installAutoCityGrowth' not in s:
+              import_anchor = 'import { HOUSE_LEVELS, MAX_HOUSE_LEVEL, houseDef, totalCapacity } from "@/game/houses";\nimport { readLocalCity, saveLocalCity } from "@/game/save";'
+              import_repl = 'import { HOUSE_LEVELS, MAX_HOUSE_LEVEL, houseDef, totalCapacity } from "@/game/houses";\nimport { installAutoCityGrowth } from "@/game/autoCityGrowth";\nimport { readLocalCity, saveLocalCity } from "@/game/save";'
+              if import_anchor not in s:
+                  raise SystemExit('Auto-city import anchor not found')
+              s = s.replace(import_anchor, import_repl, 1)
+
+              anchor = '''    let ti = 0;
+    const spawnNetCar = (cx: number, cz: number) => {'''
+              if anchor not in s:
+                  raise SystemExit('Auto-city insertion anchor not found')
+              call = '''    installAutoCityGrowth({
+      scene,
+      plan,
+      tile: TILE,
+      mainCx: MAIN_CX,
+      mainCzStart: MAIN_CZ_START,
+      getMoney: () => economyRef.current.money,
+      isDisposed: () => disposed,
+      makeHouse,
+      renderPlan,
+      renderHouses,
+      renderDecor,
+      onStageStart: (stage) => {
+        toast.info(`🚧 Chantier : ${stage.label}`, {
+          description: `Débloqué à ${stage.unlockMoney.toLocaleString("fr-FR")} € de prospérité.`,
+        });
+      },
+      onStageComplete: (stage) => {
+        logRef.current(
+          makeEvent("build", `Ville automatique · ${stage.label}`, 0, economyRef.current.money),
+        );
+        toast.success(`🏗️ ${stage.label} terminé`, {
+          description: "TikowikoCity s'agrandit automatiquement grâce à tes revenus.",
+        });
+      },
+    });
+
+'''
+              s = s.replace(anchor, call + anchor, 1)
+              p.write_text(s)
+
+          Path('/tmp/CarWashScene.auto.tsx').write_text(p.read_text())
+          PY
+
+      - name: Check integrated TypeScript
+        run: bunx tsc --noEmit
+
       - name: Prepare standalone source
         run: |
           python3 - <<'PY'
@@ -65,7 +121,7 @@ jobs:
           test -s public/__l5e/assets-v1/9c5274f0-aa40-4b17-b9ec-59b98304032c/tunnel.glb
           test -s public/__l5e/assets-v1/08f530e6-70ff-45a1-bd46-eaedca3a22fd/kenney-pack.glb
 
-      - name: Check TypeScript
+      - name: Check standalone TypeScript
         run: bunx tsc --noEmit
 
       - name: Build mobile game
@@ -88,21 +144,21 @@ jobs:
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
-      - name: Publish latest APK
+      - name: Publish automatic city source and latest APK
         run: |
           set -euo pipefail
           mkdir -p apk
+          cp /tmp/CarWashScene.auto.tsx src/components/CarWashScene.tsx
           cp android/app/build/outputs/apk/debug/app-debug.apk apk/TikowikoCity-latest.apk
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/CarWashScene.tsx
           git add -f apk/TikowikoCity-latest.apk
           if git diff --cached --quiet; then
-            echo "Latest APK unchanged"
+            echo "Source and latest APK unchanged"
             exit 0
           fi
-          git commit -m "Publie TikowikoCity latest APK [skip ci]"
-          # Le build modifie temporairement des fichiers source et télécharge des assets.
-          # On nettoie le worktree après le commit APK afin que le rebase puisse s'exécuter.
+          git commit -m "Ajoute ville automatique et publie APK [skip ci]"
           git reset --hard HEAD
           git clean -fd
           git pull --rebase origin main
