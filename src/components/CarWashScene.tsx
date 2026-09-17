@@ -783,6 +783,8 @@ export default function CarWashScene() {
     playSeconds: playSecondsRef.current,
     activeUrbanEvent: activeUrbanEventRef.current,
     nextUrbanEventAt: nextUrbanEventAtRef.current,
+    districtLevel: districtLevelRef.current,
+    camera: cameraIoRef.current.save(),
   });
 
   type SavedState = {
@@ -806,6 +808,8 @@ export default function CarWashScene() {
     playSeconds?: unknown;
     activeUrbanEvent?: unknown;
     nextUrbanEventAt?: unknown;
+    districtLevel?: unknown;
+    camera?: unknown;
   };
 
   /** Réapplique une sauvegarde (locale ou Drive) à la partie en cours. */
@@ -893,6 +897,10 @@ export default function CarWashScene() {
     activeUrbanEventRef.current = restoredEvent && restoredEvent.endsAt > Date.now() ? restoredEvent : null;
     setActiveUrbanEvent(activeUrbanEventRef.current);
     nextUrbanEventAtRef.current = typeof state.nextUrbanEventAt === "number" && Number.isFinite(state.nextUrbanEventAt) ? state.nextUrbanEventAt : Date.now() + 45_000;
+    const restoredDistrict = sanitizeDistrictLevel(state.districtLevel);
+    districtLevelRef.current = restoredDistrict;
+    setDistrictLevel(restoredDistrict);
+    if (state.camera) cameraIoRef.current.load(state.camera);
     if (
       withCinema &&
       typeof state.cinema === "boolean" &&
