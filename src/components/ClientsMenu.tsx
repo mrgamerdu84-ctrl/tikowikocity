@@ -6,6 +6,7 @@ import {
   effectiveWashDuration,
   neighborhoodDemand,
   paymentPreview,
+  travelerDemand,
   type ClientBehavior,
   type NeighborhoodStats,
 } from "@/game/clientBehavior";
@@ -31,6 +32,7 @@ export function ClientsMenu({ open, behavior, upgrades, neighborhood, rollerQual
   if (!open) return null;
   const arrival = effectiveArrivalInterval(upgrades, neighborhood, behavior);
   const district = neighborhoodDemand(neighborhood);
+  const travelers = travelerDemand(neighborhood);
   const duration = effectiveWashDuration(upgrades, behavior);
   const payment = paymentPreview(upgrades, behavior, rollerQuality);
   const update = (key: keyof ClientBehavior, value: number) => onChange({ ...behavior, [key]: value });
@@ -65,6 +67,18 @@ export function ClientsMenu({ open, behavior, upgrades, neighborhood, rollerQual
               <span>🅿️ {neighborhood.parking} parkings</span><span className="text-right">+{district.parkingPercent} %</span>
             </div>
             <p className="mt-2 text-[11px] font-medium text-muted-foreground">Construire et accueillir des habitants réduit directement l’attente entre deux clients.</p>
+          </div>
+
+          <div className="mt-3 rounded-lg bg-sunny/15 p-3 ring-1 ring-sunny/30">
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-extrabold">🧳 Voyageurs de passage</h3>
+              <strong className="ml-auto text-sm">+{travelers.bonusPercent} %</strong>
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-2 text-xs font-semibold text-muted-foreground">
+              <span>{travelers.travelersPerHour}/h traversent la ville</span>
+              <span className="text-right">{travelers.cleanCarSeekers}/h cherchent un lavage</span>
+            </div>
+            <p className="mt-2 text-[11px] font-medium text-muted-foreground">Les routes attirent le passage ; les parkings augmentent la part qui s’arrête au car wash.</p>
           </div>
 
           <div className="mt-4 divide-y divide-border rounded-lg border border-border">

@@ -1,7 +1,7 @@
 /* Journal de la partie : lavages, améliorations, constructions…
    Chaque entrée garde la date, un libellé, le montant (signé) et le solde. */
 
-export type EventKind = "wash" | "upgrade" | "build" | "house" | "decor" | "info";
+export type EventKind = "wash" | "upgrade" | "parts" | "build" | "house" | "decor" | "info";
 
 export type GameEvent = {
   id: string;
@@ -25,6 +25,7 @@ export const MAX_HISTORY = 80;
 export const EVENT_META: Record<EventKind, { icon: string; label: string }> = {
   wash: { icon: "🫧", label: "Lavages" },
   upgrade: { icon: "🛠️", label: "Améliorations" },
+  parts: { icon: "🔧", label: "Pièces et entretien" },
   build: { icon: "🚧", label: "Voirie" },
   house: { icon: "🏠", label: "Maisons" },
   decor: { icon: "🌳", label: "Aménagements" },
