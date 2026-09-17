@@ -5,6 +5,7 @@ export type PlayerController = {
   position: () => [number, number, number];
   setPosition: (value: unknown) => void;
   setEnabled: (enabled: boolean) => void;
+  setPaused: (paused: boolean) => void;
   setTouch: (x: number, y: number) => void;
   update: (dt: number, camera: THREE.PerspectiveCamera) => void;
   dispose: () => void;
@@ -31,6 +32,7 @@ export function createPlayerController(scene: THREE.Scene, modelSource: THREE.Ob
   const keys = new Set<string>();
   const touch = new THREE.Vector2();
   let enabled = false;
+  let paused = false;
   const forward = new THREE.Vector3();
   const right = new THREE.Vector3();
   const move = new THREE.Vector3();
@@ -51,11 +53,12 @@ export function createPlayerController(scene: THREE.Scene, modelSource: THREE.Ob
       if ([x, y, z].every((n) => typeof n === "number" && Number.isFinite(n))) root.position.set(x, y, z);
     },
     setEnabled: (value) => { enabled = value; root.visible = value; touch.set(0, 0); },
+    setPaused: (value) => { paused = value; touch.set(0, 0); },
     setTouch: (x, y) => touch.set(THREE.MathUtils.clamp(x, -1, 1), THREE.MathUtils.clamp(y, -1, 1)),
     update: (dt, camera) => {
       if (!enabled) return;
-      const ahead = (keys.has("KeyW") || keys.has("ArrowUp") ? 1 : 0) - (keys.has("KeyS") || keys.has("ArrowDown") ? 1 : 0) - touch.y;
-      const strafe = (keys.has("KeyD") || keys.has("ArrowRight") ? 1 : 0) - (keys.has("KeyA") || keys.has("ArrowLeft") ? 1 : 0) + touch.x;
+      const ahead = paused ? 0 : (keys.has("KeyW") || keys.has("ArrowUp") ? 1 : 0) - (keys.has("KeyS") || keys.has("ArrowDown") ? 1 : 0) - touch.y;
+      const strafe = paused ? 0 : (keys.has("KeyD") || keys.has("ArrowRight") ? 1 : 0) - (keys.has("KeyA") || keys.has("ArrowLeft") ? 1 : 0) + touch.x;
       camera.getWorldDirection(forward);
       forward.y = 0;
       if (forward.lengthSq() < 0.001) forward.set(0, 0, -1);
