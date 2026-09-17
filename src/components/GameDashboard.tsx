@@ -19,6 +19,7 @@ type Props = {
   machines: Machines;
   cinema: boolean;
   walking: boolean;
+  rollerCondition: number;
   hidden?: boolean;
   onBuild: () => void;
   onShop: () => void;
@@ -38,6 +39,7 @@ export function GameDashboard({
   machines,
   cinema,
   walking,
+  rollerCondition,
   hidden = false,
   onBuild,
   onShop,
@@ -111,7 +113,8 @@ export function GameDashboard({
               </div>
 
               <div className="mt-3 rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-200">
-                <div className="mb-2 flex items-center"><p className="text-sm font-black">⚙️ Car wash</p><span className="ml-auto text-[11px] font-bold text-slate-500">Commandes rapides</span></div>
+                <div className="mb-2 flex items-center"><p className="text-sm font-black">⚙️ Car wash</p><span className="ml-auto text-[11px] font-bold text-slate-500">Rouleaux {rollerCondition} %</span></div>
+                <progress className="mb-2 h-1.5 w-full accent-emerald-500" value={rollerCondition} max={100} aria-label="État des rouleaux" />
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                   {([
                     ["belt", "🛤️ Tapis"],

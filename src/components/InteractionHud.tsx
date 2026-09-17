@@ -5,6 +5,7 @@ type Props = {
   nearby: NearbyInteraction | null;
   dialogue: NearbyInteraction | null;
   machinesRunning: boolean;
+  actionDisabled?: boolean;
   onInteract: () => void;
   onAction: () => void;
   onClose: () => void;
@@ -14,6 +15,7 @@ export function InteractionHud({
   nearby,
   dialogue,
   machinesRunning,
+  actionDisabled = false,
   onInteract,
   onAction,
   onClose,
@@ -43,6 +45,10 @@ export function InteractionHud({
             </Button>
           ) : dialogue.kind === "house" ? (
             <Button onClick={onAction} className="bg-sunny text-sunny-foreground">👋 Saluer</Button>
+          ) : dialogue.kind === "vendor" ? (
+            <Button disabled={actionDisabled} onClick={onAction} className="bg-sunny text-sunny-foreground">
+              🔧 Acheter et réparer · {dialogue.price} €
+            </Button>
           ) : null}
           <Button variant="secondary" onClick={onClose}>Continuer</Button>
         </div>
