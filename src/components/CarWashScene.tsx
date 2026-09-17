@@ -4591,19 +4591,29 @@ export default function CarWashScene() {
 
             {/* Outils de la catégorie active */}
             <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
-              {(BUILD_CATEGORIES.find((c) => c.id === buildCat)?.tools ?? []).map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => chooseTool(t)}
-                  aria-pressed={tool === t}
-                  className={`shrink-0 rounded-xl px-2.5 py-1.5 text-[11.5px] font-semibold transition-colors ${
-                    tool === t ? "bg-splash text-splash-foreground" : "bg-ink/10 text-ink"
-                  }`}
-                >
-                  {TOOL_LABEL[t]}
-                </button>
-              ))}
+              {(BUILD_CATEGORIES.find((c) => c.id === buildCat)?.tools ?? []).map((t) => {
+                const unlocked = districtUnlocks(districtLevel).tools.includes(t);
+                return (
+                  <button
+                    key={t}
+                    type="button"
+                    disabled={!unlocked}
+                    onClick={() => {
+                      if (!unlocked) {
+                        toast.info("Outil débloqué à un palier supérieur du quartier.");
+                        return;
+                      }
+                      chooseTool(t);
+                    }}
+                    aria-pressed={tool === t}
+                    className={`shrink-0 rounded-xl px-2.5 py-1.5 text-[11.5px] font-semibold transition-colors ${
+                      tool === t ? "bg-splash text-splash-foreground" : "bg-ink/10 text-ink"
+                    } ${unlocked ? "" : "opacity-45"}`}
+                  >
+                    {unlocked ? TOOL_LABEL[t] : `🔒 ${TOOL_LABEL[t]}`}
+                  </button>
+                );
+              })}
               <button
                 type="button"
                 onClick={() => {
