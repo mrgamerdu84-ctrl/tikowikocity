@@ -4080,9 +4080,9 @@ export default function CarWashScene() {
 
       {shopOpen && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 p-3 backdrop-blur-sm sm:items-center">
-          <div className="flex max-h-[86vh] w-full max-w-[440px] flex-col rounded-3xl bg-white p-4 text-ink shadow-[0_12px_40px_rgba(6,58,94,0.35)]">
+          <div className="flex max-h-[92vh] w-full max-w-[440px] flex-col rounded-lg bg-white p-3 text-ink shadow-[0_12px_40px_rgba(6,58,94,0.35)]">
             <div className="flex items-center gap-2">
-              <h2 className="text-[18px] font-extrabold">🛠️ Boutique du car wash</h2>
+              <h2 className="min-w-0 truncate text-base font-extrabold">🛠️ Boutique du car wash</h2>
               <span className="ml-auto rounded-full bg-sunny/30 px-2 py-1 text-[13px] font-extrabold tabular-nums">
                 {economy.money.toLocaleString("fr-FR")} €
               </span>
@@ -4093,9 +4093,9 @@ export default function CarWashScene() {
                   setShopOpen(false);
                 }}
                 aria-label="Fermer la boutique"
-                className="rounded-full bg-ink/10 px-2 py-1 text-[13px] font-bold"
+                className="rounded-lg bg-ink/10 px-2.5 py-1.5 text-xs font-bold"
               >
-                ✕
+                ← Retour
               </button>
             </div>
 
