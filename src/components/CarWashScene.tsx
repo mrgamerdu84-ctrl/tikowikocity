@@ -106,15 +106,26 @@ import {
 } from "@/game/spareParts";
 import {
   DEFAULT_CLIENT_BEHAVIOR,
+  carsPerHour,
   effectiveArrivalInterval,
   effectiveBeltFactor,
   effectiveWashDuration,
+  neighborhoodDemand,
   sanitizeClientBehavior,
+  travelerDemand,
   type ClientBehavior,
   type NeighborhoodStats,
 } from "@/game/clientBehavior";
 import { EMPTY_WASH_METRICS, formatPlayTime, recordFinance, sanitizeFinancePeriods, sanitizeWashMetrics, washAverages, type FinancePeriod, type WashMetrics } from "@/game/metrics";
 import { eventSatisfactionBonus, eventTrafficFactor, nextEventDelay, randomUrbanEvent, sanitizeUrbanEvent, URBAN_EVENT_META, type UrbanEvent } from "@/game/urbanEvents";
+import { CameraControlsHud } from "@/components/CameraControlsHud";
+import {
+  districtAt,
+  districtDemandFactor,
+  districtUnlocks,
+  nextDistrictLevel,
+  sanitizeDistrictLevel,
+} from "@/game/districtLevels";
 
 
 /* Catégories de la barre de construction : un seul onglet visible à la fois
@@ -224,6 +235,27 @@ export default function CarWashScene() {
   const activeUrbanEventRef = useRef<UrbanEvent | null>(null);
   const nextUrbanEventAtRef = useRef(Date.now() + 45_000);
   const freeBuildingRef = useRef<() => string | null>(() => null);
+  /* Niveau du quartier : déblocages de construction et bonus de fréquentation. */
+  const [districtLevel, setDistrictLevel] = useState(1);
+  const districtLevelRef = useRef(1);
+  /* Exploration libre : la caméra peut parcourir tout le quartier. */
+  const [freeCamera, setFreeCamera] = useState(false);
+  const freeCameraRef = useRef(false);
+  const cameraIoRef = useRef<{
+    setFree: (on: boolean) => void;
+    zoom: (direction: 1 | -1) => void;
+    reset: () => void;
+    focusWash: () => void;
+    save: () => number[] | null;
+    load: (data: unknown) => void;
+  }>({
+    setFree: () => {},
+    zoom: () => {},
+    reset: () => {},
+    focusWash: () => {},
+    save: () => null,
+    load: () => {},
+  });
   /* Journal de la partie : lavages, achats, constructions (horodatés). */
   const [history, setHistory] = useState<GameEvent[]>([]);
   const historyRef = useRef(history);
