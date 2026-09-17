@@ -177,12 +177,15 @@ export default function CarWashScene() {
   const historyRef = useRef(history);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyFilter, setHistoryFilter] = useState<EventKind | "all">("all");
+  /** Écrit immédiatement l'état courant après une action économique importante. */
+  const persistNowRef = useRef<() => void>(() => {});
   /** Ajoute une entrée au journal (la plus récente en tête). */
   const logRef = useRef<(e: GameEvent) => void>(() => {});
   logRef.current = (entry: GameEvent) => {
     const next = [entry, ...historyRef.current].slice(0, MAX_HISTORY);
     historyRef.current = next;
     setHistory(next);
+    persistNowRef.current();
   };
   const registerWashRef = useRef<(amount: number, premium: boolean) => void>(() => {});
   registerWashRef.current = (amount: number, premium: boolean) => {
@@ -529,8 +532,14 @@ export default function CarWashScene() {
       const money = state.economy.money;
       const washes = state.economy.washes;
       const next = {
-        money: typeof money === "number" && Number.isFinite(money) ? money : 0,
-        washes: typeof washes === "number" && Number.isFinite(washes) ? washes : 0,
+        money:
+          typeof money === "number" && Number.isFinite(money)
+            ? Math.max(0, Math.round(money))
+            : economyRef.current.money,
+        washes:
+          typeof washes === "number" && Number.isFinite(washes)
+            ? Math.max(0, Math.round(washes))
+            : economyRef.current.washes,
       };
       economyRef.current = next;
       setEconomy(next);
@@ -563,6 +572,10 @@ export default function CarWashScene() {
   /* Sauvegarde locale automatique : la création du joueur est restaurée
      telle quelle au prochain lancement, sans action de sa part. */
   const localReadyRef = useRef(false);
+  persistNowRef.current = () => {
+    if (!localReadyRef.current) return;
+    saveLocalCity(collectState(), SAVE_VERSION);
+  };
   const restoreLocalRef = useRef<() => void>(() => {});
   restoreLocalRef.current = () => {
     const saved = readLocalCity();
@@ -580,18 +593,20 @@ export default function CarWashScene() {
   };
 
   useEffect(() => {
-    const flush = () => {
-      if (!localReadyRef.current) return;
-      saveLocalCity(collectState(), SAVE_VERSION);
+    const flush = () => persistNowRef.current();
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") flush();
     };
     const timer = window.setInterval(flush, 4000);
     window.addEventListener("pagehide", flush);
     window.addEventListener("beforeunload", flush);
+    document.addEventListener("visibilitychange", onVisibilityChange);
     return () => {
       flush();
       window.clearInterval(timer);
       window.removeEventListener("pagehide", flush);
       window.removeEventListener("beforeunload", flush);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
