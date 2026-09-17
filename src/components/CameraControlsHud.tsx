@@ -28,7 +28,7 @@ export function CameraControlsHud({ active, onToggle, onZoom, onReset, onFocusWa
       )}
       {active && (
         <p className="pointer-events-none max-w-[9.5rem] rounded-md bg-slate-900/80 px-2 py-1 text-right text-[10px] font-bold text-white">
-          1 doigt tourne · 2 doigts déplacent et zooment
+          1 doigt déplace · 2 doigts tournent et zooment · flèches ou ZQSD au clavier
         </p>
       )}
     </div>

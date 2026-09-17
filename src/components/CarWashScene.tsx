@@ -241,6 +241,7 @@ export default function CarWashScene() {
   /* Exploration libre : la caméra peut parcourir tout le quartier. */
   const [freeCamera, setFreeCamera] = useState(false);
   const freeCameraRef = useRef(false);
+  const freeCameraPanRef = useRef<(dt: number) => void>(() => {});
   const cameraIoRef = useRef<{
     setFree: (on: boolean) => void;
     zoom: (direction: 1 | -1) => void;
@@ -1151,16 +1152,73 @@ export default function CarWashScene() {
     const homePosition = camera.position.clone();
     const homeTarget = controls.target.clone();
 
+    /* Réglages par défaut (vue du car wash) et réglages d'exploration libre. */
+    const defaultTouches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
+    const freeTouches = { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_ROTATE };
+    const defaultMouse = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
+    const freeMouse = { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE };
+    controls.touches = defaultTouches;
+    controls.mouseButtons = defaultMouse;
+
+    /* Limites de balade : on reste au-dessus du quartier, jamais dans le vide. */
+    const PAN_LIMIT = 150;
+    const clampTarget = () => {
+      controls.target.x = THREE.MathUtils.clamp(controls.target.x, -PAN_LIMIT, PAN_LIMIT);
+      controls.target.z = THREE.MathUtils.clamp(controls.target.z, WASH_SITE_Z - PAN_LIMIT, PAN_LIMIT);
+      controls.target.y = THREE.MathUtils.clamp(controls.target.y, 0, 20);
+    };
+
+    /* Déplacement au clavier pendant l'exploration libre (flèches / ZQSD). */
+    const panKeys = new Set<string>();
+    const onFreeKeyDown = (e: KeyboardEvent) => {
+      if (!freeCameraRef.current) return;
+      panKeys.add(e.key.toLowerCase());
+    };
+    const onFreeKeyUp = (e: KeyboardEvent) => panKeys.delete(e.key.toLowerCase());
+    window.addEventListener("keydown", onFreeKeyDown);
+    window.addEventListener("keyup", onFreeKeyUp);
+    const panVec = new THREE.Vector3();
+    const forwardVec = new THREE.Vector3();
+    const rightVec = new THREE.Vector3();
+    const freeCameraPan = (dt: number) => {
+      if (!freeCameraRef.current || panKeys.size === 0) return;
+      const up = panKeys.has("arrowup") || panKeys.has("z") || panKeys.has("w");
+      const down = panKeys.has("arrowdown") || panKeys.has("s");
+      const left = panKeys.has("arrowleft") || panKeys.has("q") || panKeys.has("a");
+      const right = panKeys.has("arrowright") || panKeys.has("d");
+      if (!up && !down && !left && !right) return;
+      camera.getWorldDirection(forwardVec);
+      forwardVec.y = 0;
+      forwardVec.normalize();
+      rightVec.crossVectors(forwardVec, camera.up).normalize();
+      panVec.set(0, 0, 0);
+      if (up) panVec.add(forwardVec);
+      if (down) panVec.sub(forwardVec);
+      if (right) panVec.add(rightVec);
+      if (left) panVec.sub(rightVec);
+      if (panVec.lengthSq() === 0) return;
+      const speed = camera.position.distanceTo(controls.target) * 0.9;
+      panVec.normalize().multiplyScalar(speed * dt);
+      camera.position.add(panVec);
+      controls.target.add(panVec);
+      clampTarget();
+      controls.update();
+    };
+    freeCameraPanRef.current = freeCameraPan;
+
     cameraIoRef.current = {
       setFree: (on: boolean) => {
         controls.enabled = true;
         controls.enablePan = true;
+        controls.screenSpacePanning = false;
         controls.maxDistance = on ? 320 : 160;
+        controls.minPolarAngle = 0;
+        controls.touches = on ? freeTouches : defaultTouches;
+        controls.mouseButtons = on ? freeMouse : defaultMouse;
         renderer.domElement.style.touchAction = "none";
-        if (!on) {
-          controls.maxDistance = 160;
-          controls.update();
-        }
+        if (!on) panKeys.clear();
+        clampTarget();
+        controls.update();
       },
       zoom: (direction: 1 | -1) => {
         const dir = camera.position.clone().sub(controls.target);
@@ -3552,6 +3610,7 @@ export default function CarWashScene() {
         if (dialogue && (!next || next.id !== dialogue.id)) closeDialogue();
       }
       pedestrianRef.current?.update(dt, t, residentsRef.current, netCars.map((car) => car.car));
+      freeCameraPanRef.current(dt);
       if (!walkingRef.current) controls.update();
       renderer.render(scene, camera);
     };
@@ -3751,6 +3810,9 @@ export default function CarWashScene() {
       renderer.domElement.removeEventListener("pointerdown", onPointerDown);
       renderer.domElement.removeEventListener("pointerup", onPointerUp);
       renderer.domElement.removeEventListener("pointercancel", onPointerCancel);
+      window.removeEventListener("keydown", onFreeKeyDown);
+      window.removeEventListener("keyup", onFreeKeyUp);
+      freeCameraPanRef.current = () => {};
       controls.dispose();
       playerControllerRef.current?.dispose();
       playerControllerRef.current = null;
