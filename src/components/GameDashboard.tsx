@@ -18,12 +18,14 @@ type Props = {
   capacity: number;
   machines: Machines;
   cinema: boolean;
+  walking: boolean;
   hidden?: boolean;
   onBuild: () => void;
   onShop: () => void;
   onHistory: () => void;
   onToggleMachine: (key: keyof Machines) => void;
   onCinema: () => void;
+  onWalk: () => void;
 };
 
 export function GameDashboard({
@@ -35,12 +37,14 @@ export function GameDashboard({
   capacity,
   machines,
   cinema,
+  walking,
   hidden = false,
   onBuild,
   onShop,
   onHistory,
   onToggleMachine,
   onCinema,
+  onWalk,
 }: Props) {
   const [open, setOpen] = useState(false);
 
@@ -74,6 +78,7 @@ export function GameDashboard({
 
       <div className="fixed bottom-[max(env(safe-area-inset-bottom),0.5rem)] left-1/2 z-[60] flex -translate-x-1/2 gap-1.5 rounded-2xl bg-white/94 p-1.5 shadow-xl ring-1 ring-slate-900/10 backdrop-blur">
         <button type="button" onClick={() => setOpen(true)} className="rounded-xl bg-slate-100 px-3 py-2 text-[12px] font-extrabold text-slate-900">📊 Gestion</button>
+        <button type="button" onClick={onWalk} className={`rounded-xl px-3 py-2 text-[12px] font-extrabold active:scale-95 ${walking ? "bg-emerald-500 text-white" : "bg-slate-100 text-slate-900"}`}>{walking ? "👟 Explorer" : "🚶 Marcher"}</button>
         <button type="button" onClick={onBuild} className="rounded-xl bg-sky-500 px-4 py-2 text-[12px] font-extrabold text-white shadow-sm active:scale-95">🏗️ Construire</button>
         <button type="button" onClick={fullscreen} className="rounded-xl bg-slate-100 px-3 py-2 text-[12px] font-extrabold text-slate-900">⛶</button>
       </div>
@@ -98,6 +103,7 @@ export function GameDashboard({
               </div>
 
               <div className="mt-3 grid grid-cols-2 gap-2">
+                <button type="button" onClick={() => { setOpen(false); onWalk(); }} className="rounded-2xl bg-emerald-500 p-4 text-left font-black text-white">🚶 {walking ? "Quitter la marche" : "Explorer à pied"}<br/><span className="text-xs font-semibold opacity-90">Parcourir les quartiers</span></button>
                 <button type="button" onClick={() => { setOpen(false); onBuild(); }} className="rounded-2xl bg-sky-500 p-4 text-left font-black text-white">🏗️ Construction<br/><span className="text-xs font-semibold opacity-90">Routes, maisons, parcs, éclairage</span></button>
                 <button type="button" onClick={() => { setOpen(false); onShop(); }} className="rounded-2xl bg-amber-400 p-4 text-left font-black text-slate-900">🛠️ Améliorations<br/><span className="text-xs font-semibold opacity-75">Station et clientèle</span></button>
                 <button type="button" onClick={openRentals} className="rounded-2xl bg-violet-500 p-4 text-left font-black text-white">🏘️ Locations<br/><span className="text-xs font-semibold opacity-90">Loyers, impôts et besoins</span></button>
