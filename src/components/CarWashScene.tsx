@@ -640,6 +640,31 @@ export default function CarWashScene() {
     if (next) toast.info("🔭 Exploration libre activée");
   };
 
+  /* Instantané du quartier utilisé par la jauge et les paliers. */
+  const districtSnapshot = {
+    roads: planStats.roads,
+    houses: city.houses,
+    residents,
+    washes: economy.washes,
+  };
+
+  /** Ouvre le palier suivant du quartier : coût payé, bonus permanent. */
+  const upgradeDistrict = () => {
+    const progressInfo = nextDistrictLevel(districtLevelRef.current, districtSnapshot, economyRef.current.money);
+    const target = progressInfo.next;
+    if (!target) return;
+    if (!progressInfo.ready) {
+      toast.error("Objectifs du palier non atteints.");
+      return;
+    }
+    if (target.cost > 0 && !spendRef.current(target.cost, "build", `Palier ${target.title} ouvert`)) return;
+    districtLevelRef.current = target.level;
+    setDistrictLevel(target.level);
+    toast.success(`${target.icon} ${target.title}`, { description: target.summary });
+    persistNowRef.current();
+  };
+
+
   const closeDialogue = () => {
     activeDialogueRef.current = null;
     setActiveDialogue(null);
