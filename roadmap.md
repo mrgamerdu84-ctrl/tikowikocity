@@ -6,4 +6,4 @@
 - [x] Ajouter des piétons avec destinations de quartier
 - [x] Étendre la sauvegarde et vérifier ordinateur/mobile
 - [x] Ajouter un personnage jouable avec interactions et dialogues
-- [ ] Automatiser la croissance de la ville, les sorties des habitants et les revenus du car wash
+- [x] Automatiser la croissance de la ville, les sorties des habitants et les revenus du car wash
