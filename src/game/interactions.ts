@@ -46,7 +46,7 @@ export function findNearbyInteraction(
       title: "Car wash Tikowiko",
       prompt: "Interagir avec la station",
       dialogue: context.machinesRunning
-        ? `La station tourne parfaitement. ${context.washes} voiture${context.washes > 1 ? "s ont" : " a"} déjà été lavée${context.washes > 1 ? "s" : ""}.`
+        ? `La station tourne parfaitement. ${context.washes} voiture${context.washes === 1 ? " a" : "s ont"} déjà été lavée${context.washes === 1 ? "" : "s"}. Le solde est de ${context.money.toLocaleString("fr-FR")} €.`
         : "Certaines machines sont arrêtées. Je peux remettre toute la station en marche.",
       distance: washDistance,
     });

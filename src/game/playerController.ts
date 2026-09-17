@@ -40,6 +40,7 @@ export function createPlayerController(scene: THREE.Scene, modelSource: THREE.Ob
   const move = new THREE.Vector3();
   const desiredCamera = new THREE.Vector3();
   const look = new THREE.Vector3();
+  const reactionScaleVector = new THREE.Vector3(1, 1, 1);
 
   const onDown = (event: KeyboardEvent) => { keys.add(event.code); };
   const onUp = (event: KeyboardEvent) => { keys.delete(event.code); };
@@ -79,7 +80,8 @@ export function createPlayerController(scene: THREE.Scene, modelSource: THREE.Ob
         model.position.y = Math.abs(Math.sin(performance.now() * 0.008)) * 0.06;
       } else model.position.y *= Math.exp(-8 * dt);
       const reactionScale = 1 + Math.sin((reactionTime / 0.75) * Math.PI) * 0.08;
-      root.scale.lerp(new THREE.Vector3(reactionScale, reactionScale, reactionScale), 1 - Math.exp(-12 * dt));
+      reactionScaleVector.setScalar(reactionScale);
+      root.scale.lerp(reactionScaleVector, 1 - Math.exp(-12 * dt));
       desiredCamera.copy(root.position).addScaledVector(forward, -8).add(new THREE.Vector3(0, 5.5, 0));
       camera.position.lerp(desiredCamera, 1 - Math.exp(-4 * dt));
       look.copy(root.position).add(new THREE.Vector3(0, 1.4, 0));
