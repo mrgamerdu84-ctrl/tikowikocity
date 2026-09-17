@@ -955,17 +955,18 @@ export default function CarWashScene() {
     };
 
 
-    /* Récupère les roues et mémorise, pour chacune, le sens de rotation
-       correct : certains modèles (4x4/SUV) ont des roues dont l'axe local
-       est inversé, ce qui les faisait tourner à l'envers. */
+    /* Anime uniquement les quatre roues en contact avec la route.
+       Le SUV possède aussi une roue de secours arrière nommée "wheel-back" :
+       l'ancien test partiel la faisait tourner comme une roue roulante. */
     const findWheels = (car: THREE.Object3D) => {
       const wheels: THREE.Object3D[] = [];
+      const roadWheelName = /^wheel-(?:front|back)-(?:left|right)$/i;
       car.updateWorldMatrix(true, true);
       const carRight = new THREE.Vector3(1, 0, 0).transformDirection(
         car.matrixWorld,
       );
       car.traverse((n) => {
-        if (n.name && n.name.toLowerCase().includes("wheel")) {
+        if (roadWheelName.test(n.name)) {
           const axis = new THREE.Vector3(1, 0, 0).transformDirection(
             n.matrixWorld,
           );
