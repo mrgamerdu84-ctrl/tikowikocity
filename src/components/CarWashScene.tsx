@@ -269,10 +269,11 @@ export default function CarWashScene() {
   };
 
   useEffect(() => {
-    const started = performance.now();
-    let base = playSecondsRef.current;
+    let previous = performance.now();
     const timer = window.setInterval(() => {
-      const next = base + (performance.now() - started) / 1000;
+      const now = performance.now();
+      const next = playSecondsRef.current + (now - previous) / 1000;
+      previous = now;
       playSecondsRef.current = next;
       setPlaySeconds(next);
     }, 1000);
@@ -1982,6 +1983,31 @@ export default function CarWashScene() {
       pedestrianRef.current?.refresh();
     };
 
+    freeBuildingRef.current = () => {
+      const candidates = [
+        [MAIN_CX - 1, MAIN_CZ_START + 4], [MAIN_CX + 1, MAIN_CZ_START + 5],
+        [MAIN_CX - 2, MAIN_CZ_START + 7], [MAIN_CX + 2, MAIN_CZ_START + 8],
+        [MAIN_CX - 1, MAIN_CZ_START + 10], [MAIN_CX + 1, MAIN_CZ_START + 11],
+      ] as const;
+      for (const [cx, cz] of candidates) {
+        if (plan.canPlaceHouse(cx, cz)) {
+          plan.placeHouse(cx, cz, Math.min(3, 1 + Math.floor(economyRef.current.washes / 12)), 0);
+          renderHouses();
+          persistNowRef.current();
+          return `Une nouvelle résidence ouvre en ${cx}, ${cz}`;
+        }
+      }
+      for (const [cx, cz] of candidates) {
+        if (plan.canPlaceDecor(cx, cz)) {
+          plan.placeDecor(cx, cz, Math.random() > 0.45 ? "park" : "parking", 0);
+          renderDecor();
+          persistNowRef.current();
+          return `Un nouvel aménagement ouvre en ${cx}, ${cz}`;
+        }
+      }
+      return null;
+    };
+
     /* ---------- Personnalisation du car wash ---------- */
     const washDecor = new THREE.Group();
     washDecor.position.z = WASH_SITE_Z;
@@ -3114,7 +3140,7 @@ export default function CarWashScene() {
           e.paid = true;
           const r = computeReward(up);
           const adjustedAmount = Math.max(1, Math.round(r.amount * rollerQualityFactor(rollerConditionRef.current) * clientBehaviorRef.current.payment / 100));
-          registerWashRef.current(adjustedAmount, r.premium);
+          registerWashRef.current(adjustedAmount, r.premium, effectiveWashDuration(up, clientBehaviorRef.current));
         }
 
         e.wheels.forEach((w) => {
@@ -3191,7 +3217,7 @@ export default function CarWashScene() {
       if (washCooldown <= 0) {
         neighborhoodRef.current.residents = residentsRef.current;
         const [lo, hi] = effectiveArrivalInterval(up, neighborhoodRef.current, clientBehaviorRef.current);
-        washCooldown = lo + Math.random() * (hi - lo);
+        washCooldown = (lo + Math.random() * (hi - lo)) / eventTrafficFactor(activeUrbanEventRef.current);
         if (ctl.traffic && washCars.length < queueCapacity(up)) sendCityCarToWash();
       }
 
