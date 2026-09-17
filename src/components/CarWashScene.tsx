@@ -104,6 +104,7 @@ import {
   effectiveBeltFactor,
   sanitizeClientBehavior,
   type ClientBehavior,
+  type NeighborhoodStats,
 } from "@/game/clientBehavior";
 
 
@@ -339,7 +340,8 @@ export default function CarWashScene() {
   const [residents, setResidents] = useState(0);
   const residentsRef = useRef(0);
   const cityRef = useRef(city);
-  const [planStats, setPlanStats] = useState({ roads: 0, decor: 0 });
+  const [planStats, setPlanStats] = useState({ roads: 0, decor: 0, parking: 0 });
+  const neighborhoodRef = useRef<NeighborhoodStats>({ houses: 0, residents: 0, roads: 0, parking: 0 });
   const [progress, setProgress] = useState<CityProgress>({ unlocked: [] });
   const progressRef = useRef(progress);
   const playerControllerRef = useRef<PlayerController | null>(null);
@@ -352,6 +354,7 @@ export default function CarWashScene() {
   cityStatsRef.current = (levels: number[]) => {
     const next = { houses: levels.length, capacity: totalCapacity(levels) };
     cityRef.current = next;
+    neighborhoodRef.current.houses = next.houses;
     setCity(next);
   };
   /* Dépense d'argent depuis la scène 3D (pose / amélioration de maison). */
@@ -1854,7 +1857,9 @@ export default function CarWashScene() {
         obj.rotation.y = (d.rot * Math.PI) / 2;
         decorGroup.add(obj);
       });
-      setPlanStats((prev) => ({ ...prev, decor: plan.decor.size }));
+      const parking = [...plan.decor.values()].filter((item) => item.kind === "parking" || item.kind === "carport" || item.kind === "truckstop").length;
+      neighborhoodRef.current.parking = parking;
+      setPlanStats((prev) => ({ ...prev, decor: plan.decor.size, parking }));
       pedestrianRef.current?.refresh();
     };
 
@@ -2060,6 +2065,7 @@ export default function CarWashScene() {
           streetLampLights.push(light);
         }
       });
+      neighborhoodRef.current.roads = plan.cells.size;
       setPlanStats((prev) => ({ ...prev, roads: plan.cells.size }));
       pedestrianRef.current?.refresh();
     };
@@ -3064,7 +3070,8 @@ export default function CarWashScene() {
       /* De temps en temps, une voiture de la ville part au lavage. */
       washCooldown -= dt;
       if (washCooldown <= 0) {
-        const [lo, hi] = effectiveArrivalInterval(up, residentsRef.current, clientBehaviorRef.current);
+        neighborhoodRef.current.residents = residentsRef.current;
+        const [lo, hi] = effectiveArrivalInterval(up, neighborhoodRef.current, clientBehaviorRef.current);
         washCooldown = lo + Math.random() * (hi - lo);
         if (ctl.traffic && washCars.length < queueCapacity(up)) sendCityCarToWash();
       }
@@ -3573,7 +3580,7 @@ export default function CarWashScene() {
         open={clientsOpen}
         behavior={clientBehavior}
         upgrades={upgrades}
-        residents={residents}
+        neighborhood={{ houses: city.houses, residents, roads: planStats.roads, parking: planStats.parking }}
         rollerQuality={rollerQualityFactor(rollerCondition)}
         onChange={updateClientBehavior}
         onClose={() => setClientsOpen(false)}

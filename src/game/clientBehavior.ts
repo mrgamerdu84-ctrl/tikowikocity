@@ -12,6 +12,39 @@ export const DEFAULT_CLIENT_BEHAVIOR: ClientBehavior = {
   washTime: 100,
 };
 
+export type NeighborhoodStats = {
+  houses: number;
+  residents: number;
+  roads: number;
+  parking: number;
+};
+
+export type NeighborhoodDemand = {
+  factor: number;
+  bonusPercent: number;
+  housesPercent: number;
+  residentsPercent: number;
+  roadsPercent: number;
+  parkingPercent: number;
+};
+
+/** Bonus d'affluence apporté par le quartier, plafonné pour préserver le trafic. */
+export function neighborhoodDemand(stats: NeighborhoodStats): NeighborhoodDemand {
+  const housesPercent = Math.min(30, Math.max(0, stats.houses) * 4);
+  const residentsPercent = Math.min(55, Math.max(0, stats.residents) * 2.2);
+  const roadsPercent = Math.min(25, Math.max(0, stats.roads - 8) * 1.25);
+  const parkingPercent = Math.min(35, Math.max(0, stats.parking) * 9);
+  const bonusPercent = Math.min(120, housesPercent + residentsPercent + roadsPercent + parkingPercent);
+  return {
+    factor: 1 + bonusPercent / 100,
+    bonusPercent: Math.round(bonusPercent),
+    housesPercent: Math.round(housesPercent),
+    residentsPercent: Math.round(residentsPercent),
+    roadsPercent: Math.round(roadsPercent),
+    parkingPercent: Math.round(parkingPercent),
+  };
+}
+
 const clampPercent = (value: unknown, min: number, max: number, fallback: number) =>
   typeof value === "number" && Number.isFinite(value)
     ? Math.round(Math.min(max, Math.max(min, value)))
@@ -26,11 +59,11 @@ export function sanitizeClientBehavior(raw: unknown): ClientBehavior {
   };
 }
 
-export function effectiveArrivalInterval(upgrades: UpgradeLevels, residents: number, behavior: ClientBehavior): [number, number] {
+export function effectiveArrivalInterval(upgrades: UpgradeLevels, neighborhood: NeighborhoodStats, behavior: ClientBehavior): [number, number] {
   const [lo, hi] = washInterval(upgrades.speed, upgrades.parking);
-  const crowd = 1 / (1 + Math.max(0, residents) / 25);
+  const district = neighborhoodDemand(neighborhood).factor;
   const frequency = behavior.frequency / 100;
-  return [lo * crowd / frequency, (hi + 3) * crowd / frequency];
+  return [lo / district / frequency, (hi + 3) / district / frequency];
 }
 
 export function effectiveBeltFactor(upgrades: UpgradeLevels, behavior: ClientBehavior) {
