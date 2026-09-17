@@ -241,6 +241,7 @@ export default function CarWashScene() {
   /* Exploration libre : la caméra peut parcourir tout le quartier. */
   const [freeCamera, setFreeCamera] = useState(false);
   const freeCameraRef = useRef(false);
+  const freeCameraPanRef = useRef<(dt: number) => void>(() => {});
   const cameraIoRef = useRef<{
     setFree: (on: boolean) => void;
     zoom: (direction: 1 | -1) => void;
@@ -3609,6 +3610,7 @@ export default function CarWashScene() {
         if (dialogue && (!next || next.id !== dialogue.id)) closeDialogue();
       }
       pedestrianRef.current?.update(dt, t, residentsRef.current, netCars.map((car) => car.car));
+      freeCameraPanRef.current(dt);
       if (!walkingRef.current) controls.update();
       renderer.render(scene, camera);
     };
@@ -3808,6 +3810,9 @@ export default function CarWashScene() {
       renderer.domElement.removeEventListener("pointerdown", onPointerDown);
       renderer.domElement.removeEventListener("pointerup", onPointerUp);
       renderer.domElement.removeEventListener("pointercancel", onPointerCancel);
+      window.removeEventListener("keydown", onFreeKeyDown);
+      window.removeEventListener("keyup", onFreeKeyUp);
+      freeCameraPanRef.current = () => {};
       controls.dispose();
       playerControllerRef.current?.dispose();
       playerControllerRef.current = null;
