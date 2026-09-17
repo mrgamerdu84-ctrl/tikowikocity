@@ -5,6 +5,7 @@ import { saveToDrive, loadFromDrive } from "@/lib/drive.functions";
 import { avatarSrc, usePlayer } from "@/lib/player";
 import { RentalManager } from "@/components/RentalManager";
 import { GameDashboard } from "@/components/GameDashboard";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 
 const SAVE_VERSION = 3;
@@ -60,6 +61,7 @@ import {
   washInterval,
   computeReward,
   upgradeCost,
+  upgradePreview,
   sanitizeUpgrades,
   type UpgradeKey,
   type UpgradeLevels,
@@ -210,6 +212,7 @@ export default function CarWashScene() {
   const [upgrades, setUpgrades] = useState<UpgradeLevels>(DEFAULT_UPGRADES);
   const upgradesRef = useRef(upgrades);
   const [shopOpen, setShopOpen] = useState(false);
+  const [upgradeInfoOpen, setUpgradeInfoOpen] = useState<UpgradeKey | null>(null);
 
   const buyUpgrade = (key: UpgradeKey) => {
     const level = upgradesRef.current[key];
@@ -3507,7 +3510,10 @@ export default function CarWashScene() {
               </span>
               <button
                 type="button"
-                onClick={() => setShopOpen(false)}
+                onClick={() => {
+                  setUpgradeInfoOpen(null);
+                  setShopOpen(false);
+                }}
                 aria-label="Fermer la boutique"
                 className="rounded-full bg-ink/10 px-2 py-1 text-[13px] font-bold"
               >
@@ -3527,6 +3533,7 @@ export default function CarWashScene() {
                       const maxed = level >= MAX_LEVEL;
                       const cost = maxed ? 0 : upgradeCost(u.key, level);
                       const affordable = !maxed && economy.money >= cost;
+                      const preview = upgradePreview(u.key, level, upgrades);
                       return (
                         <li
                           key={u.key}
@@ -3545,20 +3552,92 @@ export default function CarWashScene() {
                               </p>
                               <p className="text-[11.5px] opacity-75">{u.desc}</p>
                             </div>
-                            <button
-                              type="button"
-                              disabled={maxed}
-                              onClick={() => buyUpgrade(u.key)}
-                              className={`ml-auto shrink-0 rounded-full px-3 py-2 text-[12px] font-bold transition-transform active:translate-y-0.5 ${
-                                maxed
-                                  ? "bg-ink/10 opacity-60"
-                                  : affordable
-                                    ? "bg-splash text-splash-foreground"
-                                    : "bg-ink/10 opacity-60"
-                              }`}
-                            >
-                              {maxed ? "MAX" : `${cost.toLocaleString("fr-FR")} €`}
-                            </button>
+                            <div className="ml-auto flex shrink-0 items-center gap-1.5">
+                              <Popover
+                                open={upgradeInfoOpen === u.key}
+                                onOpenChange={(open) => setUpgradeInfoOpen(open ? u.key : null)}
+                              >
+                                <PopoverTrigger asChild>
+                                  <button
+                                    type="button"
+                                    aria-label={`Voir les détails de ${u.label}`}
+                                    aria-expanded={upgradeInfoOpen === u.key}
+                                    onPointerEnter={(event) => {
+                                      if (event.pointerType === "mouse") setUpgradeInfoOpen(u.key);
+                                    }}
+                                    onPointerLeave={(event) => {
+                                      if (event.pointerType === "mouse") setUpgradeInfoOpen(null);
+                                    }}
+                                    onFocus={() => setUpgradeInfoOpen(u.key)}
+                                    className="grid size-8 place-items-center rounded-full bg-ink/10 text-[15px] font-black ring-1 ring-ink/10"
+                                  >
+                                    i
+                                  </button>
+                                </PopoverTrigger>
+                                <PopoverContent
+                                  side="top"
+                                  align="end"
+                                  collisionPadding={12}
+                                  onPointerEnter={(event) => {
+                                    if (event.pointerType === "mouse") setUpgradeInfoOpen(u.key);
+                                  }}
+                                  onPointerLeave={(event) => {
+                                    if (event.pointerType === "mouse") setUpgradeInfoOpen(null);
+                                  }}
+                                  className="z-[70] w-[min(21rem,calc(100vw-1.5rem))] border-ink/15 bg-white p-3 text-ink shadow-xl"
+                                >
+                                  <div className="flex items-start gap-2">
+                                    <span aria-hidden className="text-xl">{u.icon}</span>
+                                    <div>
+                                      <p className="text-sm font-extrabold">{u.label}</p>
+                                      <p className="text-[11px] opacity-65">
+                                        {maxed ? `Niveau maximal ${MAX_LEVEL}` : `Niveau ${level} → niveau ${level + 1}`}
+                                      </p>
+                                    </div>
+                                    <span className="ml-auto rounded-full bg-sunny/30 px-2 py-1 text-xs font-extrabold tabular-nums">
+                                      {maxed ? "MAX" : `${cost.toLocaleString("fr-FR")} €`}
+                                    </span>
+                                  </div>
+                                  {maxed ? (
+                                    <div className="mt-3 rounded-lg bg-sunny/20 p-2.5 text-xs font-semibold">
+                                      Tout est débloqué : {preview.current}.
+                                    </div>
+                                  ) : (
+                                    <>
+                                      <dl className="mt-3 grid gap-2 text-xs">
+                                        <div className="rounded-lg bg-ink/5 p-2">
+                                          <dt className="font-bold opacity-60">Actuellement</dt>
+                                          <dd className="mt-0.5 font-semibold">{preview.current}</dd>
+                                        </div>
+                                        <div className="rounded-lg bg-splash/15 p-2 ring-1 ring-splash/20">
+                                          <dt className="font-bold text-splash">Après achat</dt>
+                                          <dd className="mt-0.5 font-extrabold">{preview.next}</dd>
+                                          <dd className="mt-1 font-bold text-splash">{preview.change}</dd>
+                                        </div>
+                                      </dl>
+                                      <p className="mt-2 text-[11.5px] leading-relaxed opacity-80">
+                                        <strong>Impact :</strong> {preview.impact}
+                                      </p>
+                                    </>
+                                  )}
+                                </PopoverContent>
+                              </Popover>
+                              <button
+                                type="button"
+                                disabled={maxed}
+                                onClick={() => buyUpgrade(u.key)}
+                                aria-label={maxed ? `${u.label}, niveau maximal` : `Acheter ${u.label} niveau ${level + 1} pour ${cost} euros`}
+                                className={`shrink-0 rounded-full px-3 py-2 text-[12px] font-bold transition-transform active:translate-y-0.5 ${
+                                  maxed
+                                    ? "bg-ink/10 opacity-60"
+                                    : affordable
+                                      ? "bg-splash text-splash-foreground"
+                                      : "bg-ink/10 opacity-60"
+                                }`}
+                              >
+                                {maxed ? "MAX" : `${cost.toLocaleString("fr-FR")} €`}
+                              </button>
+                            </div>
                           </div>
                           {/* Jauge de niveau */}
                           <div className="mt-1.5 flex gap-1">
