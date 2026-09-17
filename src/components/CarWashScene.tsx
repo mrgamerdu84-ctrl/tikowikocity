@@ -1478,6 +1478,7 @@ export default function CarWashScene() {
     const conveyorSlats: THREE.Mesh[] = [];
     /* ----- Réseau routier du joueur ----- */
     const plan = new CityPlan();
+    let stopAutoCityGrowth: (() => void) | null = null;
     let interactionScan = 0;
     const MAIN_CX = Math.round(WASH_ACCESS_X / TILE);
     const MAIN_CZ_START = -5; // première case au nord de la parcelle
@@ -3311,7 +3312,7 @@ export default function CarWashScene() {
         /* Restauration de la sauvegarde locale une fois la ville prête. */
         restoreLocalRef.current();
         localReadyRef.current = true;
-        installAutoCityGrowth({
+        stopAutoCityGrowth = installAutoCityGrowth({
           scene,
           plan,
           tile: TILE,
@@ -3357,6 +3358,8 @@ export default function CarWashScene() {
       playerControllerRef.current = null;
       pedestrianRef.current?.dispose();
       pedestrianRef.current = null;
+      stopAutoCityGrowth?.();
+      stopAutoCityGrowth = null;
       renderer.dispose();
       renderer.domElement.remove();
     };
