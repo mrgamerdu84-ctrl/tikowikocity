@@ -3557,7 +3557,7 @@ export default function CarWashScene() {
         player={player ?? null}
         money={economy.money}
         washes={economy.washes}
-        neighborhood={{ houses: city.houses, residents, roads: planStats.roads, parking: planStats.parking }}
+        residents={residents}
         houses={city.houses}
         capacity={city.capacity}
         machines={machines}
@@ -3580,7 +3580,7 @@ export default function CarWashScene() {
         open={clientsOpen}
         behavior={clientBehavior}
         upgrades={upgrades}
-        residents={residents}
+        neighborhood={{ houses: city.houses, residents, roads: planStats.roads, parking: planStats.parking }}
         rollerQuality={rollerQualityFactor(rollerCondition)}
         onChange={updateClientBehavior}
         onClose={() => setClientsOpen(false)}
