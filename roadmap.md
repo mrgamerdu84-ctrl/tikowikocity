@@ -8,3 +8,5 @@
 - [x] Ajouter un personnage jouable avec interactions et dialogues
 - [x] Automatiser la croissance de la ville, les sorties des habitants et les revenus du car wash
 - [x] Ajouter les vendeurs de pièces, l’usure des rouleaux et les réparations
+
+- [ ] Ajouter le menu Clients et ses réglages de comportement
