@@ -62,9 +62,12 @@ export function createPedestrianSystem(scene: THREE.Scene, plan: CityPlan, templ
 
   const routeFor = (from: THREE.Vector3) => {
     if (destinations.length < 2) return [from.clone()];
-    const target = destinations[Math.floor(Math.random() * destinations.length)]!.clone();
-    const mid = new THREE.Vector3(target.x, 0, from.z);
-    return [from.clone(), mid, target];
+    const nearby = destinations.filter((point) => {
+      const distance = point.distanceTo(from);
+      return distance > 1 && distance < TILE * 1.75;
+    });
+    const target = (nearby.length ? nearby : destinations)[Math.floor(Math.random() * (nearby.length || destinations.length))]!.clone();
+    return [from.clone(), target];
   };
 
   const spawn = () => {
@@ -109,8 +112,7 @@ export function createPedestrianSystem(scene: THREE.Scene, plan: CityPlan, templ
       const dz = target.z - agent.root.position.z;
       const distance = Math.hypot(dx, dz);
       const nearTraffic = traffic.some((car) => car.position.distanceToSquared(agent.root.position) < 10);
-      const crossing = Math.abs(dx) > 1.5 && Math.abs(dz) > 1.5;
-      if (nearTraffic && crossing) return;
+      if (nearTraffic) return;
       if (distance < 0.22) { agent.waypoint += 1; return; }
       const step = Math.min(distance, agent.speed * dt);
       agent.root.position.x += (dx / distance) * step;

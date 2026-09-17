@@ -3214,7 +3214,7 @@ export default function CarWashScene() {
       {!buildMode && progression && (
         <div className="pointer-events-none fixed left-2 top-[68px] z-40 w-[min(310px,calc(100vw-1rem))] rounded-2xl bg-white/90 px-3 py-2 text-slate-900 shadow-lg ring-1 ring-slate-900/10 backdrop-blur sm:left-4 sm:top-[76px]">
           <div className="flex items-center gap-2 text-[12px] font-black"><span>{progression.icon}</span><span className="truncate">{progression.title}</span><span className="ml-auto tabular-nums text-slate-500">{Math.round((progression.value / progression.target) * 100)}%</span></div>
-          <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-200"><div className="h-full rounded-full bg-emerald-500 transition-[width] duration-500" style={{ width: `${Math.min(100, (progression.value / progression.target) * 100)}%` }} /></div>
+          <progress className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full accent-emerald-500" value={progression.value} max={progression.target} />
           <p className="mt-1 text-[10px] font-semibold text-slate-600">{progression.description}</p>
         </div>
       )}
