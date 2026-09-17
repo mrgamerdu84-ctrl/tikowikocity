@@ -7,7 +7,7 @@ import { RentalManager } from "@/components/RentalManager";
 import { GameDashboard } from "@/components/GameDashboard";
 
 
-const SAVE_VERSION = 2;
+const SAVE_VERSION = 3;
 
 
 import * as THREE from "three";
@@ -19,6 +19,10 @@ import modelsAsset from "@/assets/car-wash-models.json.asset.json";
 
 import tunnelAsset from "@/assets/tunnel.glb.asset.json";
 import kenneyPackAsset from "@/assets/kenney-pack.glb.asset.json";
+import citizenMaleA from "@/assets/character-male-a.glb.asset.json";
+import citizenMaleC from "@/assets/character-male-c.glb.asset.json";
+import citizenFemaleA from "@/assets/character-female-a.glb.asset.json";
+import citizenFemaleD from "@/assets/character-female-d.glb.asset.json";
 import {
   CityPlan,
   type SerializedPlan,
@@ -71,6 +75,9 @@ import {
 } from "@/game/history";
 import { HOUSE_LEVELS, MAX_HOUSE_LEVEL, houseDef, totalCapacity } from "@/game/houses";
 import { readLocalCity, saveLocalCity } from "@/game/save";
+import { createPedestrianSystem, type PedestrianSystem } from "@/game/pedestrians";
+import { createPlayerController, type PlayerController } from "@/game/playerController";
+import { nextMilestone, sanitizeCityProgress, type CityProgress } from "@/game/progression";
 
 
 /* Catégories de la barre de construction : un seul onglet visible à la fois
@@ -244,6 +251,11 @@ export default function CarWashScene() {
   const [residents, setResidents] = useState(0);
   const residentsRef = useRef(0);
   const cityRef = useRef(city);
+  const [planStats, setPlanStats] = useState({ roads: 0, decor: 0 });
+  const [progress, setProgress] = useState<CityProgress>({ unlocked: [] });
+  const progressRef = useRef(progress);
+  const playerControllerRef = useRef<PlayerController | null>(null);
+  const pedestrianRef = useRef<PedestrianSystem | null>(null);
   const cityStatsRef = useRef<(levels: number[]) => void>(() => {});
   cityStatsRef.current = (levels: number[]) => {
     const next = { houses: levels.length, capacity: totalCapacity(levels) };
@@ -305,6 +317,8 @@ export default function CarWashScene() {
 
   /* ----- Mode construction (pose de routes / mobilier par le joueur) ----- */
   const [buildMode, setBuildMode] = useState(false);
+  const [walking, setWalking] = useState(false);
+  const walkingRef = useRef(false);
   const [buildCameraMode, setBuildCameraMode] = useState(false);
   const [tool, setTool] = useState<BuildTool>("straight");
   const [rot, setRot] = useState(0);
@@ -374,6 +388,11 @@ export default function CarWashScene() {
   const toggleBuild = () => {
     setBuildMode((prev) => {
       const next = !prev;
+      if (next && walkingRef.current) {
+        walkingRef.current = false;
+        setWalking(false);
+        playerControllerRef.current?.setEnabled(false);
+      }
       buildRef.current = next;
       if (!next) {
         buildCameraRef.current = false;
@@ -383,6 +402,31 @@ export default function CarWashScene() {
       return next;
     });
   };
+  const toggleWalking = () => {
+    if (buildRef.current) return;
+    const next = !walkingRef.current;
+    walkingRef.current = next;
+    setWalking(next);
+    playerControllerRef.current?.setEnabled(next);
+  };
+
+  const progression = nextMilestone(progress, {
+    money: economy.money,
+    washes: economy.washes,
+    roads: planStats.roads,
+    houses: city.houses,
+    residents,
+    decor: planStats.decor,
+    upgrades,
+  });
+  useEffect(() => {
+    if (!progression?.complete) return;
+    const next = { unlocked: [...progressRef.current.unlocked, progression.id] };
+    progressRef.current = next;
+    setProgress(next);
+    logRef.current(makeEvent("info", `${progression.title} débloqué`));
+    toast.success(`${progression.icon} ${progression.title}`, { description: "La ville franchit une nouvelle étape." });
+  }, [progression?.complete, progression?.id]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key.toLowerCase() !== "r" || !buildRef.current) return;
@@ -428,6 +472,8 @@ export default function CarWashScene() {
     economy: economyRef.current,
     history: historyRef.current,
     upgrades: upgradesRef.current,
+    progress: progressRef.current,
+    playerPosition: playerControllerRef.current?.position(),
   });
 
   type SavedState = {
@@ -441,6 +487,8 @@ export default function CarWashScene() {
     economy?: { money?: unknown; washes?: unknown };
     history?: unknown;
     upgrades?: unknown;
+    progress?: unknown;
+    playerPosition?: unknown;
   };
 
   /** Réapplique une sauvegarde (locale ou Drive) à la partie en cours. */
@@ -493,6 +541,12 @@ export default function CarWashScene() {
       upgradesRef.current = up;
       setUpgrades(up);
     }
+    if (state.progress) {
+      const next = sanitizeCityProgress(state.progress);
+      progressRef.current = next;
+      setProgress(next);
+    }
+    if (state.playerPosition) playerControllerRef.current?.setPosition(state.playerPosition);
     if (
       withCinema &&
       typeof state.cinema === "boolean" &&
