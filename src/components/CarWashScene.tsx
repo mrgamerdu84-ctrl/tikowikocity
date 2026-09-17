@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/alert-dialog";
 
 
-const SAVE_VERSION = 3;
+const SAVE_VERSION = 4;
 
 
 import * as THREE from "three";
@@ -93,6 +93,12 @@ import { createPlayerController, type PlayerController } from "@/game/playerCont
 import { findNearbyInteraction, type NearbyInteraction } from "@/game/interactions";
 import { nextMilestone, sanitizeCityProgress, type CityProgress } from "@/game/progression";
 import { installAutoCityGrowth } from "@/game/autoCityGrowth";
+import {
+  ROLLER_WEAR_PER_WASH,
+  STREET_VENDORS,
+  rollerQualityFactor,
+  sanitizeRollerCondition,
+} from "@/game/spareParts";
 
 
 /* Catégories de la barre de construction : un seul onglet visible à la fois
@@ -179,6 +185,8 @@ export default function CarWashScene() {
     traffic: true,
   });
   const machinesRef = useRef(machines);
+  const [rollerCondition, setRollerCondition] = useState(100);
+  const rollerConditionRef = useRef(100);
 
   /* ----- Économie : chaque lavage terminé rapporte de l'argent.
      Les routes restent gratuites (aucun coût de construction). ----- */
@@ -202,6 +210,9 @@ export default function CarWashScene() {
   };
   const registerWashRef = useRef<(amount: number, premium: boolean) => void>(() => {});
   registerWashRef.current = (amount: number, premium: boolean) => {
+    const nextCondition = sanitizeRollerCondition(rollerConditionRef.current - ROLLER_WEAR_PER_WASH);
+    rollerConditionRef.current = nextCondition;
+    setRollerCondition(nextCondition);
     setEconomy((prev) => {
       const next = { money: prev.money + amount, washes: prev.washes + 1 };
       economyRef.current = next;
@@ -518,6 +529,21 @@ export default function CarWashScene() {
       }
     } else if (target.kind === "house") {
       toast.success("👋 Les habitants te saluent en retour !");
+    } else if (target.kind === "vendor") {
+      const price = target.price ?? 0;
+      if (rollerConditionRef.current >= 100) {
+        toast.info("✅ Les rouleaux sont déjà neufs");
+      } else if (price <= 0 || economyRef.current.money < price) {
+        toast.error(`Il manque ${Math.max(0, price - economyRef.current.money).toLocaleString("fr-FR")} € pour acheter les pièces`);
+      } else {
+        const next = { ...economyRef.current, money: economyRef.current.money - price };
+        economyRef.current = next;
+        setEconomy(next);
+        rollerConditionRef.current = 100;
+        setRollerCondition(100);
+        logRef.current(makeEvent("upgrade", `Réparation des rouleaux · ${target.title}`, -price, next.money));
+        toast.success("🔧 Rouleaux réparés à 100 %");
+      }
     }
     playerControllerRef.current?.react();
     closeDialogue();
@@ -602,6 +628,7 @@ export default function CarWashScene() {
     economy: economyRef.current,
     history: historyRef.current,
     upgrades: upgradesRef.current,
+    rollerCondition: rollerConditionRef.current,
     progress: progressRef.current,
     playerPosition: playerControllerRef.current?.position(),
   });
@@ -617,6 +644,7 @@ export default function CarWashScene() {
     economy?: { money?: unknown; washes?: unknown };
     history?: unknown;
     upgrades?: unknown;
+    rollerCondition?: unknown;
     progress?: unknown;
     playerPosition?: unknown;
   };
@@ -677,6 +705,9 @@ export default function CarWashScene() {
       upgradesRef.current = up;
       setUpgrades(up);
     }
+    const restoredCondition = sanitizeRollerCondition(state.rollerCondition);
+    rollerConditionRef.current = restoredCondition;
+    setRollerCondition(restoredCondition);
     if (state.progress) {
       const next = sanitizeCityProgress(state.progress);
       progressRef.current = next;
@@ -2936,7 +2967,8 @@ export default function CarWashScene() {
         if (!e.paid && e.d >= WASH_D1) {
           e.paid = true;
           const r = computeReward(up);
-          registerWashRef.current(r.amount, r.premium);
+          const adjustedAmount = Math.max(1, Math.round(r.amount * rollerQualityFactor(rollerConditionRef.current)));
+          registerWashRef.current(adjustedAmount, r.premium);
         }
 
         e.wheels.forEach((w) => {
@@ -3189,6 +3221,7 @@ export default function CarWashScene() {
               washes: economyRef.current.washes,
               money: economyRef.current.money,
               machinesRunning: Object.values(machinesRef.current).every(Boolean),
+              rollerCondition: rollerConditionRef.current,
             })
           : null;
         if (next?.id !== nearbyInteractionRef.current?.id || next?.dialogue !== nearbyInteractionRef.current?.dialogue) {
@@ -3308,6 +3341,51 @@ export default function CarWashScene() {
         if (playerModel) {
           playerControllerRef.current = createPlayerController(scene, playerModel);
           pedestrianRef.current = createPedestrianSystem(scene, plan, citizenTemplates.slice(1));
+          STREET_VENDORS.forEach((vendor, index) => {
+            const stall = new THREE.Group();
+            stall.name = `street-vendor-${vendor.id}`;
+            stall.position.set(vendor.x, 0, vendor.z);
+            const counter = new THREE.Mesh(
+              new THREE.BoxGeometry(2.4, 1, 0.8),
+              new THREE.MeshStandardMaterial({ color: vendor.color, roughness: 0.75 }),
+            );
+            counter.position.y = 0.5;
+            counter.castShadow = true;
+            stall.add(counter);
+            const canopy = new THREE.Mesh(
+              new THREE.BoxGeometry(2.8, 0.16, 1.25),
+              new THREE.MeshStandardMaterial({ color: index % 2 ? 0xf4f0dc : 0x2c6eaa, roughness: 0.65 }),
+            );
+            canopy.position.y = 2.45;
+            canopy.castShadow = true;
+            stall.add(canopy);
+            [-0.95, 0.95].forEach((x) => {
+              const post = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.05, 0.05, 2.4, 8),
+                new THREE.MeshStandardMaterial({ color: 0x4b5563, roughness: 0.8 }),
+              );
+              post.position.set(x, 1.2, 0.35);
+              stall.add(post);
+            });
+            [-0.6, 0, 0.6].forEach((x, partIndex) => {
+              const part = new THREE.Mesh(
+                partIndex === 1 ? new THREE.TorusGeometry(0.2, 0.07, 8, 16) : new THREE.CylinderGeometry(0.13, 0.13, 0.42, 12),
+                new THREE.MeshStandardMaterial({ color: partIndex === 1 ? 0x30343b : 0xd8dde3, metalness: 0.7, roughness: 0.3 }),
+              );
+              part.rotation.z = Math.PI / 2;
+              part.position.set(x, 1.14, -0.08);
+              stall.add(part);
+            });
+            const vendorModel = citizenTemplates[(index + 1) % citizenTemplates.length]?.clone(true);
+            if (vendorModel) {
+              vendorModel.scale.setScalar(0.85);
+              vendorModel.position.set(0, 0, 0.72);
+              vendorModel.rotation.y = Math.PI;
+              setShadow(vendorModel);
+              stall.add(vendorModel);
+            }
+            scene.add(stall);
+          });
         }
         /* Restauration de la sauvegarde locale une fois la ville prête. */
         restoreLocalRef.current();
@@ -3459,6 +3537,7 @@ export default function CarWashScene() {
         machines={machines}
         cinema={cinema}
         walking={walking}
+        rollerCondition={rollerCondition}
         onBuild={toggleBuild}
         onShop={() => setShopOpen(true)}
         onHistory={() => setHistoryOpen(true)}
@@ -3471,6 +3550,7 @@ export default function CarWashScene() {
           nearby={nearbyInteraction}
           dialogue={activeDialogue}
           machinesRunning={Object.values(machines).every(Boolean)}
+          actionDisabled={activeDialogue?.kind === "vendor" && (rollerCondition >= 100 || economy.money < (activeDialogue.price ?? 0))}
           onInteract={interactNearby}
           onAction={performDialogueAction}
           onClose={closeDialogue}
