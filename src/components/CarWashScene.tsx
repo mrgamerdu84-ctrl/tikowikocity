@@ -1116,10 +1116,65 @@ export default function CarWashScene() {
     );
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
-    controls.minDistance = 6;
-    controls.maxDistance = 160;
+    controls.minDistance = 4;
+    controls.maxDistance = 320;
     controls.maxPolarAngle = Math.PI * 0.49;
+    controls.screenSpacePanning = false;
     controls.update();
+
+    /* Vue initiale mémorisée pour le bouton « vue d'ensemble ». */
+    const homePosition = camera.position.clone();
+    const homeTarget = controls.target.clone();
+
+    cameraIoRef.current = {
+      setFree: (on: boolean) => {
+        controls.enabled = true;
+        controls.enablePan = true;
+        controls.maxDistance = on ? 320 : 160;
+        renderer.domElement.style.touchAction = "none";
+        if (!on) {
+          controls.maxDistance = 160;
+          controls.update();
+        }
+      },
+      zoom: (direction: 1 | -1) => {
+        const dir = camera.position.clone().sub(controls.target);
+        const distance = dir.length();
+        const next = THREE.MathUtils.clamp(
+          distance * (direction > 0 ? 0.82 : 1.22),
+          controls.minDistance,
+          controls.maxDistance,
+        );
+        camera.position.copy(controls.target).add(dir.setLength(next));
+        controls.update();
+      },
+      reset: () => {
+        camera.position.copy(homePosition);
+        controls.target.copy(homeTarget);
+        controls.update();
+      },
+      focusWash: () => {
+        controls.target.set(0, 1.5, WASH_SITE_Z);
+        camera.position.set(14, 12, WASH_SITE_Z + 20);
+        controls.update();
+      },
+      save: () => [
+        camera.position.x,
+        camera.position.y,
+        camera.position.z,
+        controls.target.x,
+        controls.target.y,
+        controls.target.z,
+      ],
+      load: (data: unknown) => {
+        if (!Array.isArray(data) || data.length < 6) return;
+        const nums = data.map((v) => (typeof v === "number" && Number.isFinite(v) ? v : null));
+        if (nums.some((v) => v === null)) return;
+        camera.position.set(nums[0]!, nums[1]!, nums[2]!);
+        controls.target.set(nums[3]!, nums[4]!, nums[5]!);
+        controls.update();
+      },
+    };
 
     const hemi = new THREE.HemisphereLight(0xffffff, 0x8fae7a, 0.9);
     scene.add(hemi);
