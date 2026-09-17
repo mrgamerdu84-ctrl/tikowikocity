@@ -92,6 +92,7 @@ import { createPedestrianSystem, type PedestrianSystem } from "@/game/pedestrian
 import { createPlayerController, type PlayerController } from "@/game/playerController";
 import { findNearbyInteraction, type NearbyInteraction } from "@/game/interactions";
 import { nextMilestone, sanitizeCityProgress, type CityProgress } from "@/game/progression";
+import { installAutoCityGrowth } from "@/game/autoCityGrowth";
 
 
 /* Catégories de la barre de construction : un seul onglet visible à la fois
@@ -367,6 +368,11 @@ export default function CarWashScene() {
         residentsRef.current = next;
         if (next > prev && (next === 1 || next % 10 === 0)) {
           toast.success(`👥 ${next} habitant${next > 1 ? "s" : ""} à TikowikoCity`);
+        }
+        if (next > prev && (next === 1 || next % 5 === 0)) {
+          logRef.current(
+            makeEvent("info", `Nouvel habitant · TikowikoCity compte ${next} résident${next > 1 ? "s" : ""}`),
+          );
         }
         return next;
       });
@@ -1472,6 +1478,7 @@ export default function CarWashScene() {
     const conveyorSlats: THREE.Mesh[] = [];
     /* ----- Réseau routier du joueur ----- */
     const plan = new CityPlan();
+    let stopAutoCityGrowth: (() => void) | null = null;
     let interactionScan = 0;
     const MAIN_CX = Math.round(WASH_ACCESS_X / TILE);
     const MAIN_CZ_START = -5; // première case au nord de la parcelle
@@ -3305,6 +3312,26 @@ export default function CarWashScene() {
         /* Restauration de la sauvegarde locale une fois la ville prête. */
         restoreLocalRef.current();
         localReadyRef.current = true;
+        stopAutoCityGrowth = installAutoCityGrowth({
+          scene,
+          plan,
+          tile: TILE,
+          mainCx: MAIN_CX,
+          mainCzStart: MAIN_CZ_START,
+          getMoney: () => economyRef.current.money,
+          isDisposed: () => disposed,
+          makeHouse,
+          renderPlan,
+          renderHouses,
+          renderDecor,
+          onStageStart: (stage) => {
+            toast.info(`🏗️ ${stage.label}`, { description: "La ville lance un nouveau chantier." });
+          },
+          onStageComplete: (stage) => {
+            logRef.current(makeEvent("build", `Croissance automatique · ${stage.label}`));
+            persistNowRef.current();
+          },
+        });
         setLoading(false);
         animate();
 
@@ -3331,6 +3358,8 @@ export default function CarWashScene() {
       playerControllerRef.current = null;
       pedestrianRef.current?.dispose();
       pedestrianRef.current = null;
+      stopAutoCityGrowth?.();
+      stopAutoCityGrowth = null;
       renderer.dispose();
       renderer.domElement.remove();
     };

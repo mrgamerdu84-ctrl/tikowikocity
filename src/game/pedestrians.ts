@@ -15,6 +15,13 @@ type Agent = {
   speed: number;
   phase: number;
   wait: number;
+  home: Home;
+  returning: boolean;
+};
+
+type Home = {
+  door: THREE.Vector3;
+  sidewalk: THREE.Vector3;
 };
 
 const SIDE = TILE * 0.43;
@@ -27,6 +34,7 @@ export function createPedestrianSystem(scene: THREE.Scene, plan: CityPlan, templ
   scene.add(group);
   const agents: Agent[] = [];
   let destinations: THREE.Vector3[] = [];
+  let homes: Home[] = [];
 
   const nearestRoad = (cx: number, cz: number) => {
     for (let d = 0; d < 4; d++) {
@@ -41,10 +49,20 @@ export function createPedestrianSystem(scene: THREE.Scene, plan: CityPlan, templ
 
   const refresh = () => {
     const next: THREE.Vector3[] = [];
+    const nextHomes: Home[] = [];
     plan.houses.forEach((_house, k) => {
       const [cx, cz] = parseKey(k);
       const road = nearestRoad(cx, cz);
-      if (road) next.push(sidewalkPoint(road.cx, road.cz, road.dx, road.dz));
+      if (road) {
+        const sidewalk = sidewalkPoint(road.cx, road.cz, road.dx, road.dz);
+        const door = new THREE.Vector3(
+          cx * TILE + road.dx * TILE * 0.28,
+          0,
+          cz * TILE + road.dz * TILE * 0.28,
+        );
+        nextHomes.push({ door, sidewalk });
+        next.push(sidewalk);
+      }
     });
     plan.decor.forEach((_decor, k) => {
       const [cx, cz] = parseKey(k);
@@ -58,21 +76,24 @@ export function createPedestrianSystem(scene: THREE.Scene, plan: CityPlan, templ
     });
     next.push(new THREE.Vector3(-9, 0, -34), new THREE.Vector3(9, 0, -34));
     destinations = next;
+    homes = nextHomes;
   };
 
-  const routeFor = (from: THREE.Vector3) => {
+  const outingFor = (home: Home) => {
+    const from = home.sidewalk;
     if (destinations.length < 2) return [from.clone()];
     const nearby = destinations.filter((point) => {
       const distance = point.distanceTo(from);
       return distance > 1 && distance < TILE * 1.75;
     });
     const target = (nearby.length ? nearby : destinations)[Math.floor(Math.random() * (nearby.length || destinations.length))]!.clone();
-    return [from.clone(), target];
+    return [home.door.clone(), home.sidewalk.clone(), target];
   };
 
   const spawn = () => {
-    if (!templates.length || !destinations.length) return;
-    const start = destinations[Math.floor(Math.random() * destinations.length)]!.clone();
+    if (!templates.length || !homes.length) return;
+    const home = homes[agents.length % homes.length]!;
+    const start = home.door.clone();
     const model = templates[agents.length % templates.length]!.clone(true);
     const box = new THREE.Box3().setFromObject(model);
     const size = box.getSize(new THREE.Vector3());
@@ -88,7 +109,16 @@ export function createPedestrianSystem(scene: THREE.Scene, plan: CityPlan, templ
     root.add(model);
     root.position.copy(start);
     group.add(root);
-    agents.push({ root, route: routeFor(start), waypoint: 1, speed: 1.2 + Math.random() * 0.65, phase: Math.random() * 10, wait: 0 });
+    agents.push({
+      root,
+      route: outingFor(home),
+      waypoint: 1,
+      speed: 1.2 + Math.random() * 0.65,
+      phase: Math.random() * 10,
+      wait: Math.random() * 2,
+      home,
+      returning: false,
+    });
   };
 
   const update = (dt: number, elapsed: number, population: number, traffic: THREE.Object3D[]) => {
@@ -103,9 +133,15 @@ export function createPedestrianSystem(scene: THREE.Scene, plan: CityPlan, templ
       if (agent.wait > 0) { agent.wait -= dt; return; }
       const target = agent.route[agent.waypoint];
       if (!target) {
-        agent.route = routeFor(agent.root.position);
+        if (agent.returning) {
+          agent.route = outingFor(agent.home);
+          agent.returning = false;
+        } else {
+          agent.route = [agent.root.position.clone(), agent.home.sidewalk.clone(), agent.home.door.clone()];
+          agent.returning = true;
+        }
         agent.waypoint = 1;
-        agent.wait = 1 + Math.random() * 3;
+        agent.wait = agent.returning ? 0.5 + Math.random() * 1.5 : 2 + Math.random() * 4;
         return;
       }
       const dx = target.x - agent.root.position.x;
