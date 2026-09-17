@@ -3627,6 +3627,12 @@ export default function CarWashScene() {
       ? upgradeCost(pendingUpgrade, pendingUpgradeLevel)
       : 0;
   const balanceAfterUpgrade = Math.max(0, economy.money - pendingUpgradeCost);
+  const financeIncome = financePeriods.reduce((sum, period) => sum + period.income, 0);
+  const financeExpenses = financePeriods.reduce((sum, period) => sum + period.expenses, 0);
+  const currentFinancePeriod = financePeriods.at(-1);
+  const previousFinancePeriod = financePeriods.at(-2);
+  const currentProfit = (currentFinancePeriod?.income ?? 0) - (currentFinancePeriod?.expenses ?? 0);
+  const previousProfit = (previousFinancePeriod?.income ?? 0) - (previousFinancePeriod?.expenses ?? 0);
 
   return (
     <>
@@ -3914,9 +3920,9 @@ export default function CarWashScene() {
 
       {historyOpen && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 p-3 backdrop-blur-sm sm:items-center">
-          <div className="flex max-h-[86vh] w-full max-w-[460px] flex-col rounded-3xl bg-white p-4 text-ink shadow-[0_12px_40px_rgba(6,58,94,0.35)]">
-            <div className="flex items-center gap-2">
-              <h2 className="text-[18px] font-extrabold">🧾 Journal de la ville</h2>
+          <div className="flex max-h-[92vh] w-full max-w-[460px] flex-col rounded-lg bg-white p-3 text-ink shadow-[0_12px_40px_rgba(6,58,94,0.35)]">
+            <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2">
+              <h2 className="truncate text-base font-extrabold">🧾 Journal de la ville</h2>
               <span className="ml-auto rounded-full bg-sunny/30 px-2 py-1 text-[13px] font-extrabold tabular-nums">
                 {economy.money.toLocaleString("fr-FR")} €
               </span>
@@ -3924,11 +3930,33 @@ export default function CarWashScene() {
                 type="button"
                 onClick={() => setHistoryOpen(false)}
                 aria-label="Fermer le journal"
-                className="rounded-full bg-ink/10 px-2 py-1 text-[13px] font-bold"
+                className="rounded-lg bg-ink/10 px-2.5 py-1.5 text-xs font-bold"
               >
-                ✕
+                ← Retour
               </button>
             </div>
+
+            <div className="mt-2 grid grid-cols-2 rounded-lg bg-ink/5 p-1 text-xs font-extrabold">
+              <button type="button" onClick={() => setHistoryView("journal")} className={`rounded-md px-3 py-1.5 ${historyView === "journal" ? "bg-white shadow-sm" : "opacity-65"}`}>Journal</button>
+              <button type="button" onClick={() => setHistoryView("profit")} className={`rounded-md px-3 py-1.5 ${historyView === "profit" ? "bg-white shadow-sm" : "opacity-65"}`}>Rentabilité</button>
+            </div>
+
+            {historyView === "profit" ? (
+              <div className="mt-3 overflow-y-auto">
+                <dl className="grid grid-cols-2 gap-2">
+                  {[["Revenus", financeIncome, "text-splash"], ["Dépenses", financeExpenses, ""], ["Profit net", financeIncome - financeExpenses, financeIncome >= financeExpenses ? "text-splash" : "text-destructive"]].map(([label, value, color]) => <div key={String(label)} className="rounded-lg bg-ink/5 p-2 ring-1 ring-ink/10"><dt className="text-[10px] font-bold opacity-60">{label}</dt><dd className={`text-lg font-black tabular-nums ${color}`}>{Number(value).toLocaleString("fr-FR")} €</dd></div>)}
+                  <div className="rounded-lg bg-sunny/20 p-2 ring-1 ring-sunny/30"><dt className="text-[10px] font-bold opacity-60">TEMPS DE JEU</dt><dd className="text-lg font-black">{formatPlayTime(playSeconds)}</dd></div>
+                </dl>
+                <div className="mt-3 rounded-lg border border-ink/10 p-3">
+                  <div className="flex items-center gap-2"><h3 className="text-sm font-extrabold">Période actuelle · 30 min</h3><span className={`ml-auto text-sm font-black ${currentProfit >= 0 ? "text-splash" : "text-destructive"}`}>{currentProfit >= 0 ? "+" : ""}{currentProfit.toLocaleString("fr-FR")} €</span></div>
+                  <p className="mt-1 text-xs font-semibold opacity-65">Revenus {currentFinancePeriod?.income.toLocaleString("fr-FR") ?? 0} € · dépenses {currentFinancePeriod?.expenses.toLocaleString("fr-FR") ?? 0} €</p>
+                  {previousFinancePeriod && <p className="mt-2 text-xs font-bold">Évolution : {currentProfit - previousProfit >= 0 ? "↗" : "↘"} {Math.abs(currentProfit - previousProfit).toLocaleString("fr-FR")} € par rapport à la période précédente</p>}
+                </div>
+                <div className="mt-3 divide-y divide-ink/10 rounded-lg border border-ink/10">
+                  {[...financePeriods].reverse().map((period) => <div key={period.index} className="grid grid-cols-[1fr_auto] gap-2 px-3 py-2 text-xs"><span className="font-bold">Mois {period.index + 1}</span><span className="font-black tabular-nums">+{period.income.toLocaleString("fr-FR")} € · −{period.expenses.toLocaleString("fr-FR")} € · {(period.income - period.expenses).toLocaleString("fr-FR")} €</span></div>)}
+                </div>
+              </div>
+            ) : <>
 
             {/* Bilan global */}
             <div className="mt-3 grid grid-cols-3 gap-1.5">
@@ -4045,6 +4073,7 @@ export default function CarWashScene() {
                 </p>
               </>
             )}
+            </>}
           </div>
         </div>
       )}
