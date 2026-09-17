@@ -12,3 +12,4 @@
 - [x] Ajouter le menu Clients et ses réglages de comportement
 
 - [x] Relier la fréquentation du car wash au développement du quartier
+- [x] Adapter les pièces, l’état des rouleaux, le journal et les voyageurs simulés

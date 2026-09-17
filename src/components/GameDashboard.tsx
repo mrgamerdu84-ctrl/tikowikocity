@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { avatarSrc, type Player } from "@/lib/player";
+import { MIN_ROLLER_CONDITION, PART_GRADE_META, rollerQualityFactor, type RollerPartGrade } from "@/game/spareParts";
 
 type Machines = {
   belt: boolean;
@@ -20,6 +21,8 @@ type Props = {
   cinema: boolean;
   walking: boolean;
   rollerCondition: number;
+  rollerLevel: number;
+  rollerPartGrade: RollerPartGrade;
   hidden?: boolean;
   onBuild: () => void;
   onShop: () => void;
@@ -41,6 +44,8 @@ export function GameDashboard({
   cinema,
   walking,
   rollerCondition,
+  rollerLevel,
+  rollerPartGrade,
   hidden = false,
   onBuild,
   onShop,
@@ -51,6 +56,9 @@ export function GameDashboard({
   onWalk,
 }: Props) {
   const [open, setOpen] = useState(false);
+  const washQuality = Math.round(rollerQualityFactor(rollerCondition) * 100);
+  const rollerStatus = rollerCondition <= MIN_ROLLER_CONDITION ? "Seuil critique" : rollerCondition < 65 ? "Entretien conseillé" : "Bon état";
+  const rollerAccent = rollerCondition <= MIN_ROLLER_CONDITION ? "accent-red-500" : rollerCondition < 65 ? "accent-amber-500" : "accent-emerald-500";
 
   const fullscreen = () => {
     if (!document.fullscreenElement) {
@@ -116,8 +124,13 @@ export function GameDashboard({
               </div>
 
               <div className="mt-3 rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-200">
-                <div className="mb-2 flex items-center"><p className="text-sm font-black">⚙️ Car wash</p><span className="ml-auto text-[11px] font-bold text-slate-500">Rouleaux {rollerCondition} %</span></div>
-                <progress className="mb-2 h-1.5 w-full accent-emerald-500" value={rollerCondition} max={100} aria-label="État des rouleaux" />
+                <div className="flex items-center"><p className="text-sm font-black">⚙️ État des rouleaux</p><span className="ml-auto text-[11px] font-bold text-slate-500">Niveau {rollerLevel}</span></div>
+                <div className="mt-2 flex items-center text-xs font-extrabold"><span>{rollerStatus}</span><span className="ml-auto tabular-nums">{rollerCondition} %</span></div>
+                <progress className={`mt-1 h-2 w-full ${rollerAccent}`} value={rollerCondition} max={100} aria-label="État des rouleaux" />
+                <div className="mb-3 mt-2 grid grid-cols-2 gap-2 text-[11px] font-semibold text-slate-600">
+                  <span>{PART_GRADE_META[rollerPartGrade].label}</span><span className="text-right">Usure {PART_GRADE_META[rollerPartGrade].wearPerWash} pts/lavage</span>
+                  <span>Seuil d’usure {MIN_ROLLER_CONDITION} %</span><span className="text-right">Qualité lavage {washQuality} %</span>
+                </div>
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                   {([
                     ["belt", "🛤️ Tapis"],

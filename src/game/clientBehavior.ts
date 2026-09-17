@@ -28,6 +28,22 @@ export type NeighborhoodDemand = {
   parkingPercent: number;
 };
 
+export type TravelerDemand = {
+  travelersPerHour: number;
+  cleanCarSeekers: number;
+  bonusPercent: number;
+  factor: number;
+};
+
+/** Flux simulé : la voirie crée le passage et les parkings convertissent des voyageurs. */
+export function travelerDemand(stats: NeighborhoodStats): TravelerDemand {
+  const travelersPerHour = Math.min(180, Math.max(0, stats.roads) * 3 + Math.max(0, stats.parking) * 12);
+  const seekerRate = Math.min(0.28, 0.08 + Math.max(0, stats.parking) * 0.025);
+  const cleanCarSeekers = Math.round(travelersPerHour * seekerRate);
+  const bonusPercent = Math.min(35, Math.round(cleanCarSeekers * 1.5));
+  return { travelersPerHour: Math.round(travelersPerHour), cleanCarSeekers, bonusPercent, factor: 1 + bonusPercent / 100 };
+}
+
 /** Bonus d'affluence apporté par le quartier, plafonné pour préserver le trafic. */
 export function neighborhoodDemand(stats: NeighborhoodStats): NeighborhoodDemand {
   const housesPercent = Math.min(30, Math.max(0, stats.houses) * 4);
@@ -62,8 +78,9 @@ export function sanitizeClientBehavior(raw: unknown): ClientBehavior {
 export function effectiveArrivalInterval(upgrades: UpgradeLevels, neighborhood: NeighborhoodStats, behavior: ClientBehavior): [number, number] {
   const [lo, hi] = washInterval(upgrades.speed, upgrades.parking);
   const district = neighborhoodDemand(neighborhood).factor;
+  const travelers = travelerDemand(neighborhood).factor;
   const frequency = behavior.frequency / 100;
-  return [lo / district / frequency, (hi + 3) / district / frequency];
+  return [lo / district / travelers / frequency, (hi + 3) / district / travelers / frequency];
 }
 
 export function effectiveBeltFactor(upgrades: UpgradeLevels, behavior: ClientBehavior) {

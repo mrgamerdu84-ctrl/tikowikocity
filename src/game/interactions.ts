@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { decorDef, type DecorKind } from "./decor";
 import { TILE, parseKey } from "./grid";
 import type { CityPlan } from "./cityPlan";
-import { rollerQualityLoss, STREET_VENDORS } from "./spareParts";
+import { PART_GRADE_META, rollerPartPrice, rollerQualityLoss, STREET_VENDORS, type RollerPartGrade } from "./spareParts";
 
 export type InteractionKind = "carWash" | "house" | "decor" | "streetLight" | "vendor";
 
@@ -19,6 +19,7 @@ export type NearbyInteraction = {
   decorKind?: DecorKind;
   vendorId?: string;
   price?: number;
+  partGrade?: RollerPartGrade;
 };
 
 export type InteractionContext = {
@@ -26,6 +27,7 @@ export type InteractionContext = {
   money: number;
   machinesRunning: boolean;
   rollerCondition: number;
+  rollerLevel: number;
 };
 
 const WASH_POSITION = new THREE.Vector2(2, -42);
@@ -45,17 +47,20 @@ export function findNearbyInteraction(
     const distance = distanceTo(position, vendor.x, vendor.z);
     if (distance > INTERACTION_RADIUS) return;
     const loss = rollerQualityLoss(context.rollerCondition);
+    const price = rollerPartPrice(vendor.partGrade, context.rollerLevel);
+    const grade = PART_GRADE_META[vendor.partGrade];
     candidates.push({
       id: `vendor-${vendor.id}`,
       kind: "vendor",
       vendorId: vendor.id,
-      price: vendor.price,
+      price,
+      partGrade: vendor.partGrade,
       icon: "🔧",
       title: vendor.name,
       prompt: "Parler au vendeur de pièces",
       dialogue: context.rollerCondition >= 100
-        ? `Tes rouleaux sont neufs : état 100 %, aucune perte de qualité. Garde tes ${vendor.price} € pour plus tard.`
-        : `Kit de roulements et lanières : ${vendor.price} €. Tes rouleaux sont à ${context.rollerCondition} % et réduisent actuellement la qualité de ${loss} %. La réparation les remet à 100 % et supprime cette perte.`,
+        ? `Tes rouleaux niveau ${context.rollerLevel} sont neufs. ${grade.label} : ${price} €, usure de ${grade.wearPerWash} points par lavage.`
+        : `${grade.label} pour rouleaux niveau ${context.rollerLevel} : ${price} €. Réparation à 100 %, puis ${grade.wearPerWash} points d’usure par lavage. La qualité actuelle gagnera ${loss} %.`,
       distance,
     });
   });

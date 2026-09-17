@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/alert-dialog";
 
 
-const SAVE_VERSION = 5;
+const SAVE_VERSION = 6;
 
 
 import * as THREE from "three";
@@ -93,10 +93,15 @@ import { findNearbyInteraction, type NearbyInteraction } from "@/game/interactio
 import { nextMilestone, sanitizeCityProgress, type CityProgress } from "@/game/progression";
 import { installAutoCityGrowth } from "@/game/autoCityGrowth";
 import {
-  ROLLER_WEAR_PER_WASH,
+  DEFAULT_ROLLER_PART_GRADE,
+  PART_GRADE_META,
   STREET_VENDORS,
+  rollerWearPerWash,
   rollerQualityFactor,
+  rollerQualityLoss,
+  sanitizeRollerPartGrade,
   sanitizeRollerCondition,
+  type RollerPartGrade,
 } from "@/game/spareParts";
 import {
   DEFAULT_CLIENT_BEHAVIOR,
@@ -194,6 +199,8 @@ export default function CarWashScene() {
   const machinesRef = useRef(machines);
   const [rollerCondition, setRollerCondition] = useState(100);
   const rollerConditionRef = useRef(100);
+  const [rollerPartGrade, setRollerPartGrade] = useState<RollerPartGrade>(DEFAULT_ROLLER_PART_GRADE);
+  const rollerPartGradeRef = useRef<RollerPartGrade>(DEFAULT_ROLLER_PART_GRADE);
 
   /* ----- Économie : chaque lavage terminé rapporte de l'argent.
      Les routes restent gratuites (aucun coût de construction). ----- */
@@ -217,7 +224,7 @@ export default function CarWashScene() {
   };
   const registerWashRef = useRef<(amount: number, premium: boolean) => void>(() => {});
   registerWashRef.current = (amount: number, premium: boolean) => {
-    const nextCondition = sanitizeRollerCondition(rollerConditionRef.current - ROLLER_WEAR_PER_WASH);
+    const nextCondition = sanitizeRollerCondition(rollerConditionRef.current - rollerWearPerWash(rollerPartGradeRef.current));
     rollerConditionRef.current = nextCondition;
     setRollerCondition(nextCondition);
     setEconomy((prev) => {
@@ -550,18 +557,22 @@ export default function CarWashScene() {
       toast.success("👋 Les habitants te saluent en retour !");
     } else if (target.kind === "vendor") {
       const price = target.price ?? 0;
-      if (rollerConditionRef.current >= 100) {
-        toast.info("✅ Les rouleaux sont déjà neufs");
+      const grade = sanitizeRollerPartGrade(target.partGrade);
+      if (rollerConditionRef.current >= 100 && rollerPartGradeRef.current === grade) {
+        toast.info(`✅ Les rouleaux utilisent déjà ces ${PART_GRADE_META[grade].label.toLocaleLowerCase("fr-FR")}`);
       } else if (price <= 0 || economyRef.current.money < price) {
         toast.error(`Il manque ${Math.max(0, price - economyRef.current.money).toLocaleString("fr-FR")} € pour acheter les pièces`);
       } else {
+        const qualityGain = rollerQualityLoss(rollerConditionRef.current);
         const next = { ...economyRef.current, money: economyRef.current.money - price };
         economyRef.current = next;
         setEconomy(next);
         rollerConditionRef.current = 100;
         setRollerCondition(100);
-        logRef.current(makeEvent("upgrade", `Réparation des rouleaux · ${target.title}`, -price, next.money));
-        toast.success("🔧 Rouleaux réparés à 100 %");
+        rollerPartGradeRef.current = grade;
+        setRollerPartGrade(grade);
+        logRef.current(makeEvent("parts", `${PART_GRADE_META[grade].label} · ${target.title} · rouleaux niv. ${upgradesRef.current.speed} · qualité +${qualityGain} %`, -price, next.money));
+        toast.success(`🔧 Rouleaux réparés · ${PART_GRADE_META[grade].label.toLocaleLowerCase("fr-FR")}`);
       }
     }
     playerControllerRef.current?.react();
@@ -649,6 +660,7 @@ export default function CarWashScene() {
     upgrades: upgradesRef.current,
     clientBehavior: clientBehaviorRef.current,
     rollerCondition: rollerConditionRef.current,
+    rollerPartGrade: rollerPartGradeRef.current,
     progress: progressRef.current,
     playerPosition: playerControllerRef.current?.position(),
   });
@@ -666,6 +678,7 @@ export default function CarWashScene() {
     upgrades?: unknown;
     clientBehavior?: unknown;
     rollerCondition?: unknown;
+    rollerPartGrade?: unknown;
     progress?: unknown;
     playerPosition?: unknown;
   };
@@ -732,6 +745,9 @@ export default function CarWashScene() {
     const restoredCondition = sanitizeRollerCondition(state.rollerCondition);
     rollerConditionRef.current = restoredCondition;
     setRollerCondition(restoredCondition);
+    const restoredPartGrade = sanitizeRollerPartGrade(state.rollerPartGrade);
+    rollerPartGradeRef.current = restoredPartGrade;
+    setRollerPartGrade(restoredPartGrade);
     if (state.progress) {
       const next = sanitizeCityProgress(state.progress);
       progressRef.current = next;
@@ -3248,6 +3264,7 @@ export default function CarWashScene() {
               money: economyRef.current.money,
               machinesRunning: Object.values(machinesRef.current).every(Boolean),
               rollerCondition: rollerConditionRef.current,
+              rollerLevel: upgradesRef.current.speed,
             })
           : null;
         if (next?.id !== nearbyInteractionRef.current?.id || next?.dialogue !== nearbyInteractionRef.current?.dialogue) {
@@ -3564,6 +3581,8 @@ export default function CarWashScene() {
         cinema={cinema}
         walking={walking}
         rollerCondition={rollerCondition}
+        rollerLevel={upgrades.speed}
+        rollerPartGrade={rollerPartGrade}
         onBuild={toggleBuild}
         onShop={() => setShopOpen(true)}
         onHistory={() => setHistoryOpen(true)}
@@ -3590,7 +3609,7 @@ export default function CarWashScene() {
           nearby={nearbyInteraction}
           dialogue={activeDialogue}
           machinesRunning={Object.values(machines).every(Boolean)}
-          actionDisabled={activeDialogue?.kind === "vendor" && (rollerCondition >= 100 || economy.money < (activeDialogue.price ?? 0))}
+          actionDisabled={activeDialogue?.kind === "vendor" && ((rollerCondition >= 100 && rollerPartGrade === activeDialogue.partGrade) || economy.money < (activeDialogue.price ?? 0))}
           onInteract={interactNearby}
           onAction={performDialogueAction}
           onClose={closeDialogue}
