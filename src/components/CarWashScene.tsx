@@ -611,6 +611,11 @@ export default function CarWashScene() {
     walkingRef.current = next;
     setWalking(next);
     playerControllerRef.current?.setEnabled(next);
+    if (next && freeCameraRef.current) {
+      freeCameraRef.current = false;
+      setFreeCamera(false);
+      cameraIoRef.current.setFree(false);
+    }
     if (!next) {
       nearbyInteractionRef.current = null;
       setNearbyInteraction(null);
@@ -619,6 +624,20 @@ export default function CarWashScene() {
       playerControllerRef.current?.setPaused(false);
     }
     buildCameraApplyRef.current(false);
+  };
+
+  /** Exploration libre : on quitte marche/construction pour survoler la ville. */
+  const toggleFreeCamera = () => {
+    const next = !freeCameraRef.current;
+    if (next) {
+      if (walkingRef.current) toggleWalking();
+      if (buildRef.current) toggleBuild();
+      if (cinemaStateRef.current) cinemaRef.current();
+    }
+    freeCameraRef.current = next;
+    setFreeCamera(next);
+    cameraIoRef.current.setFree(next);
+    if (next) toast.info("🔭 Exploration libre activée");
   };
 
   const closeDialogue = () => {
