@@ -108,6 +108,7 @@ import {
   DEFAULT_CLIENT_BEHAVIOR,
   effectiveArrivalInterval,
   effectiveBeltFactor,
+  effectiveWashDuration,
   sanitizeClientBehavior,
   type ClientBehavior,
   type NeighborhoodStats,
@@ -3712,6 +3713,8 @@ export default function CarWashScene() {
         rollerCondition={rollerCondition}
         rollerLevel={upgrades.speed}
         rollerPartGrade={rollerPartGrade}
+        savedAt={savedAt ? new Date(savedAt).toLocaleString("fr-FR") : null}
+        activeEvent={activeUrbanEvent ? { icon: URBAN_EVENT_META[activeUrbanEvent.kind].icon, title: activeUrbanEvent.title, remaining: `${Math.max(0, Math.ceil((activeUrbanEvent.endsAt - Date.now()) / 60_000))} min` } : null}
         onBuild={toggleBuild}
         onShop={() => setShopOpen(true)}
         onHistory={() => setHistoryOpen(true)}
@@ -3720,6 +3723,9 @@ export default function CarWashScene() {
           setHistoryOpen(false);
           setClientsOpen(true);
         }}
+        onCarWash={() => setStatsOpen(true)}
+        onSave={handleManualSave}
+        onLoad={handleManualLoad}
         onToggleMachine={toggleMachine}
         onCinema={() => cinemaRef.current()}
         onWalk={toggleWalking}
@@ -3732,6 +3738,16 @@ export default function CarWashScene() {
         rollerQuality={rollerQualityFactor(rollerCondition)}
         onChange={updateClientBehavior}
         onClose={() => setClientsOpen(false)}
+      />
+      <CarWashStatsMenu
+        open={statsOpen}
+        metrics={washMetrics}
+        upgrades={upgrades}
+        behavior={clientBehavior}
+        rollerCondition={rollerCondition}
+        partGrade={rollerPartGrade}
+        event={activeUrbanEvent}
+        onClose={() => setStatsOpen(false)}
       />
       {walking && (
         <InteractionHud
