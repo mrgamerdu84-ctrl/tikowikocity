@@ -7,7 +7,7 @@ import { RentalManager } from "@/components/RentalManager";
 import { GameDashboard } from "@/components/GameDashboard";
 
 
-const SAVE_VERSION = 2;
+const SAVE_VERSION = 3;
 
 
 import * as THREE from "three";
@@ -19,6 +19,10 @@ import modelsAsset from "@/assets/car-wash-models.json.asset.json";
 
 import tunnelAsset from "@/assets/tunnel.glb.asset.json";
 import kenneyPackAsset from "@/assets/kenney-pack.glb.asset.json";
+import citizenMaleA from "@/assets/character-male-a.glb.asset.json";
+import citizenMaleC from "@/assets/character-male-c.glb.asset.json";
+import citizenFemaleA from "@/assets/character-female-a.glb.asset.json";
+import citizenFemaleD from "@/assets/character-female-d.glb.asset.json";
 import {
   CityPlan,
   type SerializedPlan,
@@ -71,6 +75,9 @@ import {
 } from "@/game/history";
 import { HOUSE_LEVELS, MAX_HOUSE_LEVEL, houseDef, totalCapacity } from "@/game/houses";
 import { readLocalCity, saveLocalCity } from "@/game/save";
+import { createPedestrianSystem, type PedestrianSystem } from "@/game/pedestrians";
+import { createPlayerController, type PlayerController } from "@/game/playerController";
+import { nextMilestone, sanitizeCityProgress, type CityProgress } from "@/game/progression";
 
 
 /* Catégories de la barre de construction : un seul onglet visible à la fois
@@ -244,6 +251,11 @@ export default function CarWashScene() {
   const [residents, setResidents] = useState(0);
   const residentsRef = useRef(0);
   const cityRef = useRef(city);
+  const [planStats, setPlanStats] = useState({ roads: 0, decor: 0 });
+  const [progress, setProgress] = useState<CityProgress>({ unlocked: [] });
+  const progressRef = useRef(progress);
+  const playerControllerRef = useRef<PlayerController | null>(null);
+  const pedestrianRef = useRef<PedestrianSystem | null>(null);
   const cityStatsRef = useRef<(levels: number[]) => void>(() => {});
   cityStatsRef.current = (levels: number[]) => {
     const next = { houses: levels.length, capacity: totalCapacity(levels) };
@@ -305,6 +317,8 @@ export default function CarWashScene() {
 
   /* ----- Mode construction (pose de routes / mobilier par le joueur) ----- */
   const [buildMode, setBuildMode] = useState(false);
+  const [walking, setWalking] = useState(false);
+  const walkingRef = useRef(false);
   const [buildCameraMode, setBuildCameraMode] = useState(false);
   const [tool, setTool] = useState<BuildTool>("straight");
   const [rot, setRot] = useState(0);
@@ -374,6 +388,11 @@ export default function CarWashScene() {
   const toggleBuild = () => {
     setBuildMode((prev) => {
       const next = !prev;
+      if (next && walkingRef.current) {
+        walkingRef.current = false;
+        setWalking(false);
+        playerControllerRef.current?.setEnabled(false);
+      }
       buildRef.current = next;
       if (!next) {
         buildCameraRef.current = false;
@@ -383,6 +402,32 @@ export default function CarWashScene() {
       return next;
     });
   };
+  const toggleWalking = () => {
+    if (buildRef.current) return;
+    const next = !walkingRef.current;
+    walkingRef.current = next;
+    setWalking(next);
+    playerControllerRef.current?.setEnabled(next);
+    buildCameraApplyRef.current(false);
+  };
+
+  const progression = nextMilestone(progress, {
+    money: economy.money,
+    washes: economy.washes,
+    roads: planStats.roads,
+    houses: city.houses,
+    residents,
+    decor: planStats.decor,
+    upgrades,
+  });
+  useEffect(() => {
+    if (!progression?.complete) return;
+    const next = { unlocked: [...progressRef.current.unlocked, progression.id] };
+    progressRef.current = next;
+    setProgress(next);
+    logRef.current(makeEvent("info", `${progression.title} débloqué`));
+    toast.success(`${progression.icon} ${progression.title}`, { description: "La ville franchit une nouvelle étape." });
+  }, [progression?.complete, progression?.id]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key.toLowerCase() !== "r" || !buildRef.current) return;
@@ -428,6 +473,8 @@ export default function CarWashScene() {
     economy: economyRef.current,
     history: historyRef.current,
     upgrades: upgradesRef.current,
+    progress: progressRef.current,
+    playerPosition: playerControllerRef.current?.position(),
   });
 
   type SavedState = {
@@ -441,6 +488,8 @@ export default function CarWashScene() {
     economy?: { money?: unknown; washes?: unknown };
     history?: unknown;
     upgrades?: unknown;
+    progress?: unknown;
+    playerPosition?: unknown;
   };
 
   /** Réapplique une sauvegarde (locale ou Drive) à la partie en cours. */
@@ -493,6 +542,12 @@ export default function CarWashScene() {
       upgradesRef.current = up;
       setUpgrades(up);
     }
+    if (state.progress) {
+      const next = sanitizeCityProgress(state.progress);
+      progressRef.current = next;
+      setProgress(next);
+    }
+    if (state.playerPosition) playerControllerRef.current?.setPosition(state.playerPosition);
     if (
       withCinema &&
       typeof state.cinema === "boolean" &&
@@ -710,6 +765,8 @@ export default function CarWashScene() {
     /* Ces listes sont reconstruites avec le plan et servent au cycle nocturne. */
     const streetLampLights: THREE.PointLight[] = [];
     const houseLights: THREE.PointLight[] = [];
+    const washLights: THREE.PointLight[] = [];
+    const citizenTemplates: THREE.Object3D[] = [];
 
     const ground = new THREE.Mesh(
       new THREE.PlaneGeometry(900, 900),
@@ -1434,6 +1491,7 @@ export default function CarWashScene() {
         housesGroup.add(m);
       });
       cityStatsRef.current(plan.houseLevels());
+      pedestrianRef.current?.refresh();
     };
 
     /* ---------- Décor du joueur : parcs et parkings ---------- */
@@ -1600,6 +1658,8 @@ export default function CarWashScene() {
         obj.rotation.y = (d.rot * Math.PI) / 2;
         decorGroup.add(obj);
       });
+      setPlanStats((prev) => ({ ...prev, decor: plan.decor.size }));
+      pedestrianRef.current?.refresh();
     };
 
     /* ---------- Personnalisation du car wash ---------- */
@@ -1626,6 +1686,7 @@ export default function CarWashScene() {
 
     const rebuildWashDecor = (style: WashStyle) => {
       [...washDecor.children].forEach((c) => washDecor.remove(c));
+      washLights.length = 0;
       const hex = WASH_COLORS[style.color]?.hex ?? WASH_COLORS[0]!.hex;
       const themeMat = new THREE.MeshStandardMaterial({ color: hex, roughness: 0.65 });
 
@@ -1652,6 +1713,10 @@ export default function CarWashScene() {
         );
         panel.position.set(0, 6.4, -3.4);
         washDecor.add(panel);
+        const signLight = new THREE.PointLight(hex, 0, 20, 1.7);
+        signLight.position.set(0, 6, -2.4);
+        washDecor.add(signLight);
+        washLights.push(signLight);
         for (const sx of [-4, 4]) {
           const mast = new THREE.Mesh(
             new THREE.BoxGeometry(0.2, 1.6, 0.2),
@@ -1715,6 +1780,23 @@ export default function CarWashScene() {
           flag.position.set(x + 0.55, 2.9, 6.2);
           washDecor.add(pole, flag);
         }
+      }
+
+      for (const [x, z] of [[-8, -5], [8, -5], [-8, 5], [8, 5]] as const) {
+        const pole = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.07, 0.1, 3.7, 8),
+          new THREE.MeshStandardMaterial({ color: 0x58636d, roughness: 0.55 }),
+        );
+        pole.position.set(x, 1.85, z);
+        const bulb = new THREE.Mesh(
+          new THREE.SphereGeometry(0.16, 10, 8),
+          new THREE.MeshStandardMaterial({ color: 0xffe8ae, emissive: 0xffc85c, emissiveIntensity: 0.2 }),
+        );
+        bulb.position.set(x, 3.75, z);
+        const light = new THREE.PointLight(0xffd88a, 0, 18, 1.7);
+        light.position.set(x, 3.65, z);
+        washDecor.add(pole, bulb, light);
+        washLights.push(light);
       }
 
       setShadow(washDecor);
@@ -1782,6 +1864,8 @@ export default function CarWashScene() {
           streetLampLights.push(light);
         }
       });
+      setPlanStats((prev) => ({ ...prev, roads: plan.cells.size }));
+      pedestrianRef.current?.refresh();
     };
 
     let ti = 0;
@@ -2576,7 +2660,10 @@ export default function CarWashScene() {
       }
     };
     buildCameraApplyRef.current = (cameraMode: boolean) => {
-      if (!buildRef.current) return;
+      if (!buildRef.current) {
+        controls.enabled = !walkingRef.current;
+        return;
+      }
       controls.enabled = cameraMode;
       ghost.visible = false;
       downAt = null;
@@ -2640,6 +2727,9 @@ export default function CarWashScene() {
             if (m.userData?.['nightWindow']) m.emissiveIntensity = 0.08 + night * 1.5;
           });
         });
+      });
+      washLights.forEach((light) => {
+        light.intensity = night * 7.5;
       });
 
       const hourFloat = dayPhase * 24;
@@ -2945,7 +3035,9 @@ export default function CarWashScene() {
         camera.lookAt(2, 2, WASH_SITE_Z);
       }
 
-      controls.update();
+      playerControllerRef.current?.update(dt, camera);
+      pedestrianRef.current?.update(dt, t, residentsRef.current, netCars.map((car) => car.car));
+      if (!walkingRef.current) controls.update();
       renderer.render(scene, camera);
     };
 
@@ -2994,6 +3086,12 @@ export default function CarWashScene() {
         child.removeFromParent();
         kit[child.name] = child;
       });
+
+      const citizenAssets = [citizenMaleA, citizenMaleC, citizenFemaleA, citizenFemaleD];
+      const citizens = await Promise.all(citizenAssets.map((asset) => new Promise<THREE.Group>((resolve, reject) => {
+        loader.load(asset.url, (gltf) => resolve(gltf.scene), undefined, (err) => reject(err instanceof Error ? err : new Error(String(err))));
+      })));
+      citizenTemplates.push(...citizens);
     };
 
 
@@ -3044,6 +3142,11 @@ export default function CarWashScene() {
       .then(() => {
         if (disposed) return;
         buildScene();
+        const playerModel = citizenTemplates[0];
+        if (playerModel) {
+          playerControllerRef.current = createPlayerController(scene, playerModel);
+          pedestrianRef.current = createPedestrianSystem(scene, plan, citizenTemplates.slice(1));
+        }
         /* Restauration de la sauvegarde locale une fois la ville prête. */
         restoreLocalRef.current();
         localReadyRef.current = true;
@@ -3069,6 +3172,10 @@ export default function CarWashScene() {
       renderer.domElement.removeEventListener("pointerup", onPointerUp);
       renderer.domElement.removeEventListener("pointercancel", onPointerCancel);
       controls.dispose();
+      playerControllerRef.current?.dispose();
+      playerControllerRef.current = null;
+      pedestrianRef.current?.dispose();
+      pedestrianRef.current = null;
       renderer.dispose();
       renderer.domElement.remove();
     };
@@ -3095,12 +3202,45 @@ export default function CarWashScene() {
         capacity={city.capacity}
         machines={machines}
         cinema={cinema}
+        walking={walking}
         onBuild={toggleBuild}
         onShop={() => setShopOpen(true)}
         onHistory={() => setHistoryOpen(true)}
         onToggleMachine={toggleMachine}
         onCinema={() => cinemaRef.current()}
+        onWalk={toggleWalking}
       />
+
+      {!buildMode && progression && (
+        <div className="pointer-events-none fixed left-2 top-[68px] z-40 w-[min(310px,calc(100vw-1rem))] rounded-2xl bg-white/90 px-3 py-2 text-slate-900 shadow-lg ring-1 ring-slate-900/10 backdrop-blur sm:left-4 sm:top-[76px]">
+          <div className="flex items-center gap-2 text-[12px] font-black"><span>{progression.icon}</span><span className="truncate">{progression.title}</span><span className="ml-auto tabular-nums text-slate-500">{Math.round((progression.value / progression.target) * 100)}%</span></div>
+          <progress className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full accent-emerald-500" value={progression.value} max={progression.target} />
+          <p className="mt-1 text-[10px] font-semibold text-slate-600">{progression.description}</p>
+        </div>
+      )}
+
+      {walking && (
+        <div className="fixed inset-0 z-50 pointer-events-none">
+          <div className="absolute bottom-24 left-5 size-28 rounded-full bg-white/65 shadow-lg ring-1 ring-slate-900/15 backdrop-blur pointer-events-auto touch-none"
+            onPointerDown={(event) => {
+              event.currentTarget.setPointerCapture(event.pointerId);
+              const rect = event.currentTarget.getBoundingClientRect();
+              playerControllerRef.current?.setTouch((event.clientX - rect.left - rect.width / 2) / (rect.width / 2), (event.clientY - rect.top - rect.height / 2) / (rect.height / 2));
+            }}
+            onPointerMove={(event) => {
+              if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
+              const rect = event.currentTarget.getBoundingClientRect();
+              playerControllerRef.current?.setTouch((event.clientX - rect.left - rect.width / 2) / (rect.width / 2), (event.clientY - rect.top - rect.height / 2) / (rect.height / 2));
+            }}
+            onPointerUp={(event) => { event.currentTarget.releasePointerCapture(event.pointerId); playerControllerRef.current?.setTouch(0, 0); }}
+            onPointerCancel={() => playerControllerRef.current?.setTouch(0, 0)}
+            aria-label="Joystick de déplacement"
+          >
+            <div className="absolute inset-[34px] rounded-full bg-emerald-500 shadow-md" />
+          </div>
+          <div className="absolute bottom-24 right-4 rounded-2xl bg-slate-950/70 px-3 py-2 text-[11px] font-bold text-white backdrop-blur">WASD / flèches<br/>ou joystick</div>
+        </div>
+      )}
 
       {loading && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[linear-gradient(180deg,var(--sky-top),var(--sky-mid)_55%,var(--sky-bottom))] transition-opacity duration-500">
