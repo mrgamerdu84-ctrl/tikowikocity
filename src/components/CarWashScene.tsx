@@ -860,7 +860,10 @@ export default function CarWashScene() {
 
   const handleManualLoad = () => {
     const saved = readLocalCity();
-    if (!saved) return toast.info("Aucune sauvegarde locale disponible.");
+    if (!saved) {
+      toast.info("Aucune sauvegarde locale disponible.");
+      return;
+    }
     if (!window.confirm("Charger cette sauvegarde et remplacer la partie en cours ?")) return;
     applySavedStateRef.current(saved.state as SavedState);
     setSavedAt(saved.savedAt);

@@ -22,7 +22,7 @@ export const EVENT_COOLDOWN_MAX_MS = 5 * 60_000;
 
 export function makeUrbanEvent(kind: UrbanEventKind, now = Date.now()): UrbanEvent {
   const duration = kind === "building" ? 12_000 : EVENT_MIN_DURATION_MS + Math.random() * (EVENT_MAX_DURATION_MS - EVENT_MIN_DURATION_MS);
-  const copy = kind === "festival"
+  const copy: [string, string] = kind === "festival"
     ? ["Fête de quartier", "Les visiteurs affluent et repartent avec une voiture brillante."]
     : kind === "strike"
       ? ["Grève des transports", "La circulation ralentit et moins de clients rejoignent la station."]
