@@ -24,6 +24,7 @@ type Props = {
   onBuild: () => void;
   onShop: () => void;
   onHistory: () => void;
+  onClients: () => void;
   onToggleMachine: (key: keyof Machines) => void;
   onCinema: () => void;
   onWalk: () => void;
@@ -44,6 +45,7 @@ export function GameDashboard({
   onBuild,
   onShop,
   onHistory,
+  onClients,
   onToggleMachine,
   onCinema,
   onWalk,
@@ -108,6 +110,7 @@ export function GameDashboard({
                 <button type="button" onClick={() => { setOpen(false); onWalk(); }} className="rounded-2xl bg-emerald-500 p-4 text-left font-black text-white">🚶 {walking ? "Quitter la marche" : "Explorer à pied"}<br/><span className="text-xs font-semibold opacity-90">Parcourir les quartiers</span></button>
                 <button type="button" onClick={() => { setOpen(false); onBuild(); }} className="rounded-2xl bg-sky-500 p-4 text-left font-black text-white">🏗️ Construction<br/><span className="text-xs font-semibold opacity-90">Routes, maisons, parcs, éclairage</span></button>
                 <button type="button" onClick={() => { setOpen(false); onShop(); }} className="rounded-2xl bg-amber-400 p-4 text-left font-black text-slate-900">🛠️ Améliorations<br/><span className="text-xs font-semibold opacity-75">Station et clientèle</span></button>
+                <button type="button" onClick={() => { setOpen(false); onClients(); }} className="rounded-2xl bg-splash p-4 text-left font-black text-splash-foreground">👥 Clients<br/><span className="text-xs font-semibold opacity-90">Fréquence, paiement et durée</span></button>
                 <button type="button" onClick={openRentals} className="rounded-2xl bg-violet-500 p-4 text-left font-black text-white">🏘️ Locations<br/><span className="text-xs font-semibold opacity-90">Loyers, impôts et besoins</span></button>
                 <button type="button" onClick={() => { setOpen(false); onHistory(); }} className="rounded-2xl bg-emerald-500 p-4 text-left font-black text-white">🧾 Argent & historique<br/><span className="text-xs font-semibold opacity-90">Entrées et dépenses</span></button>
               </div>
