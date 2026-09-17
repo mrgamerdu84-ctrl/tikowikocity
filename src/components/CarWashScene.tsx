@@ -69,8 +69,6 @@ import {
   DEFAULT_UPGRADES,
   MAX_LEVEL,
   queueCapacity,
-  beltFactor,
-  washInterval,
   computeReward,
   upgradeCost,
   upgradePreview,
