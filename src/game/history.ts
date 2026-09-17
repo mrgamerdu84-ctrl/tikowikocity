@@ -1,7 +1,7 @@
 /* Journal de la partie : lavages, améliorations, constructions…
    Chaque entrée garde la date, un libellé, le montant (signé) et le solde. */
 
-export type EventKind = "wash" | "upgrade" | "parts" | "build" | "house" | "decor" | "info";
+export type EventKind = "wash" | "upgrade" | "parts" | "build" | "house" | "decor" | "urban" | "info";
 
 export type GameEvent = {
   id: string;
@@ -14,6 +14,7 @@ export type GameEvent = {
   amount?: number;
   /** Solde du joueur juste après l'événement (€). */
   balance?: number;
+  flow?: "income" | "expense" | "neutral";
 };
 
 /** Ancien format (lavages uniquement) conservé pour la compatibilité. */
@@ -29,6 +30,7 @@ export const EVENT_META: Record<EventKind, { icon: string; label: string }> = {
   build: { icon: "🚧", label: "Voirie" },
   house: { icon: "🏠", label: "Maisons" },
   decor: { icon: "🌳", label: "Aménagements" },
+  urban: { icon: "🎉", label: "Événements urbains" },
   info: { icon: "📌", label: "Divers" },
 };
 
@@ -57,6 +59,7 @@ export function makeEvent(
     label,
     ...(amount === undefined ? {} : { amount }),
     ...(balance === undefined ? {} : { balance }),
+    flow: amount === undefined || amount === 0 ? "neutral" : amount > 0 ? "income" : "expense",
   };
 }
 
@@ -89,6 +92,9 @@ export function sanitizeHistory(raw: unknown): GameEvent[] {
       label,
       ...(amount === undefined ? {} : { amount }),
       ...(balance === undefined ? {} : { balance }),
+      flow: e['flow'] === "income" || e['flow'] === "expense" || e['flow'] === "neutral"
+        ? e['flow']
+        : amount === undefined || amount === 0 ? "neutral" : amount > 0 ? "income" : "expense",
     });
     if (out.length >= MAX_HISTORY) break;
   }
