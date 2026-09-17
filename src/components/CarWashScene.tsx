@@ -3334,7 +3334,12 @@ export default function CarWashScene() {
       washCooldown -= dt;
       if (washCooldown <= 0) {
         neighborhoodRef.current.residents = residentsRef.current;
-        const [lo, hi] = effectiveArrivalInterval(up, neighborhoodRef.current, clientBehaviorRef.current);
+        const [lo, hi] = effectiveArrivalInterval(
+          up,
+          neighborhoodRef.current,
+          clientBehaviorRef.current,
+          districtDemandFactor(districtLevelRef.current),
+        );
         washCooldown = (lo + Math.random() * (hi - lo)) / eventTrafficFactor(activeUrbanEventRef.current);
         if (ctl.traffic && washCars.length < queueCapacity(up)) sendCityCarToWash();
       }
