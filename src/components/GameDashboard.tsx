@@ -1,5 +1,9 @@
 import { useState } from "react";
 
+import { AttendanceGauge } from "@/components/AttendanceGauge";
+import { DistrictLevelPanel } from "@/components/DistrictLevelPanel";
+import type { NeighborhoodDemand, TravelerDemand } from "@/game/clientBehavior";
+import { districtDemandBonus, type DistrictSnapshot } from "@/game/districtLevels";
 import { avatarSrc, type Player } from "@/lib/player";
 import { MIN_ROLLER_CONDITION, PART_GRADE_META, rollerQualityFactor, type RollerPartGrade } from "@/game/spareParts";
 
