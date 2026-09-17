@@ -408,6 +408,7 @@ export default function CarWashScene() {
     walkingRef.current = next;
     setWalking(next);
     playerControllerRef.current?.setEnabled(next);
+    buildCameraApplyRef.current(false);
   };
 
   const progression = nextMilestone(progress, {
@@ -2659,7 +2660,10 @@ export default function CarWashScene() {
       }
     };
     buildCameraApplyRef.current = (cameraMode: boolean) => {
-      if (!buildRef.current) return;
+      if (!buildRef.current) {
+        controls.enabled = !walkingRef.current;
+        return;
+      }
       controls.enabled = cameraMode;
       ghost.visible = false;
       downAt = null;
@@ -3198,12 +3202,45 @@ export default function CarWashScene() {
         capacity={city.capacity}
         machines={machines}
         cinema={cinema}
+        walking={walking}
         onBuild={toggleBuild}
         onShop={() => setShopOpen(true)}
         onHistory={() => setHistoryOpen(true)}
         onToggleMachine={toggleMachine}
         onCinema={() => cinemaRef.current()}
+        onWalk={toggleWalking}
       />
+
+      {!buildMode && progression && (
+        <div className="pointer-events-none fixed left-2 top-[68px] z-40 w-[min(310px,calc(100vw-1rem))] rounded-2xl bg-white/90 px-3 py-2 text-slate-900 shadow-lg ring-1 ring-slate-900/10 backdrop-blur sm:left-4 sm:top-[76px]">
+          <div className="flex items-center gap-2 text-[12px] font-black"><span>{progression.icon}</span><span className="truncate">{progression.title}</span><span className="ml-auto tabular-nums text-slate-500">{Math.round((progression.value / progression.target) * 100)}%</span></div>
+          <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-200"><div className="h-full rounded-full bg-emerald-500 transition-[width] duration-500" style={{ width: `${Math.min(100, (progression.value / progression.target) * 100)}%` }} /></div>
+          <p className="mt-1 text-[10px] font-semibold text-slate-600">{progression.description}</p>
+        </div>
+      )}
+
+      {walking && (
+        <div className="fixed inset-0 z-50 pointer-events-none">
+          <div className="absolute bottom-24 left-5 size-28 rounded-full bg-white/65 shadow-lg ring-1 ring-slate-900/15 backdrop-blur pointer-events-auto touch-none"
+            onPointerDown={(event) => {
+              event.currentTarget.setPointerCapture(event.pointerId);
+              const rect = event.currentTarget.getBoundingClientRect();
+              playerControllerRef.current?.setTouch((event.clientX - rect.left - rect.width / 2) / (rect.width / 2), (event.clientY - rect.top - rect.height / 2) / (rect.height / 2));
+            }}
+            onPointerMove={(event) => {
+              if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
+              const rect = event.currentTarget.getBoundingClientRect();
+              playerControllerRef.current?.setTouch((event.clientX - rect.left - rect.width / 2) / (rect.width / 2), (event.clientY - rect.top - rect.height / 2) / (rect.height / 2));
+            }}
+            onPointerUp={(event) => { event.currentTarget.releasePointerCapture(event.pointerId); playerControllerRef.current?.setTouch(0, 0); }}
+            onPointerCancel={() => playerControllerRef.current?.setTouch(0, 0)}
+            aria-label="Joystick de déplacement"
+          >
+            <div className="absolute inset-[34px] rounded-full bg-emerald-500 shadow-md" />
+          </div>
+          <div className="absolute bottom-24 right-4 rounded-2xl bg-slate-950/70 px-3 py-2 text-[11px] font-bold text-white backdrop-blur">WASD / flèches<br/>ou joystick</div>
+        </div>
+      )}
 
       {loading && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[linear-gradient(180deg,var(--sky-top),var(--sky-mid)_55%,var(--sky-bottom))] transition-opacity duration-500">
