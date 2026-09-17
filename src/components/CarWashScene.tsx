@@ -4692,43 +4692,58 @@ export default function CarWashScene() {
             {/* Variantes de l'outil actif */}
             {tool === "house" && (
               <div className="flex items-center gap-1.5 overflow-x-auto border-t border-ink/10 pt-1.5">
-                {HOUSE_LEVELS.map((h) => (
-                  <button
-                    key={h.level}
-                    type="button"
-                    onClick={() => chooseHouseLevel(h.level)}
-                    aria-pressed={houseLevel === h.level}
-                    className={`shrink-0 rounded-xl px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${
-                      houseLevel === h.level
-                        ? "bg-sunny text-sunny-foreground"
-                        : "bg-ink/10 text-ink"
-                    }`}
-                  >
-                    {h.icon} Niv.{h.level} · {h.cost} € · {h.capacity} hab.
-                  </button>
-                ))}
+                {HOUSE_LEVELS.map((h) => {
+                  const unlocked = h.level <= districtUnlocks(districtLevel).houseLevel;
+                  return (
+                    <button
+                      key={h.level}
+                      type="button"
+                      onClick={() =>
+                        unlocked
+                          ? chooseHouseLevel(h.level)
+                          : toast("🔒 Ce type de maison s’ouvre à un palier supérieur du quartier.")
+                      }
+                      aria-pressed={houseLevel === h.level}
+                      className={`shrink-0 rounded-xl px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${
+                        houseLevel === h.level
+                          ? "bg-sunny text-sunny-foreground"
+                          : "bg-ink/10 text-ink"
+                      } ${unlocked ? "" : "opacity-45"}`}
+                    >
+                      {unlocked ? h.icon : "🔒"} Niv.{h.level} · {h.cost} € · {h.capacity} hab.
+                    </button>
+                  );
+                })}
               </div>
             )}
 
             {(tool === "park" || tool === "parking") && (
               <div className="flex items-center gap-1.5 overflow-x-auto border-t border-ink/10 pt-1.5">
-                {decorOf(tool as DecorCategory).map((d) => (
-                  <button
-                    key={d.kind}
-                    type="button"
-                    onClick={() => chooseDecor(d.kind)}
-                    aria-pressed={decorKind[tool as DecorCategory] === d.kind}
-                    className={`shrink-0 rounded-xl px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${
-                      decorKind[tool as DecorCategory] === d.kind
-                        ? "bg-sunny text-sunny-foreground"
-                        : "bg-ink/10 text-ink"
-                    }`}
-                  >
-                    {d.icon} {d.label} · {d.cost} €
-                  </button>
-                ))}
+                {decorOf(tool as DecorCategory).map((d) => {
+                  const unlocked = districtUnlocks(districtLevel).decor.has(d.kind);
+                  return (
+                    <button
+                      key={d.kind}
+                      type="button"
+                      onClick={() =>
+                        unlocked
+                          ? chooseDecor(d.kind)
+                          : toast("🔒 Cet aménagement s’ouvre à un palier supérieur du quartier.")
+                      }
+                      aria-pressed={decorKind[tool as DecorCategory] === d.kind}
+                      className={`shrink-0 rounded-xl px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${
+                        decorKind[tool as DecorCategory] === d.kind
+                          ? "bg-sunny text-sunny-foreground"
+                          : "bg-ink/10 text-ink"
+                      } ${unlocked ? "" : "opacity-45"}`}
+                    >
+                      {unlocked ? d.icon : "🔒"} {d.label} · {d.cost} €
+                    </button>
+                  );
+                })}
               </div>
             )}
+
 
             {tool === "wash" && (
               <div className="flex items-center gap-1.5 overflow-x-auto border-t border-ink/10 pt-1.5">
