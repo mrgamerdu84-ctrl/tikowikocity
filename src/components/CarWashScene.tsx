@@ -651,8 +651,8 @@ export default function CarWashScene() {
   /** Ouvre le palier suivant du quartier : coût payé, bonus permanent. */
   const upgradeDistrict = () => {
     const progressInfo = nextDistrictLevel(districtLevelRef.current, districtSnapshot, economyRef.current.money);
-    const target = progressInfo.next;
-    if (!target) return;
+    const target = progressInfo?.next;
+    if (!progressInfo || !target) return;
     if (!progressInfo.ready) {
       toast.error("Objectifs du palier non atteints.");
       return;
@@ -4592,7 +4592,7 @@ export default function CarWashScene() {
             {/* Outils de la catégorie active */}
             <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
               {(BUILD_CATEGORIES.find((c) => c.id === buildCat)?.tools ?? []).map((t) => {
-                const unlocked = districtUnlocks(districtLevel).tools.includes(t);
+                const unlocked = districtUnlocks(districtLevel).tools.has(t);
                 return (
                   <button
                     key={t}
