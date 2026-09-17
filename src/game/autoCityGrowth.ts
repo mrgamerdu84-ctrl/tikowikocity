@@ -86,6 +86,9 @@ export function installAutoCityGrowth(options: AutoCityRuntimeOptions) {
   constructionGroup.name = "TikowikoCityAutoConstruction";
   scene.add(constructionGroup);
   let busy = false;
+  let stopped = false;
+  let loopTimer = 0;
+  let animationFrame = 0;
 
   const cellFor = (stage: AutoCityStage) => [mainCx + stage.dx, stage.cz] as const;
 
@@ -209,7 +212,7 @@ export function installAutoCityGrowth(options: AutoCityRuntimeOptions) {
     const duration = stage.kind === "house" ? 4200 : stage.kind === "road" ? 2400 : 3000;
 
     const tick = (now: number) => {
-      if (isDisposed()) {
+      if (stopped || isDisposed()) {
         constructionGroup.remove(site);
         return;
       }
@@ -230,7 +233,7 @@ export function installAutoCityGrowth(options: AutoCityRuntimeOptions) {
 
       site.position.y = Math.sin(now * 0.008) * 0.015;
       if (progress < 1) {
-        requestAnimationFrame(tick);
+        animationFrame = requestAnimationFrame(tick);
         return;
       }
 
@@ -239,7 +242,7 @@ export function installAutoCityGrowth(options: AutoCityRuntimeOptions) {
       busy = false;
     };
 
-    requestAnimationFrame(tick);
+    animationFrame = requestAnimationFrame(tick);
     return true;
   };
 
@@ -253,9 +256,16 @@ export function installAutoCityGrowth(options: AutoCityRuntimeOptions) {
   };
 
   const loop = () => {
-    if (isDisposed()) return;
+    if (stopped || isDisposed()) return;
     advance();
-    window.setTimeout(loop, busy ? 900 : 1800);
+    loopTimer = window.setTimeout(loop, busy ? 900 : 1800);
   };
-  window.setTimeout(loop, 1400);
+  loopTimer = window.setTimeout(loop, 1400);
+  return () => {
+    stopped = true;
+    window.clearTimeout(loopTimer);
+    cancelAnimationFrame(animationFrame);
+    constructionGroup.clear();
+    scene.remove(constructionGroup);
+  };
 }
