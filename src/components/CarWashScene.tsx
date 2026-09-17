@@ -6,6 +6,16 @@ import { avatarSrc, usePlayer } from "@/lib/player";
 import { RentalManager } from "@/components/RentalManager";
 import { GameDashboard } from "@/components/GameDashboard";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 
 const SAVE_VERSION = 3;
@@ -216,13 +226,45 @@ export default function CarWashScene() {
   const upgradesRef = useRef(upgrades);
   const [shopOpen, setShopOpen] = useState(false);
   const [upgradeInfoOpen, setUpgradeInfoOpen] = useState<UpgradeKey | null>(null);
+  const [pendingUpgrade, setPendingUpgrade] = useState<UpgradeKey | null>(null);
+  const [purchasingUpgrade, setPurchasingUpgrade] = useState<UpgradeKey | null>(null);
+  const purchaseLockRef = useRef(false);
 
-  const buyUpgrade = (key: UpgradeKey) => {
+  const requestUpgrade = (key: UpgradeKey) => {
+    if (purchaseLockRef.current) return;
     const level = upgradesRef.current[key];
     if (level >= MAX_LEVEL) return;
     const cost = upgradeCost(key, level);
     if (economyRef.current.money < cost) {
       toast.error(`Il manque ${(cost - economyRef.current.money).toLocaleString("fr-FR")} €`);
+      return;
+    }
+    setUpgradeInfoOpen(null);
+    setPendingUpgrade(key);
+  };
+
+  const confirmUpgrade = async () => {
+    const key = pendingUpgrade;
+    if (!key || purchaseLockRef.current) return;
+    purchaseLockRef.current = true;
+    setPurchasingUpgrade(key);
+
+    // Laisse le verrou visuel apparaître avant d'appliquer l'achat.
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+    const level = upgradesRef.current[key];
+    if (level >= MAX_LEVEL) {
+      toast.error("Cette amélioration est déjà au niveau maximal.");
+      setPendingUpgrade(null);
+      setPurchasingUpgrade(null);
+      purchaseLockRef.current = false;
+      return;
+    }
+    const cost = upgradeCost(key, level);
+    if (economyRef.current.money < cost) {
+      toast.error(`Il manque ${(cost - economyRef.current.money).toLocaleString("fr-FR")} €`);
+      setPendingUpgrade(null);
+      setPurchasingUpgrade(null);
+      purchaseLockRef.current = false;
       return;
     }
     const nextEco = { ...economyRef.current, money: economyRef.current.money - cost };
@@ -231,13 +273,23 @@ export default function CarWashScene() {
     const nextUp = { ...upgradesRef.current, [key]: level + 1 };
     upgradesRef.current = nextUp;
     setUpgrades(nextUp);
-    const def = UPGRADES.find((u) => u.key === key)!;
+    const def = UPGRADES.find((u) => u.key === key);
+    if (!def) {
+      setPendingUpgrade(null);
+      setPurchasingUpgrade(null);
+      purchaseLockRef.current = false;
+      return;
+    }
     logRef.current(
       makeEvent("upgrade", `${def.label} niveau ${level + 1}`, -cost, nextEco.money),
     );
     toast.success(`${def.icon} ${def.label} niveau ${level + 1}`, {
       description: def.effect(level + 1),
     });
+    persistNowRef.current();
+    setPendingUpgrade(null);
+    setPurchasingUpgrade(null);
+    purchaseLockRef.current = false;
   };
 
 
@@ -3639,8 +3691,8 @@ export default function CarWashScene() {
                               </Popover>
                               <button
                                 type="button"
-                                disabled={maxed}
-                                onClick={() => buyUpgrade(u.key)}
+                                disabled={maxed || purchasingUpgrade !== null}
+                                onClick={() => requestUpgrade(u.key)}
                                 aria-label={maxed ? `${u.label}, niveau maximal` : `Acheter ${u.label} niveau ${level + 1} pour ${cost} euros`}
                                 className={`shrink-0 rounded-full px-3 py-2 text-[12px] font-bold transition-transform active:translate-y-0.5 ${
                                   maxed
@@ -3650,7 +3702,11 @@ export default function CarWashScene() {
                                       : "bg-ink/10 opacity-60"
                                 }`}
                               >
-                                {maxed ? "MAX" : `${cost.toLocaleString("fr-FR")} €`}
+                                {purchasingUpgrade === u.key
+                                  ? "Achat…"
+                                  : maxed
+                                    ? "MAX"
+                                    : `${cost.toLocaleString("fr-FR")} €`}
                               </button>
                             </div>
                           </div>
