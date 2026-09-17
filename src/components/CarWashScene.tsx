@@ -7,6 +7,7 @@ import { RentalManager } from "@/components/RentalManager";
 import { GameDashboard } from "@/components/GameDashboard";
 import { ClientsMenu } from "@/components/ClientsMenu";
 import { InteractionHud } from "@/components/InteractionHud";
+import { CarWashStatsMenu } from "@/components/CarWashStatsMenu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   AlertDialog,
@@ -20,7 +21,7 @@ import {
 } from "@/components/ui/alert-dialog";
 
 
-const SAVE_VERSION = 6;
+const SAVE_VERSION = 7;
 
 
 import * as THREE from "three";
@@ -111,6 +112,8 @@ import {
   type ClientBehavior,
   type NeighborhoodStats,
 } from "@/game/clientBehavior";
+import { EMPTY_WASH_METRICS, formatPlayTime, recordFinance, sanitizeFinancePeriods, sanitizeWashMetrics, washAverages, type FinancePeriod, type WashMetrics } from "@/game/metrics";
+import { eventSatisfactionBonus, eventTrafficFactor, nextEventDelay, randomUrbanEvent, sanitizeUrbanEvent, URBAN_EVENT_META, type UrbanEvent } from "@/game/urbanEvents";
 
 
 /* Catégories de la barre de construction : un seul onglet visible à la fois
@@ -207,6 +210,19 @@ export default function CarWashScene() {
   const [economy, setEconomy] = useState({ money: 150, washes: 0 });
   const economyRef = useRef(economy);
   const [gain, setGain] = useState<{ id: number; amount: number } | null>(null);
+  const [washMetrics, setWashMetrics] = useState<WashMetrics>(EMPTY_WASH_METRICS);
+  const washMetricsRef = useRef<WashMetrics>(EMPTY_WASH_METRICS);
+  const [financePeriods, setFinancePeriods] = useState<FinancePeriod[]>([]);
+  const financePeriodsRef = useRef<FinancePeriod[]>([]);
+  const [playSeconds, setPlaySeconds] = useState(0);
+  const playSecondsRef = useRef(0);
+  const [statsOpen, setStatsOpen] = useState(false);
+  const [historyView, setHistoryView] = useState<"journal" | "profit">("journal");
+  const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [activeUrbanEvent, setActiveUrbanEvent] = useState<UrbanEvent | null>(null);
+  const activeUrbanEventRef = useRef<UrbanEvent | null>(null);
+  const nextUrbanEventAtRef = useRef(Date.now() + 45_000);
+  const freeBuildingRef = useRef<() => string | null>(() => null);
   /* Journal de la partie : lavages, achats, constructions (horodatés). */
   const [history, setHistory] = useState<GameEvent[]>([]);
   const historyRef = useRef(history);
@@ -220,10 +236,19 @@ export default function CarWashScene() {
     const next = [entry, ...historyRef.current].slice(0, MAX_HISTORY);
     historyRef.current = next;
     setHistory(next);
+    if (entry.amount) {
+      const periods = recordFinance(financePeriodsRef.current, playSecondsRef.current, entry.amount);
+      financePeriodsRef.current = periods;
+      setFinancePeriods(periods);
+    }
     persistNowRef.current();
   };
-  const registerWashRef = useRef<(amount: number, premium: boolean) => void>(() => {});
-  registerWashRef.current = (amount: number, premium: boolean) => {
+  const registerWashRef = useRef<(amount: number, premium: boolean, duration: number) => void>(() => {});
+  registerWashRef.current = (amount: number, premium: boolean, duration: number) => {
+    const satisfaction = Math.max(35, Math.min(100, Math.round(58 + rollerQualityFactor(rollerConditionRef.current) * 28 + (upgradesRef.current.quality - 1) * 3 + (upgradesRef.current.decor - 1) * 2 + eventSatisfactionBonus(activeUrbanEventRef.current))));
+    const metrics = { count: washMetricsRef.current.count + 1, revenue: washMetricsRef.current.revenue + amount, totalDuration: washMetricsRef.current.totalDuration + duration, totalSatisfaction: washMetricsRef.current.totalSatisfaction + satisfaction, premiumCount: washMetricsRef.current.premiumCount + (premium ? 1 : 0) };
+    washMetricsRef.current = metrics;
+    setWashMetrics(metrics);
     const nextCondition = sanitizeRollerCondition(rollerConditionRef.current - rollerWearPerWash(rollerPartGradeRef.current));
     rollerConditionRef.current = nextCondition;
     setRollerCondition(nextCondition);
@@ -242,6 +267,43 @@ export default function CarWashScene() {
     });
     setGain({ id: Date.now() + Math.random(), amount });
   };
+
+  useEffect(() => {
+    const started = performance.now();
+    let base = playSecondsRef.current;
+    const timer = window.setInterval(() => {
+      const next = base + (performance.now() - started) / 1000;
+      playSecondsRef.current = next;
+      setPlaySeconds(next);
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      const now = Date.now();
+      const current = activeUrbanEventRef.current;
+      if (current && now >= current.endsAt) {
+        logRef.current(makeEvent("urban", `${current.title} · terminé`));
+        activeUrbanEventRef.current = null;
+        setActiveUrbanEvent(null);
+        nextUrbanEventAtRef.current = now + nextEventDelay();
+        return;
+      }
+      if (!current && now >= nextUrbanEventAtRef.current) {
+        const event = randomUrbanEvent(now);
+        if (event.kind === "building") {
+          const building = freeBuildingRef.current();
+          event.description = building ? `${building} vient d’être construit gratuitement.` : "La ville réserve le prochain terrain disponible.";
+        }
+        activeUrbanEventRef.current = event;
+        setActiveUrbanEvent(event);
+        logRef.current(makeEvent("urban", `${event.title} · ${event.description}`));
+        toast.success(`${URBAN_EVENT_META[event.kind].icon} ${event.title}`, { description: event.description });
+      }
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (!gain) return;
@@ -663,6 +725,11 @@ export default function CarWashScene() {
     rollerPartGrade: rollerPartGradeRef.current,
     progress: progressRef.current,
     playerPosition: playerControllerRef.current?.position(),
+    washMetrics: washMetricsRef.current,
+    financePeriods: financePeriodsRef.current,
+    playSeconds: playSecondsRef.current,
+    activeUrbanEvent: activeUrbanEventRef.current,
+    nextUrbanEventAt: nextUrbanEventAtRef.current,
   });
 
   type SavedState = {
@@ -681,6 +748,11 @@ export default function CarWashScene() {
     rollerPartGrade?: unknown;
     progress?: unknown;
     playerPosition?: unknown;
+    washMetrics?: unknown;
+    financePeriods?: unknown;
+    playSeconds?: unknown;
+    activeUrbanEvent?: unknown;
+    nextUrbanEventAt?: unknown;
   };
 
   /** Réapplique une sauvegarde (locale ou Drive) à la partie en cours. */
@@ -754,6 +826,20 @@ export default function CarWashScene() {
       setProgress(next);
     }
     if (state.playerPosition) playerControllerRef.current?.setPosition(state.playerPosition);
+    const restoredMetrics = sanitizeWashMetrics(state.washMetrics);
+    washMetricsRef.current = restoredMetrics;
+    setWashMetrics(restoredMetrics);
+    const restoredPeriods = sanitizeFinancePeriods(state.financePeriods);
+    financePeriodsRef.current = restoredPeriods;
+    setFinancePeriods(restoredPeriods);
+    if (typeof state.playSeconds === "number" && Number.isFinite(state.playSeconds)) {
+      playSecondsRef.current = Math.max(0, state.playSeconds);
+      setPlaySeconds(playSecondsRef.current);
+    }
+    const restoredEvent = sanitizeUrbanEvent(state.activeUrbanEvent);
+    activeUrbanEventRef.current = restoredEvent && restoredEvent.endsAt > Date.now() ? restoredEvent : null;
+    setActiveUrbanEvent(activeUrbanEventRef.current);
+    nextUrbanEventAtRef.current = typeof state.nextUrbanEventAt === "number" && Number.isFinite(state.nextUrbanEventAt) ? state.nextUrbanEventAt : Date.now() + 45_000;
     if (
       withCinema &&
       typeof state.cinema === "boolean" &&
@@ -761,6 +847,22 @@ export default function CarWashScene() {
     ) {
       cinemaRef.current();
     }
+  };
+
+  const handleManualSave = () => {
+    saveLocalCity(collectState(), SAVE_VERSION);
+    const saved = readLocalCity();
+    setSavedAt(saved?.savedAt ?? new Date().toISOString());
+    toast.success("💾 Partie sauvegardée maintenant");
+  };
+
+  const handleManualLoad = () => {
+    const saved = readLocalCity();
+    if (!saved) return toast.info("Aucune sauvegarde locale disponible.");
+    if (!window.confirm("Charger cette sauvegarde et remplacer la partie en cours ?")) return;
+    applySavedStateRef.current(saved.state as SavedState);
+    setSavedAt(saved.savedAt);
+    toast.success("📥 Sauvegarde chargée", { description: new Date(saved.savedAt).toLocaleString("fr-FR") });
   };
 
   /* Sauvegarde locale automatique : la création du joueur est restaurée
@@ -776,6 +878,7 @@ export default function CarWashScene() {
     if (!saved) return;
     try {
       applySavedStateRef.current(saved.state as SavedState, false);
+      setSavedAt(saved.savedAt);
       localReadyRef.current = true;
       toast.success("Ville restaurée", {
         description: "Ta dernière création a été rechargée automatiquement.",
