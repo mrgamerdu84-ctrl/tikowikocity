@@ -5,6 +5,7 @@ import { saveToDrive, loadFromDrive } from "@/lib/drive.functions";
 import { avatarSrc, usePlayer } from "@/lib/player";
 import { RentalManager } from "@/components/RentalManager";
 import { GameDashboard } from "@/components/GameDashboard";
+import { InteractionHud } from "@/components/InteractionHud";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   AlertDialog,
@@ -89,6 +90,7 @@ import { HOUSE_LEVELS, MAX_HOUSE_LEVEL, houseDef, totalCapacity } from "@/game/h
 import { readLocalCity, saveLocalCity } from "@/game/save";
 import { createPedestrianSystem, type PedestrianSystem } from "@/game/pedestrians";
 import { createPlayerController, type PlayerController } from "@/game/playerController";
+import { findNearbyInteraction, type NearbyInteraction } from "@/game/interactions";
 import { nextMilestone, sanitizeCityProgress, type CityProgress } from "@/game/progression";
 
 
@@ -314,6 +316,10 @@ export default function CarWashScene() {
   const progressRef = useRef(progress);
   const playerControllerRef = useRef<PlayerController | null>(null);
   const pedestrianRef = useRef<PedestrianSystem | null>(null);
+  const [nearbyInteraction, setNearbyInteraction] = useState<NearbyInteraction | null>(null);
+  const nearbyInteractionRef = useRef<NearbyInteraction | null>(null);
+  const [activeDialogue, setActiveDialogue] = useState<NearbyInteraction | null>(null);
+  const activeDialogueRef = useRef<NearbyInteraction | null>(null);
   const cityStatsRef = useRef<(levels: number[]) => void>(() => {});
   cityStatsRef.current = (levels: number[]) => {
     const next = { houses: levels.length, capacity: totalCapacity(levels) };
@@ -466,8 +472,67 @@ export default function CarWashScene() {
     walkingRef.current = next;
     setWalking(next);
     playerControllerRef.current?.setEnabled(next);
+    if (!next) {
+      nearbyInteractionRef.current = null;
+      setNearbyInteraction(null);
+      activeDialogueRef.current = null;
+      setActiveDialogue(null);
+      playerControllerRef.current?.setPaused(false);
+    }
     buildCameraApplyRef.current(false);
   };
+
+  const closeDialogue = () => {
+    activeDialogueRef.current = null;
+    setActiveDialogue(null);
+    playerControllerRef.current?.setPaused(false);
+  };
+
+  const interactNearby = () => {
+    const target = nearbyInteractionRef.current;
+    if (!target || !walkingRef.current) return;
+    activeDialogueRef.current = target;
+    setActiveDialogue(target);
+    playerControllerRef.current?.setPaused(true);
+    playerControllerRef.current?.react();
+  };
+
+  const performDialogueAction = () => {
+    const target = activeDialogueRef.current;
+    if (!target) return;
+    if (target.kind === "carWash") {
+      const allRunning = Object.values(machinesRef.current).every(Boolean);
+      if (!allRunning) {
+        const next = { belt: true, rollers: true, brushes: true, traffic: true };
+        machinesRef.current = next;
+        setMachines(next);
+        toast.success("🫧 Station remise en marche");
+      } else {
+        toast.success("⚙️ Toutes les machines fonctionnent correctement");
+      }
+    } else if (target.kind === "house") {
+      toast.success("👋 Les habitants te saluent en retour !");
+    }
+    playerControllerRef.current?.react();
+    closeDialogue();
+  };
+
+  useEffect(() => {
+    const onInteractionKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("input, textarea, select, [contenteditable='true']")) return;
+      if (event.code === "KeyE" && walkingRef.current && !activeDialogueRef.current) {
+        event.preventDefault();
+        interactNearby();
+      }
+      if (event.code === "Escape" && activeDialogueRef.current) {
+        event.preventDefault();
+        closeDialogue();
+      }
+    };
+    window.addEventListener("keydown", onInteractionKey);
+    return () => window.removeEventListener("keydown", onInteractionKey);
+  }, []);
 
   const progression = nextMilestone(progress, {
     money: economy.money,
@@ -1407,6 +1472,7 @@ export default function CarWashScene() {
     const conveyorSlats: THREE.Mesh[] = [];
     /* ----- Réseau routier du joueur ----- */
     const plan = new CityPlan();
+    let interactionScan = 0;
     const MAIN_CX = Math.round(WASH_ACCESS_X / TILE);
     const MAIN_CZ_START = -5; // première case au nord de la parcelle
     const MAIN_CZ_END = 12; // s'enfonce vers les reliefs du fond
@@ -3107,6 +3173,24 @@ export default function CarWashScene() {
       }
 
       playerControllerRef.current?.update(dt, camera);
+      interactionScan -= dt;
+      if (interactionScan <= 0) {
+        interactionScan = 0.18;
+        const controller = playerControllerRef.current;
+        const next = walkingRef.current && controller
+          ? findNearbyInteraction(controller.root.position, plan, {
+              washes: economyRef.current.washes,
+              money: economyRef.current.money,
+              machinesRunning: Object.values(machinesRef.current).every(Boolean),
+            })
+          : null;
+        if (next?.id !== nearbyInteractionRef.current?.id || next?.dialogue !== nearbyInteractionRef.current?.dialogue) {
+          nearbyInteractionRef.current = next;
+          setNearbyInteraction(next);
+        }
+        const dialogue = activeDialogueRef.current;
+        if (dialogue && (!next || next.id !== dialogue.id)) closeDialogue();
+      }
       pedestrianRef.current?.update(dt, t, residentsRef.current, netCars.map((car) => car.car));
       if (!walkingRef.current) controls.update();
       renderer.render(scene, camera);
@@ -3353,6 +3437,16 @@ export default function CarWashScene() {
         onCinema={() => cinemaRef.current()}
         onWalk={toggleWalking}
       />
+      {walking && (
+        <InteractionHud
+          nearby={nearbyInteraction}
+          dialogue={activeDialogue}
+          machinesRunning={Object.values(machines).every(Boolean)}
+          onInteract={interactNearby}
+          onAction={performDialogueAction}
+          onClose={closeDialogue}
+        />
+      )}
 
       {!buildMode && progression && (
         <div className="pointer-events-none fixed left-2 top-[68px] z-40 w-[min(310px,calc(100vw-1rem))] rounded-2xl bg-white/90 px-3 py-2 text-slate-900 shadow-lg ring-1 ring-slate-900/10 backdrop-blur sm:left-4 sm:top-[76px]">
@@ -3381,7 +3475,9 @@ export default function CarWashScene() {
           >
             <div className="absolute inset-[34px] rounded-full bg-emerald-500 shadow-md" />
           </div>
-          <div className="absolute bottom-24 right-4 rounded-2xl bg-slate-950/70 px-3 py-2 text-[11px] font-bold text-white backdrop-blur">WASD / flèches<br/>ou joystick</div>
+          {!nearbyInteraction && !activeDialogue && (
+            <div className="absolute bottom-24 right-4 rounded-2xl bg-slate-950/70 px-3 py-2 text-[11px] font-bold text-white backdrop-blur">WASD / flèches<br/>ou joystick</div>
+          )}
         </div>
       )}
 
