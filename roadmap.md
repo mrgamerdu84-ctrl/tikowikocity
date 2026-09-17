@@ -14,4 +14,4 @@
 - [x] Relier la fréquentation du car wash au développement du quartier
 - [x] Adapter les pièces, l’état des rouleaux, le journal et les voyageurs simulés
 - [x] Ajouter sauvegarde manuelle, événements urbains, statistiques du car wash et rapport de rentabilité
-- [ ] Ajouter la jauge de fréquentation, les niveaux de quartier, la caméra libre et la sauvegarde exacte du quartier
+- [x] Ajouter la jauge de fréquentation, les niveaux de quartier, la caméra libre et la sauvegarde exacte du quartier
