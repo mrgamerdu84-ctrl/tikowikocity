@@ -28,6 +28,11 @@ type Props = {
   rollerLevel: number;
   rollerPartGrade: RollerPartGrade;
   savedAt: string | null;
+  demand: NeighborhoodDemand;
+  travelers: TravelerDemand;
+  districtLevel: number;
+  districtSnapshot: DistrictSnapshot;
+  carsPerHour: number;
   activeEvent?: { icon: string; title: string; remaining: string } | null;
   hidden?: boolean;
   onBuild: () => void;
@@ -37,6 +42,7 @@ type Props = {
   onCarWash: () => void;
   onSave: () => void;
   onLoad: () => void;
+  onDistrictUpgrade: () => void;
   onToggleMachine: (key: keyof Machines) => void;
   onCinema: () => void;
   onWalk: () => void;
@@ -64,7 +70,13 @@ export function GameDashboard({
   onSave,
   onLoad,
   savedAt,
+  demand,
+  travelers,
+  districtLevel,
+  districtSnapshot,
+  carsPerHour,
   activeEvent,
+  onDistrictUpgrade,
   onToggleMachine,
   onCinema,
   onWalk,
