@@ -259,6 +259,13 @@ export default function CarWashScene() {
       purchaseLockRef.current = false;
       return;
     }
+    const def = UPGRADES.find((u) => u.key === key);
+    if (!def) {
+      setPendingUpgrade(null);
+      setPurchasingUpgrade(null);
+      purchaseLockRef.current = false;
+      return;
+    }
     const cost = upgradeCost(key, level);
     if (economyRef.current.money < cost) {
       toast.error(`Il manque ${(cost - economyRef.current.money).toLocaleString("fr-FR")} €`);
@@ -273,13 +280,6 @@ export default function CarWashScene() {
     const nextUp = { ...upgradesRef.current, [key]: level + 1 };
     upgradesRef.current = nextUp;
     setUpgrades(nextUp);
-    const def = UPGRADES.find((u) => u.key === key);
-    if (!def) {
-      setPendingUpgrade(null);
-      setPurchasingUpgrade(null);
-      purchaseLockRef.current = false;
-      return;
-    }
     logRef.current(
       makeEvent("upgrade", `${def.label} niveau ${level + 1}`, -cost, nextEco.money),
     );
@@ -3253,6 +3253,16 @@ export default function CarWashScene() {
 
   }, []);
 
+  const pendingUpgradeDef = pendingUpgrade
+    ? UPGRADES.find((upgrade) => upgrade.key === pendingUpgrade)
+    : undefined;
+  const pendingUpgradeLevel = pendingUpgrade ? upgrades[pendingUpgrade] : 0;
+  const pendingUpgradeCost =
+    pendingUpgrade && pendingUpgradeLevel < MAX_LEVEL
+      ? upgradeCost(pendingUpgrade, pendingUpgradeLevel)
+      : 0;
+  const balanceAfterUpgrade = Math.max(0, economy.money - pendingUpgradeCost);
+
   return (
     <>
       <div ref={wrapRef} className="fixed inset-0" />
@@ -3262,6 +3272,68 @@ export default function CarWashScene() {
         onIncome={receiveRentalIncome}
         onSpend={spendRentalNeed}
       />
+      <AlertDialog
+        open={pendingUpgrade !== null}
+        onOpenChange={(open) => {
+          if (!open && !purchaseLockRef.current) setPendingUpgrade(null);
+        }}
+      >
+        <AlertDialogContent className="w-[calc(100%-1.5rem)] max-w-md rounded-2xl border-ink/15 bg-white p-5 text-ink">
+          <AlertDialogHeader className="text-left">
+            <AlertDialogTitle className="flex items-center gap-2 text-lg font-extrabold">
+              <span aria-hidden>{pendingUpgradeDef?.icon}</span>
+              Confirmer l’amélioration
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-left text-ink/70">
+              Vérifie le coût et ton nouveau solde avant de valider.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          {pendingUpgradeDef && pendingUpgrade ? (
+            <div className="grid gap-3 text-sm">
+              <div className="rounded-lg bg-splash/10 p-3 ring-1 ring-splash/20">
+                <p className="font-extrabold">{pendingUpgradeDef.label}</p>
+                <p className="mt-0.5 text-xs opacity-70">
+                  Niveau {pendingUpgradeLevel} → niveau {pendingUpgradeLevel + 1}
+                </p>
+                <p className="mt-2 text-xs font-semibold">
+                  {pendingUpgradeDef.effect(pendingUpgradeLevel + 1)}
+                </p>
+              </div>
+              <dl className="grid grid-cols-2 gap-2 tabular-nums">
+                <div className="rounded-lg bg-ink/5 p-3">
+                  <dt className="text-xs font-bold opacity-60">Coût</dt>
+                  <dd className="mt-1 font-extrabold">
+                    {pendingUpgradeCost.toLocaleString("fr-FR")} €
+                  </dd>
+                </div>
+                <div className="rounded-lg bg-ink/5 p-3">
+                  <dt className="text-xs font-bold opacity-60">Solde actuel</dt>
+                  <dd className="mt-1 font-extrabold">{economy.money.toLocaleString("fr-FR")} €</dd>
+                </div>
+              </dl>
+              <div className="flex items-center justify-between rounded-lg bg-sunny/25 p-3 font-extrabold">
+                <span>Solde après achat</span>
+                <span className="tabular-nums">{balanceAfterUpgrade.toLocaleString("fr-FR")} €</span>
+              </div>
+            </div>
+          ) : null}
+
+          <AlertDialogFooter className="gap-2 sm:space-x-0">
+            <AlertDialogCancel disabled={purchasingUpgrade !== null}>Annuler</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={purchasingUpgrade !== null || economy.money < pendingUpgradeCost}
+              onClick={(event) => {
+                event.preventDefault();
+                void confirmUpgrade();
+              }}
+              className="bg-splash text-splash-foreground"
+            >
+              {purchasingUpgrade ? "Achat en cours…" : "Confirmer l’achat"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <GameDashboard
         hidden={buildMode}
         player={player ?? null}
