@@ -3867,6 +3867,17 @@ export default function CarWashScene() {
         rollerLevel={upgrades.speed}
         rollerPartGrade={rollerPartGrade}
         savedAt={savedAt ? new Date(savedAt).toLocaleString("fr-FR") : null}
+        demand={neighborhoodDemand({ houses: city.houses, residents, roads: planStats.roads, parking: planStats.parking })}
+        travelers={travelerDemand({ houses: city.houses, residents, roads: planStats.roads, parking: planStats.parking })}
+        districtLevel={districtLevel}
+        districtSnapshot={districtSnapshot}
+        carsPerHour={carsPerHour(
+          upgrades,
+          { houses: city.houses, residents, roads: planStats.roads, parking: planStats.parking },
+          clientBehavior,
+          districtDemandFactor(districtLevel),
+        )}
+        onDistrictUpgrade={upgradeDistrict}
         activeEvent={activeUrbanEvent ? { icon: URBAN_EVENT_META[activeUrbanEvent.kind].icon, title: activeUrbanEvent.title, remaining: `${Math.max(0, Math.ceil((activeUrbanEvent.endsAt - Date.now()) / 60_000))} min` } : null}
         onBuild={toggleBuild}
         onShop={() => setShopOpen(true)}
