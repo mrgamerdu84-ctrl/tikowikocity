@@ -75,12 +75,34 @@ export function sanitizeClientBehavior(raw: unknown): ClientBehavior {
   };
 }
 
-export function effectiveArrivalInterval(upgrades: UpgradeLevels, neighborhood: NeighborhoodStats, behavior: ClientBehavior): [number, number] {
+export function effectiveArrivalInterval(
+  upgrades: UpgradeLevels,
+  neighborhood: NeighborhoodStats,
+  behavior: ClientBehavior,
+  /** multiplicateur apporté par le niveau du quartier */
+  districtFactor = 1,
+): [number, number] {
   const [lo, hi] = washInterval(upgrades.speed, upgrades.parking);
   const district = neighborhoodDemand(neighborhood).factor;
   const travelers = travelerDemand(neighborhood).factor;
   const frequency = behavior.frequency / 100;
-  return [lo / district / travelers / frequency, (hi + 3) / district / travelers / frequency];
+  const levels = Math.max(1, districtFactor);
+  return [
+    lo / district / travelers / frequency / levels,
+    (hi + 3) / district / travelers / frequency / levels,
+  ];
+}
+
+/** Estimation d'affluence affichée dans la jauge de fréquentation. */
+export function carsPerHour(
+  upgrades: UpgradeLevels,
+  neighborhood: NeighborhoodStats,
+  behavior: ClientBehavior,
+  districtFactor = 1,
+) {
+  const [lo, hi] = effectiveArrivalInterval(upgrades, neighborhood, behavior, districtFactor);
+  const average = (lo + hi) / 2;
+  return average > 0 ? Math.round(3600 / average) : 0;
 }
 
 export function effectiveBeltFactor(upgrades: UpgradeLevels, behavior: ClientBehavior) {

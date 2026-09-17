@@ -106,15 +106,26 @@ import {
 } from "@/game/spareParts";
 import {
   DEFAULT_CLIENT_BEHAVIOR,
+  carsPerHour,
   effectiveArrivalInterval,
   effectiveBeltFactor,
   effectiveWashDuration,
+  neighborhoodDemand,
   sanitizeClientBehavior,
+  travelerDemand,
   type ClientBehavior,
   type NeighborhoodStats,
 } from "@/game/clientBehavior";
 import { EMPTY_WASH_METRICS, formatPlayTime, recordFinance, sanitizeFinancePeriods, sanitizeWashMetrics, washAverages, type FinancePeriod, type WashMetrics } from "@/game/metrics";
 import { eventSatisfactionBonus, eventTrafficFactor, nextEventDelay, randomUrbanEvent, sanitizeUrbanEvent, URBAN_EVENT_META, type UrbanEvent } from "@/game/urbanEvents";
+import { CameraControlsHud } from "@/components/CameraControlsHud";
+import {
+  districtAt,
+  districtDemandFactor,
+  districtUnlocks,
+  nextDistrictLevel,
+  sanitizeDistrictLevel,
+} from "@/game/districtLevels";
 
 
 /* Catégories de la barre de construction : un seul onglet visible à la fois
@@ -224,6 +235,27 @@ export default function CarWashScene() {
   const activeUrbanEventRef = useRef<UrbanEvent | null>(null);
   const nextUrbanEventAtRef = useRef(Date.now() + 45_000);
   const freeBuildingRef = useRef<() => string | null>(() => null);
+  /* Niveau du quartier : déblocages de construction et bonus de fréquentation. */
+  const [districtLevel, setDistrictLevel] = useState(1);
+  const districtLevelRef = useRef(1);
+  /* Exploration libre : la caméra peut parcourir tout le quartier. */
+  const [freeCamera, setFreeCamera] = useState(false);
+  const freeCameraRef = useRef(false);
+  const cameraIoRef = useRef<{
+    setFree: (on: boolean) => void;
+    zoom: (direction: 1 | -1) => void;
+    reset: () => void;
+    focusWash: () => void;
+    save: () => number[] | null;
+    load: (data: unknown) => void;
+  }>({
+    setFree: () => {},
+    zoom: () => {},
+    reset: () => {},
+    focusWash: () => {},
+    save: () => null,
+    load: () => {},
+  });
   /* Journal de la partie : lavages, achats, constructions (horodatés). */
   const [history, setHistory] = useState<GameEvent[]>([]);
   const historyRef = useRef(history);
@@ -579,6 +611,11 @@ export default function CarWashScene() {
     walkingRef.current = next;
     setWalking(next);
     playerControllerRef.current?.setEnabled(next);
+    if (next && freeCameraRef.current) {
+      freeCameraRef.current = false;
+      setFreeCamera(false);
+      cameraIoRef.current.setFree(false);
+    }
     if (!next) {
       nearbyInteractionRef.current = null;
       setNearbyInteraction(null);
@@ -588,6 +625,45 @@ export default function CarWashScene() {
     }
     buildCameraApplyRef.current(false);
   };
+
+  /** Exploration libre : on quitte marche/construction pour survoler la ville. */
+  const toggleFreeCamera = () => {
+    const next = !freeCameraRef.current;
+    if (next) {
+      if (walkingRef.current) toggleWalking();
+      if (buildRef.current) toggleBuild();
+      if (cinemaStateRef.current) cinemaRef.current();
+    }
+    freeCameraRef.current = next;
+    setFreeCamera(next);
+    cameraIoRef.current.setFree(next);
+    if (next) toast.info("🔭 Exploration libre activée");
+  };
+
+  /* Instantané du quartier utilisé par la jauge et les paliers. */
+  const districtSnapshot = {
+    roads: planStats.roads,
+    houses: city.houses,
+    residents,
+    washes: economy.washes,
+  };
+
+  /** Ouvre le palier suivant du quartier : coût payé, bonus permanent. */
+  const upgradeDistrict = () => {
+    const progressInfo = nextDistrictLevel(districtLevelRef.current, districtSnapshot, economyRef.current.money);
+    const target = progressInfo?.next;
+    if (!progressInfo || !target) return;
+    if (!progressInfo.ready) {
+      toast.error("Objectifs du palier non atteints.");
+      return;
+    }
+    if (target.cost > 0 && !spendRef.current(target.cost, "build", `Palier ${target.title} ouvert`)) return;
+    districtLevelRef.current = target.level;
+    setDistrictLevel(target.level);
+    toast.success(`${target.icon} ${target.title}`, { description: target.summary });
+    persistNowRef.current();
+  };
+
 
   const closeDialogue = () => {
     activeDialogueRef.current = null;
@@ -732,6 +808,8 @@ export default function CarWashScene() {
     playSeconds: playSecondsRef.current,
     activeUrbanEvent: activeUrbanEventRef.current,
     nextUrbanEventAt: nextUrbanEventAtRef.current,
+    districtLevel: districtLevelRef.current,
+    camera: cameraIoRef.current.save(),
   });
 
   type SavedState = {
@@ -755,6 +833,8 @@ export default function CarWashScene() {
     playSeconds?: unknown;
     activeUrbanEvent?: unknown;
     nextUrbanEventAt?: unknown;
+    districtLevel?: unknown;
+    camera?: unknown;
   };
 
   /** Réapplique une sauvegarde (locale ou Drive) à la partie en cours. */
@@ -842,6 +922,10 @@ export default function CarWashScene() {
     activeUrbanEventRef.current = restoredEvent && restoredEvent.endsAt > Date.now() ? restoredEvent : null;
     setActiveUrbanEvent(activeUrbanEventRef.current);
     nextUrbanEventAtRef.current = typeof state.nextUrbanEventAt === "number" && Number.isFinite(state.nextUrbanEventAt) ? state.nextUrbanEventAt : Date.now() + 45_000;
+    const restoredDistrict = sanitizeDistrictLevel(state.districtLevel);
+    districtLevelRef.current = restoredDistrict;
+    setDistrictLevel(restoredDistrict);
+    if (state.camera) cameraIoRef.current.load(state.camera);
     if (
       withCinema &&
       typeof state.cinema === "boolean" &&
@@ -1057,10 +1141,65 @@ export default function CarWashScene() {
     );
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
-    controls.minDistance = 6;
-    controls.maxDistance = 160;
+    controls.minDistance = 4;
+    controls.maxDistance = 320;
     controls.maxPolarAngle = Math.PI * 0.49;
+    controls.screenSpacePanning = false;
     controls.update();
+
+    /* Vue initiale mémorisée pour le bouton « vue d'ensemble ». */
+    const homePosition = camera.position.clone();
+    const homeTarget = controls.target.clone();
+
+    cameraIoRef.current = {
+      setFree: (on: boolean) => {
+        controls.enabled = true;
+        controls.enablePan = true;
+        controls.maxDistance = on ? 320 : 160;
+        renderer.domElement.style.touchAction = "none";
+        if (!on) {
+          controls.maxDistance = 160;
+          controls.update();
+        }
+      },
+      zoom: (direction: 1 | -1) => {
+        const dir = camera.position.clone().sub(controls.target);
+        const distance = dir.length();
+        const next = THREE.MathUtils.clamp(
+          distance * (direction > 0 ? 0.82 : 1.22),
+          controls.minDistance,
+          controls.maxDistance,
+        );
+        camera.position.copy(controls.target).add(dir.setLength(next));
+        controls.update();
+      },
+      reset: () => {
+        camera.position.copy(homePosition);
+        controls.target.copy(homeTarget);
+        controls.update();
+      },
+      focusWash: () => {
+        controls.target.set(0, 1.5, WASH_SITE_Z);
+        camera.position.set(14, 12, WASH_SITE_Z + 20);
+        controls.update();
+      },
+      save: () => [
+        camera.position.x,
+        camera.position.y,
+        camera.position.z,
+        controls.target.x,
+        controls.target.y,
+        controls.target.z,
+      ],
+      load: (data: unknown) => {
+        if (!Array.isArray(data) || data.length < 6) return;
+        const nums = data.map((v) => (typeof v === "number" && Number.isFinite(v) ? v : null));
+        if (nums.some((v) => v === null)) return;
+        camera.position.set(nums[0]!, nums[1]!, nums[2]!);
+        controls.target.set(nums[3]!, nums[4]!, nums[5]!);
+        controls.update();
+      },
+    };
 
     const hemi = new THREE.HemisphereLight(0xffffff, 0x8fae7a, 0.9);
     scene.add(hemi);
@@ -3220,7 +3359,12 @@ export default function CarWashScene() {
       washCooldown -= dt;
       if (washCooldown <= 0) {
         neighborhoodRef.current.residents = residentsRef.current;
-        const [lo, hi] = effectiveArrivalInterval(up, neighborhoodRef.current, clientBehaviorRef.current);
+        const [lo, hi] = effectiveArrivalInterval(
+          up,
+          neighborhoodRef.current,
+          clientBehaviorRef.current,
+          districtDemandFactor(districtLevelRef.current),
+        );
         washCooldown = (lo + Math.random() * (hi - lo)) / eventTrafficFactor(activeUrbanEventRef.current);
         if (ctl.traffic && washCars.length < queueCapacity(up)) sendCityCarToWash();
       }
@@ -3708,6 +3852,15 @@ export default function CarWashScene() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      {!buildMode && (
+        <CameraControlsHud
+          active={freeCamera}
+          onToggle={toggleFreeCamera}
+          onZoom={(d) => cameraIoRef.current.zoom(d)}
+          onReset={() => cameraIoRef.current.reset()}
+          onFocusWash={() => cameraIoRef.current.focusWash()}
+        />
+      )}
       <GameDashboard
         hidden={buildMode}
         player={player ?? null}
@@ -3723,6 +3876,17 @@ export default function CarWashScene() {
         rollerLevel={upgrades.speed}
         rollerPartGrade={rollerPartGrade}
         savedAt={savedAt ? new Date(savedAt).toLocaleString("fr-FR") : null}
+        demand={neighborhoodDemand({ houses: city.houses, residents, roads: planStats.roads, parking: planStats.parking })}
+        travelers={travelerDemand({ houses: city.houses, residents, roads: planStats.roads, parking: planStats.parking })}
+        districtLevel={districtLevel}
+        districtSnapshot={districtSnapshot}
+        carsPerHour={carsPerHour(
+          upgrades,
+          { houses: city.houses, residents, roads: planStats.roads, parking: planStats.parking },
+          clientBehavior,
+          districtDemandFactor(districtLevel),
+        )}
+        onDistrictUpgrade={upgradeDistrict}
         activeEvent={activeUrbanEvent ? { icon: URBAN_EVENT_META[activeUrbanEvent.kind].icon, title: activeUrbanEvent.title, remaining: `${Math.max(0, Math.ceil((activeUrbanEvent.endsAt - Date.now()) / 60_000))} min` } : null}
         onBuild={toggleBuild}
         onShop={() => setShopOpen(true)}
@@ -4427,19 +4591,29 @@ export default function CarWashScene() {
 
             {/* Outils de la catégorie active */}
             <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
-              {(BUILD_CATEGORIES.find((c) => c.id === buildCat)?.tools ?? []).map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => chooseTool(t)}
-                  aria-pressed={tool === t}
-                  className={`shrink-0 rounded-xl px-2.5 py-1.5 text-[11.5px] font-semibold transition-colors ${
-                    tool === t ? "bg-splash text-splash-foreground" : "bg-ink/10 text-ink"
-                  }`}
-                >
-                  {TOOL_LABEL[t]}
-                </button>
-              ))}
+              {(BUILD_CATEGORIES.find((c) => c.id === buildCat)?.tools ?? []).map((t) => {
+                const unlocked = districtUnlocks(districtLevel).tools.has(t);
+                return (
+                  <button
+                    key={t}
+                    type="button"
+                    disabled={!unlocked}
+                    onClick={() => {
+                      if (!unlocked) {
+                        toast.info("Outil débloqué à un palier supérieur du quartier.");
+                        return;
+                      }
+                      chooseTool(t);
+                    }}
+                    aria-pressed={tool === t}
+                    className={`shrink-0 rounded-xl px-2.5 py-1.5 text-[11.5px] font-semibold transition-colors ${
+                      tool === t ? "bg-splash text-splash-foreground" : "bg-ink/10 text-ink"
+                    } ${unlocked ? "" : "opacity-45"}`}
+                  >
+                    {unlocked ? TOOL_LABEL[t] : `🔒 ${TOOL_LABEL[t]}`}
+                  </button>
+                );
+              })}
               <button
                 type="button"
                 onClick={() => {
