@@ -38,24 +38,24 @@ export function ClientsMenu({ open, behavior, upgrades, neighborhood, rollerQual
   const update = (key: keyof ClientBehavior, value: number) => onChange({ ...behavior, [key]: value });
 
   return (
-    <div className="fixed inset-0 z-[90] flex items-end justify-center bg-ink/40 p-3 backdrop-blur-sm sm:items-center">
-      <section aria-modal="true" role="dialog" aria-labelledby="clients-title" className="flex max-h-[88vh] w-full max-w-[480px] flex-col overflow-hidden rounded-3xl bg-background text-foreground shadow-2xl ring-1 ring-border">
-        <header className="flex items-center gap-2 border-b border-border px-4 py-3">
-          <div>
-            <h2 id="clients-title" className="text-lg font-extrabold">👥 Clients</h2>
-            <p className="text-xs font-semibold text-muted-foreground">Comportement et résultats réels</p>
+    <div className="fixed inset-0 z-[90] flex items-end justify-center bg-ink/40 p-2 backdrop-blur-sm sm:items-center sm:p-4">
+      <section aria-modal="true" role="dialog" aria-labelledby="clients-title" className="flex max-h-[92vh] w-full max-w-[480px] flex-col overflow-hidden rounded-lg bg-background text-foreground shadow-2xl ring-1 ring-border">
+        <header className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b border-border px-3 py-2.5">
+          <div className="min-w-0">
+            <h2 id="clients-title" className="truncate text-base font-extrabold">👥 Clients</h2>
+            <p className="truncate text-[11px] font-semibold text-muted-foreground">Comportement et résultats réels</p>
           </div>
-          <Button className="ml-auto" variant="ghost" size="icon" onClick={onClose} aria-label="Fermer le menu Clients">✕</Button>
+          <Button variant="secondary" size="sm" onClick={onClose}>← Retour</Button>
         </header>
 
-        <div className="overflow-y-auto p-4">
+        <div className="overflow-y-auto p-3">
           <dl className="grid grid-cols-3 gap-2 text-center">
             <div className="rounded-lg bg-splash/10 p-2 ring-1 ring-splash/20"><dt className="text-[10px] font-bold opacity-65">ARRIVÉES</dt><dd className="mt-1 text-sm font-black">{arrival[0].toFixed(1)}–{arrival[1].toFixed(1)} s</dd></div>
             <div className="rounded-lg bg-sunny/20 p-2 ring-1 ring-sunny/30"><dt className="text-[10px] font-bold opacity-65">PAIEMENT</dt><dd className="mt-1 text-sm font-black">{payment[0]}–{payment[1]} €</dd></div>
             <div className="rounded-lg bg-ink/5 p-2 ring-1 ring-border"><dt className="text-[10px] font-bold opacity-65">LAVAGE</dt><dd className="mt-1 text-sm font-black">{duration.toFixed(1)} s</dd></div>
           </dl>
 
-          <div className="mt-4 rounded-lg bg-splash/10 p-3 ring-1 ring-splash/20">
+          <div className="mt-3 rounded-lg bg-splash/10 p-2.5 ring-1 ring-splash/20">
             <div className="flex items-center gap-2">
               <h3 className="text-sm font-extrabold">🏙️ Attractivité du quartier</h3>
               <strong className="ml-auto text-sm text-splash">+{district.bonusPercent} % de clients</strong>
@@ -81,11 +81,11 @@ export function ClientsMenu({ open, behavior, upgrades, neighborhood, rollerQual
             <p className="mt-2 text-[11px] font-medium text-muted-foreground">Les routes attirent le passage ; les parkings augmentent la part qui s’arrête au car wash.</p>
           </div>
 
-          <div className="mt-4 divide-y divide-border rounded-lg border border-border">
+          <div className="mt-3 divide-y divide-border rounded-lg border border-border">
             {rows.map((row) => (
-              <label key={row.key} className="block px-3 py-3">
+              <label key={row.key} className="block px-3 py-2">
                 <span className="flex items-center gap-2 text-sm font-extrabold"><span aria-hidden>{row.icon}</span>{row.label}<output className="ml-auto tabular-nums">{behavior[row.key]} %</output></span>
-                <Slider className="my-3" min={row.min} max={row.max} step={row.step} value={[behavior[row.key]]} onValueChange={([value]) => { if (value !== undefined) update(row.key, value); }} aria-label={row.label} />
+                <Slider className="my-2" min={row.min} max={row.max} step={row.step} value={[behavior[row.key]]} onValueChange={([value]) => { if (value !== undefined) update(row.key, value); }} aria-label={row.label} />
                 <span className="block text-[11px] font-medium text-muted-foreground">{row.hint}</span>
               </label>
             ))}

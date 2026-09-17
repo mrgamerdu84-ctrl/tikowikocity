@@ -211,10 +211,10 @@ export function RentalManager({ houses, balance, onIncome, onSpend }: Props) {
 
       {open && (
         <div className="fixed inset-0 z-[75] flex items-end justify-center bg-slate-950/35 p-3 backdrop-blur-sm sm:items-center">
-          <div className="flex max-h-[86vh] w-full max-w-lg flex-col rounded-3xl bg-white p-4 text-slate-900 shadow-2xl">
-            <div className="flex items-center gap-2">
-              <h2 className="text-lg font-extrabold">🏘️ Locations & impôts</h2>
-              <button type="button" onClick={() => setOpen(false)} className="ml-auto rounded-full bg-slate-100 px-3 py-1.5 font-bold">✕</button>
+          <div className="flex max-h-[92vh] w-full max-w-lg flex-col rounded-lg bg-white p-3 text-slate-900 shadow-2xl">
+            <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+              <h2 className="truncate text-base font-extrabold">🏘️ Locations & impôts</h2>
+              <button type="button" onClick={() => setOpen(false)} className="shrink-0 rounded-lg bg-slate-100 px-3 py-2 text-xs font-bold">← Retour</button>
             </div>
 
             <div className="mt-3 grid grid-cols-4 gap-2 text-center text-xs">

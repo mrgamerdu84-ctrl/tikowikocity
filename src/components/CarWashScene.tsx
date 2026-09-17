@@ -7,6 +7,7 @@ import { RentalManager } from "@/components/RentalManager";
 import { GameDashboard } from "@/components/GameDashboard";
 import { ClientsMenu } from "@/components/ClientsMenu";
 import { InteractionHud } from "@/components/InteractionHud";
+import { CarWashStatsMenu } from "@/components/CarWashStatsMenu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   AlertDialog,
@@ -20,7 +21,7 @@ import {
 } from "@/components/ui/alert-dialog";
 
 
-const SAVE_VERSION = 6;
+const SAVE_VERSION = 7;
 
 
 import * as THREE from "three";
@@ -107,10 +108,13 @@ import {
   DEFAULT_CLIENT_BEHAVIOR,
   effectiveArrivalInterval,
   effectiveBeltFactor,
+  effectiveWashDuration,
   sanitizeClientBehavior,
   type ClientBehavior,
   type NeighborhoodStats,
 } from "@/game/clientBehavior";
+import { EMPTY_WASH_METRICS, formatPlayTime, recordFinance, sanitizeFinancePeriods, sanitizeWashMetrics, washAverages, type FinancePeriod, type WashMetrics } from "@/game/metrics";
+import { eventSatisfactionBonus, eventTrafficFactor, nextEventDelay, randomUrbanEvent, sanitizeUrbanEvent, URBAN_EVENT_META, type UrbanEvent } from "@/game/urbanEvents";
 
 
 /* Catégories de la barre de construction : un seul onglet visible à la fois
@@ -207,6 +211,19 @@ export default function CarWashScene() {
   const [economy, setEconomy] = useState({ money: 150, washes: 0 });
   const economyRef = useRef(economy);
   const [gain, setGain] = useState<{ id: number; amount: number } | null>(null);
+  const [washMetrics, setWashMetrics] = useState<WashMetrics>(EMPTY_WASH_METRICS);
+  const washMetricsRef = useRef<WashMetrics>(EMPTY_WASH_METRICS);
+  const [financePeriods, setFinancePeriods] = useState<FinancePeriod[]>([]);
+  const financePeriodsRef = useRef<FinancePeriod[]>([]);
+  const [playSeconds, setPlaySeconds] = useState(0);
+  const playSecondsRef = useRef(0);
+  const [statsOpen, setStatsOpen] = useState(false);
+  const [historyView, setHistoryView] = useState<"journal" | "profit">("journal");
+  const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [activeUrbanEvent, setActiveUrbanEvent] = useState<UrbanEvent | null>(null);
+  const activeUrbanEventRef = useRef<UrbanEvent | null>(null);
+  const nextUrbanEventAtRef = useRef(Date.now() + 45_000);
+  const freeBuildingRef = useRef<() => string | null>(() => null);
   /* Journal de la partie : lavages, achats, constructions (horodatés). */
   const [history, setHistory] = useState<GameEvent[]>([]);
   const historyRef = useRef(history);
@@ -220,10 +237,19 @@ export default function CarWashScene() {
     const next = [entry, ...historyRef.current].slice(0, MAX_HISTORY);
     historyRef.current = next;
     setHistory(next);
+    if (entry.amount) {
+      const periods = recordFinance(financePeriodsRef.current, playSecondsRef.current, entry.amount);
+      financePeriodsRef.current = periods;
+      setFinancePeriods(periods);
+    }
     persistNowRef.current();
   };
-  const registerWashRef = useRef<(amount: number, premium: boolean) => void>(() => {});
-  registerWashRef.current = (amount: number, premium: boolean) => {
+  const registerWashRef = useRef<(amount: number, premium: boolean, duration: number) => void>(() => {});
+  registerWashRef.current = (amount: number, premium: boolean, duration: number) => {
+    const satisfaction = Math.max(35, Math.min(100, Math.round(58 + rollerQualityFactor(rollerConditionRef.current) * 28 + (upgradesRef.current.quality - 1) * 3 + (upgradesRef.current.decor - 1) * 2 + eventSatisfactionBonus(activeUrbanEventRef.current))));
+    const metrics = { count: washMetricsRef.current.count + 1, revenue: washMetricsRef.current.revenue + amount, totalDuration: washMetricsRef.current.totalDuration + duration, totalSatisfaction: washMetricsRef.current.totalSatisfaction + satisfaction, premiumCount: washMetricsRef.current.premiumCount + (premium ? 1 : 0) };
+    washMetricsRef.current = metrics;
+    setWashMetrics(metrics);
     const nextCondition = sanitizeRollerCondition(rollerConditionRef.current - rollerWearPerWash(rollerPartGradeRef.current));
     rollerConditionRef.current = nextCondition;
     setRollerCondition(nextCondition);
@@ -242,6 +268,44 @@ export default function CarWashScene() {
     });
     setGain({ id: Date.now() + Math.random(), amount });
   };
+
+  useEffect(() => {
+    let previous = performance.now();
+    const timer = window.setInterval(() => {
+      const now = performance.now();
+      const next = playSecondsRef.current + (now - previous) / 1000;
+      previous = now;
+      playSecondsRef.current = next;
+      setPlaySeconds(next);
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      const now = Date.now();
+      const current = activeUrbanEventRef.current;
+      if (current && now >= current.endsAt) {
+        logRef.current(makeEvent("urban", `${current.title} · terminé`));
+        activeUrbanEventRef.current = null;
+        setActiveUrbanEvent(null);
+        nextUrbanEventAtRef.current = now + nextEventDelay();
+        return;
+      }
+      if (!current && now >= nextUrbanEventAtRef.current) {
+        const event = randomUrbanEvent(now);
+        if (event.kind === "building") {
+          const building = freeBuildingRef.current();
+          event.description = building ? `${building} vient d’être construit gratuitement.` : "La ville réserve le prochain terrain disponible.";
+        }
+        activeUrbanEventRef.current = event;
+        setActiveUrbanEvent(event);
+        logRef.current(makeEvent("urban", `${event.title} · ${event.description}`));
+        toast.success(`${URBAN_EVENT_META[event.kind].icon} ${event.title}`, { description: event.description });
+      }
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (!gain) return;
@@ -663,6 +727,11 @@ export default function CarWashScene() {
     rollerPartGrade: rollerPartGradeRef.current,
     progress: progressRef.current,
     playerPosition: playerControllerRef.current?.position(),
+    washMetrics: washMetricsRef.current,
+    financePeriods: financePeriodsRef.current,
+    playSeconds: playSecondsRef.current,
+    activeUrbanEvent: activeUrbanEventRef.current,
+    nextUrbanEventAt: nextUrbanEventAtRef.current,
   });
 
   type SavedState = {
@@ -681,6 +750,11 @@ export default function CarWashScene() {
     rollerPartGrade?: unknown;
     progress?: unknown;
     playerPosition?: unknown;
+    washMetrics?: unknown;
+    financePeriods?: unknown;
+    playSeconds?: unknown;
+    activeUrbanEvent?: unknown;
+    nextUrbanEventAt?: unknown;
   };
 
   /** Réapplique une sauvegarde (locale ou Drive) à la partie en cours. */
@@ -754,6 +828,20 @@ export default function CarWashScene() {
       setProgress(next);
     }
     if (state.playerPosition) playerControllerRef.current?.setPosition(state.playerPosition);
+    const restoredMetrics = sanitizeWashMetrics(state.washMetrics);
+    washMetricsRef.current = restoredMetrics;
+    setWashMetrics(restoredMetrics);
+    const restoredPeriods = sanitizeFinancePeriods(state.financePeriods);
+    financePeriodsRef.current = restoredPeriods;
+    setFinancePeriods(restoredPeriods);
+    if (typeof state.playSeconds === "number" && Number.isFinite(state.playSeconds)) {
+      playSecondsRef.current = Math.max(0, state.playSeconds);
+      setPlaySeconds(playSecondsRef.current);
+    }
+    const restoredEvent = sanitizeUrbanEvent(state.activeUrbanEvent);
+    activeUrbanEventRef.current = restoredEvent && restoredEvent.endsAt > Date.now() ? restoredEvent : null;
+    setActiveUrbanEvent(activeUrbanEventRef.current);
+    nextUrbanEventAtRef.current = typeof state.nextUrbanEventAt === "number" && Number.isFinite(state.nextUrbanEventAt) ? state.nextUrbanEventAt : Date.now() + 45_000;
     if (
       withCinema &&
       typeof state.cinema === "boolean" &&
@@ -761,6 +849,25 @@ export default function CarWashScene() {
     ) {
       cinemaRef.current();
     }
+  };
+
+  const handleManualSave = () => {
+    saveLocalCity(collectState(), SAVE_VERSION);
+    const saved = readLocalCity();
+    setSavedAt(saved?.savedAt ?? new Date().toISOString());
+    toast.success("💾 Partie sauvegardée maintenant");
+  };
+
+  const handleManualLoad = () => {
+    const saved = readLocalCity();
+    if (!saved) {
+      toast.info("Aucune sauvegarde locale disponible.");
+      return;
+    }
+    if (!window.confirm("Charger cette sauvegarde et remplacer la partie en cours ?")) return;
+    applySavedStateRef.current(saved.state as SavedState);
+    setSavedAt(saved.savedAt);
+    toast.success("📥 Sauvegarde chargée", { description: new Date(saved.savedAt).toLocaleString("fr-FR") });
   };
 
   /* Sauvegarde locale automatique : la création du joueur est restaurée
@@ -776,6 +883,7 @@ export default function CarWashScene() {
     if (!saved) return;
     try {
       applySavedStateRef.current(saved.state as SavedState, false);
+      setSavedAt(saved.savedAt);
       localReadyRef.current = true;
       toast.success("Ville restaurée", {
         description: "Ta dernière création a été rechargée automatiquement.",
@@ -1877,6 +1985,31 @@ export default function CarWashScene() {
       neighborhoodRef.current.parking = parking;
       setPlanStats((prev) => ({ ...prev, decor: plan.decor.size, parking }));
       pedestrianRef.current?.refresh();
+    };
+
+    freeBuildingRef.current = () => {
+      const candidates = [
+        [MAIN_CX - 1, MAIN_CZ_START + 4], [MAIN_CX + 1, MAIN_CZ_START + 5],
+        [MAIN_CX - 2, MAIN_CZ_START + 7], [MAIN_CX + 2, MAIN_CZ_START + 8],
+        [MAIN_CX - 1, MAIN_CZ_START + 10], [MAIN_CX + 1, MAIN_CZ_START + 11],
+      ] as const;
+      for (const [cx, cz] of candidates) {
+        if (plan.canPlaceHouse(cx, cz)) {
+          plan.placeHouse(cx, cz, Math.min(3, 1 + Math.floor(economyRef.current.washes / 12)), 0);
+          renderHouses();
+          persistNowRef.current();
+          return `Une nouvelle résidence ouvre en ${cx}, ${cz}`;
+        }
+      }
+      for (const [cx, cz] of candidates) {
+        if (plan.canPlaceDecor(cx, cz)) {
+          plan.placeDecor(cx, cz, Math.random() > 0.45 ? "park" : "parking", 0);
+          renderDecor();
+          persistNowRef.current();
+          return `Un nouvel aménagement ouvre en ${cx}, ${cz}`;
+        }
+      }
+      return null;
     };
 
     /* ---------- Personnalisation du car wash ---------- */
@@ -3011,7 +3144,7 @@ export default function CarWashScene() {
           e.paid = true;
           const r = computeReward(up);
           const adjustedAmount = Math.max(1, Math.round(r.amount * rollerQualityFactor(rollerConditionRef.current) * clientBehaviorRef.current.payment / 100));
-          registerWashRef.current(adjustedAmount, r.premium);
+          registerWashRef.current(adjustedAmount, r.premium, effectiveWashDuration(up, clientBehaviorRef.current));
         }
 
         e.wheels.forEach((w) => {
@@ -3088,7 +3221,7 @@ export default function CarWashScene() {
       if (washCooldown <= 0) {
         neighborhoodRef.current.residents = residentsRef.current;
         const [lo, hi] = effectiveArrivalInterval(up, neighborhoodRef.current, clientBehaviorRef.current);
-        washCooldown = lo + Math.random() * (hi - lo);
+        washCooldown = (lo + Math.random() * (hi - lo)) / eventTrafficFactor(activeUrbanEventRef.current);
         if (ctl.traffic && washCars.length < queueCapacity(up)) sendCityCarToWash();
       }
 
@@ -3497,6 +3630,12 @@ export default function CarWashScene() {
       ? upgradeCost(pendingUpgrade, pendingUpgradeLevel)
       : 0;
   const balanceAfterUpgrade = Math.max(0, economy.money - pendingUpgradeCost);
+  const financeIncome = financePeriods.reduce((sum, period) => sum + period.income, 0);
+  const financeExpenses = financePeriods.reduce((sum, period) => sum + period.expenses, 0);
+  const currentFinancePeriod = financePeriods.at(-1);
+  const previousFinancePeriod = financePeriods.at(-2);
+  const currentProfit = (currentFinancePeriod?.income ?? 0) - (currentFinancePeriod?.expenses ?? 0);
+  const previousProfit = (previousFinancePeriod?.income ?? 0) - (previousFinancePeriod?.expenses ?? 0);
 
   return (
     <>
@@ -3583,6 +3722,8 @@ export default function CarWashScene() {
         rollerCondition={rollerCondition}
         rollerLevel={upgrades.speed}
         rollerPartGrade={rollerPartGrade}
+        savedAt={savedAt ? new Date(savedAt).toLocaleString("fr-FR") : null}
+        activeEvent={activeUrbanEvent ? { icon: URBAN_EVENT_META[activeUrbanEvent.kind].icon, title: activeUrbanEvent.title, remaining: `${Math.max(0, Math.ceil((activeUrbanEvent.endsAt - Date.now()) / 60_000))} min` } : null}
         onBuild={toggleBuild}
         onShop={() => setShopOpen(true)}
         onHistory={() => setHistoryOpen(true)}
@@ -3591,6 +3732,9 @@ export default function CarWashScene() {
           setHistoryOpen(false);
           setClientsOpen(true);
         }}
+        onCarWash={() => setStatsOpen(true)}
+        onSave={handleManualSave}
+        onLoad={handleManualLoad}
         onToggleMachine={toggleMachine}
         onCinema={() => cinemaRef.current()}
         onWalk={toggleWalking}
@@ -3603,6 +3747,16 @@ export default function CarWashScene() {
         rollerQuality={rollerQualityFactor(rollerCondition)}
         onChange={updateClientBehavior}
         onClose={() => setClientsOpen(false)}
+      />
+      <CarWashStatsMenu
+        open={statsOpen}
+        metrics={washMetrics}
+        upgrades={upgrades}
+        behavior={clientBehavior}
+        rollerCondition={rollerCondition}
+        partGrade={rollerPartGrade}
+        event={activeUrbanEvent}
+        onClose={() => setStatsOpen(false)}
       />
       {walking && (
         <InteractionHud
@@ -3769,9 +3923,9 @@ export default function CarWashScene() {
 
       {historyOpen && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 p-3 backdrop-blur-sm sm:items-center">
-          <div className="flex max-h-[86vh] w-full max-w-[460px] flex-col rounded-3xl bg-white p-4 text-ink shadow-[0_12px_40px_rgba(6,58,94,0.35)]">
-            <div className="flex items-center gap-2">
-              <h2 className="text-[18px] font-extrabold">🧾 Journal de la ville</h2>
+          <div className="flex max-h-[92vh] w-full max-w-[460px] flex-col rounded-lg bg-white p-3 text-ink shadow-[0_12px_40px_rgba(6,58,94,0.35)]">
+            <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2">
+              <h2 className="truncate text-base font-extrabold">🧾 Journal de la ville</h2>
               <span className="ml-auto rounded-full bg-sunny/30 px-2 py-1 text-[13px] font-extrabold tabular-nums">
                 {economy.money.toLocaleString("fr-FR")} €
               </span>
@@ -3779,11 +3933,33 @@ export default function CarWashScene() {
                 type="button"
                 onClick={() => setHistoryOpen(false)}
                 aria-label="Fermer le journal"
-                className="rounded-full bg-ink/10 px-2 py-1 text-[13px] font-bold"
+                className="rounded-lg bg-ink/10 px-2.5 py-1.5 text-xs font-bold"
               >
-                ✕
+                ← Retour
               </button>
             </div>
+
+            <div className="mt-2 grid grid-cols-2 rounded-lg bg-ink/5 p-1 text-xs font-extrabold">
+              <button type="button" onClick={() => setHistoryView("journal")} className={`rounded-md px-3 py-1.5 ${historyView === "journal" ? "bg-white shadow-sm" : "opacity-65"}`}>Journal</button>
+              <button type="button" onClick={() => setHistoryView("profit")} className={`rounded-md px-3 py-1.5 ${historyView === "profit" ? "bg-white shadow-sm" : "opacity-65"}`}>Rentabilité</button>
+            </div>
+
+            {historyView === "profit" ? (
+              <div className="mt-3 overflow-y-auto">
+                <dl className="grid grid-cols-2 gap-2">
+                  {[["Revenus", financeIncome, "text-splash"], ["Dépenses", financeExpenses, ""], ["Profit net", financeIncome - financeExpenses, financeIncome >= financeExpenses ? "text-splash" : "text-destructive"]].map(([label, value, color]) => <div key={String(label)} className="rounded-lg bg-ink/5 p-2 ring-1 ring-ink/10"><dt className="text-[10px] font-bold opacity-60">{label}</dt><dd className={`text-lg font-black tabular-nums ${color}`}>{Number(value).toLocaleString("fr-FR")} €</dd></div>)}
+                  <div className="rounded-lg bg-sunny/20 p-2 ring-1 ring-sunny/30"><dt className="text-[10px] font-bold opacity-60">TEMPS DE JEU</dt><dd className="text-lg font-black">{formatPlayTime(playSeconds)}</dd></div>
+                </dl>
+                <div className="mt-3 rounded-lg border border-ink/10 p-3">
+                  <div className="flex items-center gap-2"><h3 className="text-sm font-extrabold">Période actuelle · 30 min</h3><span className={`ml-auto text-sm font-black ${currentProfit >= 0 ? "text-splash" : "text-destructive"}`}>{currentProfit >= 0 ? "+" : ""}{currentProfit.toLocaleString("fr-FR")} €</span></div>
+                  <p className="mt-1 text-xs font-semibold opacity-65">Revenus {currentFinancePeriod?.income.toLocaleString("fr-FR") ?? 0} € · dépenses {currentFinancePeriod?.expenses.toLocaleString("fr-FR") ?? 0} €</p>
+                  {previousFinancePeriod && <p className="mt-2 text-xs font-bold">Évolution : {currentProfit - previousProfit >= 0 ? "↗" : "↘"} {Math.abs(currentProfit - previousProfit).toLocaleString("fr-FR")} € par rapport à la période précédente</p>}
+                </div>
+                <div className="mt-3 divide-y divide-ink/10 rounded-lg border border-ink/10">
+                  {[...financePeriods].reverse().map((period) => <div key={period.index} className="grid grid-cols-[1fr_auto] gap-2 px-3 py-2 text-xs"><span className="font-bold">Mois {period.index + 1}</span><span className="font-black tabular-nums">+{period.income.toLocaleString("fr-FR")} € · −{period.expenses.toLocaleString("fr-FR")} € · {(period.income - period.expenses).toLocaleString("fr-FR")} €</span></div>)}
+                </div>
+              </div>
+            ) : <>
 
             {/* Bilan global */}
             <div className="mt-3 grid grid-cols-3 gap-1.5">
@@ -3900,15 +4076,16 @@ export default function CarWashScene() {
                 </p>
               </>
             )}
+            </>}
           </div>
         </div>
       )}
 
       {shopOpen && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 p-3 backdrop-blur-sm sm:items-center">
-          <div className="flex max-h-[86vh] w-full max-w-[440px] flex-col rounded-3xl bg-white p-4 text-ink shadow-[0_12px_40px_rgba(6,58,94,0.35)]">
+          <div className="flex max-h-[92vh] w-full max-w-[440px] flex-col rounded-lg bg-white p-3 text-ink shadow-[0_12px_40px_rgba(6,58,94,0.35)]">
             <div className="flex items-center gap-2">
-              <h2 className="text-[18px] font-extrabold">🛠️ Boutique du car wash</h2>
+              <h2 className="min-w-0 truncate text-base font-extrabold">🛠️ Boutique du car wash</h2>
               <span className="ml-auto rounded-full bg-sunny/30 px-2 py-1 text-[13px] font-extrabold tabular-nums">
                 {economy.money.toLocaleString("fr-FR")} €
               </span>
@@ -3919,9 +4096,9 @@ export default function CarWashScene() {
                   setShopOpen(false);
                 }}
                 aria-label="Fermer la boutique"
-                className="rounded-full bg-ink/10 px-2 py-1 text-[13px] font-bold"
+                className="rounded-lg bg-ink/10 px-2.5 py-1.5 text-xs font-bold"
               >
-                ✕
+                ← Retour
               </button>
             </div>
 

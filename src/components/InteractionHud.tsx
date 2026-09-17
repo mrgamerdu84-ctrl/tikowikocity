@@ -24,7 +24,7 @@ export function InteractionHud({
     return (
       <section
         aria-live="polite"
-        className="fixed bottom-24 left-1/2 z-[80] w-[min(92vw,440px)] -translate-x-1/2 animate-scale-in rounded-lg bg-background/95 p-4 text-foreground shadow-2xl ring-1 ring-border backdrop-blur"
+        className="fixed bottom-24 left-1/2 z-[80] w-[min(92vw,440px)] -translate-x-1/2 animate-scale-in rounded-lg bg-background/95 p-3 text-foreground shadow-2xl ring-1 ring-border backdrop-blur"
       >
         <div className="flex items-start gap-3">
           <span aria-hidden className="text-3xl">{dialogue.icon}</span>
@@ -60,12 +60,12 @@ export function InteractionHud({
   return (
     <Button
       onClick={onInteract}
-      className="fixed bottom-24 left-1/2 z-[70] h-auto -translate-x-1/2 animate-fade-in gap-2 rounded-full bg-foreground px-4 py-3 text-background shadow-xl"
+      className="fixed bottom-36 right-4 z-[70] h-14 min-w-14 animate-fade-in gap-2 rounded-full bg-foreground px-3 text-background shadow-xl sm:bottom-24 sm:left-1/2 sm:right-auto sm:h-auto sm:-translate-x-1/2 sm:px-4 sm:py-3"
       aria-label={`${nearby.prompt} avec ${nearby.title}`}
     >
       <span aria-hidden>{nearby.icon}</span>
-      <span>{nearby.prompt}</span>
-      <kbd className="hidden rounded bg-background/15 px-1.5 py-0.5 text-[10px] font-black sm:inline">E</kbd>
+      <span className="hidden sm:inline">{nearby.prompt}</span>
+      <kbd className="grid size-7 place-items-center rounded-full bg-background/15 text-xs font-black">E</kbd>
     </Button>
   );
 }
