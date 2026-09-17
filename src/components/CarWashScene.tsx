@@ -3852,6 +3852,15 @@ export default function CarWashScene() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      {!buildMode && (
+        <CameraControlsHud
+          active={freeCamera}
+          onToggle={toggleFreeCamera}
+          onZoom={(d) => cameraIoRef.current.zoom(d)}
+          onReset={() => cameraIoRef.current.reset()}
+          onFocusWash={() => cameraIoRef.current.focusWash()}
+        />
+      )}
       <GameDashboard
         hidden={buildMode}
         player={player ?? null}
