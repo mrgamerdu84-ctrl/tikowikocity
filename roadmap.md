@@ -10,3 +10,5 @@
 - [x] Ajouter les vendeurs de pièces, l’usure des rouleaux et les réparations
 
 - [x] Ajouter le menu Clients et ses réglages de comportement
+
+- [ ] Relier la fréquentation du car wash au développement du quartier
