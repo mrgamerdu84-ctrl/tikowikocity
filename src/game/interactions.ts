@@ -3,8 +3,9 @@ import * as THREE from "three";
 import { decorDef, type DecorKind } from "./decor";
 import { TILE, parseKey } from "./grid";
 import type { CityPlan } from "./cityPlan";
+import { rollerQualityLoss, STREET_VENDORS } from "./spareParts";
 
-export type InteractionKind = "carWash" | "house" | "decor" | "streetLight";
+export type InteractionKind = "carWash" | "house" | "decor" | "streetLight" | "vendor";
 
 export type NearbyInteraction = {
   id: string;
@@ -16,12 +17,15 @@ export type NearbyInteraction = {
   distance: number;
   level?: number;
   decorKind?: DecorKind;
+  vendorId?: string;
+  price?: number;
 };
 
 export type InteractionContext = {
   washes: number;
   money: number;
   machinesRunning: boolean;
+  rollerCondition: number;
 };
 
 const WASH_POSITION = new THREE.Vector2(2, -42);
@@ -37,6 +41,24 @@ export function findNearbyInteraction(
   context: InteractionContext,
 ): NearbyInteraction | null {
   const candidates: NearbyInteraction[] = [];
+  STREET_VENDORS.forEach((vendor) => {
+    const distance = distanceTo(position, vendor.x, vendor.z);
+    if (distance > INTERACTION_RADIUS) return;
+    const loss = rollerQualityLoss(context.rollerCondition);
+    candidates.push({
+      id: `vendor-${vendor.id}`,
+      kind: "vendor",
+      vendorId: vendor.id,
+      price: vendor.price,
+      icon: "🔧",
+      title: vendor.name,
+      prompt: "Parler au vendeur de pièces",
+      dialogue: context.rollerCondition >= 100
+        ? `Tes rouleaux sont neufs : état 100 %, aucune perte de qualité. Garde tes ${vendor.price} € pour plus tard.`
+        : `Kit de roulements et lanières : ${vendor.price} €. Tes rouleaux sont à ${context.rollerCondition} % et réduisent actuellement la qualité de ${loss} %. La réparation les remet à 100 % et supprime cette perte.`,
+      distance,
+    });
+  });
   const washDistance = distanceTo(position, WASH_POSITION.x, WASH_POSITION.y);
   if (washDistance <= 11) {
     candidates.push({
