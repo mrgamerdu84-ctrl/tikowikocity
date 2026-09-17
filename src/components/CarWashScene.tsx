@@ -5,6 +5,7 @@ import { saveToDrive, loadFromDrive } from "@/lib/drive.functions";
 import { avatarSrc, usePlayer } from "@/lib/player";
 import { RentalManager } from "@/components/RentalManager";
 import { GameDashboard } from "@/components/GameDashboard";
+import { ClientsMenu } from "@/components/ClientsMenu";
 import { InteractionHud } from "@/components/InteractionHud";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
@@ -19,7 +20,7 @@ import {
 } from "@/components/ui/alert-dialog";
 
 
-const SAVE_VERSION = 4;
+const SAVE_VERSION = 5;
 
 
 import * as THREE from "three";
@@ -99,6 +100,13 @@ import {
   rollerQualityFactor,
   sanitizeRollerCondition,
 } from "@/game/spareParts";
+import {
+  DEFAULT_CLIENT_BEHAVIOR,
+  effectiveArrivalInterval,
+  effectiveBeltFactor,
+  sanitizeClientBehavior,
+  type ClientBehavior,
+} from "@/game/clientBehavior";
 
 
 /* Catégories de la barre de construction : un seul onglet visible à la fois
@@ -239,10 +247,20 @@ export default function CarWashScene() {
   const [upgrades, setUpgrades] = useState<UpgradeLevels>(DEFAULT_UPGRADES);
   const upgradesRef = useRef(upgrades);
   const [shopOpen, setShopOpen] = useState(false);
+  const [clientsOpen, setClientsOpen] = useState(false);
+  const [clientBehavior, setClientBehavior] = useState<ClientBehavior>(DEFAULT_CLIENT_BEHAVIOR);
+  const clientBehaviorRef = useRef(clientBehavior);
   const [upgradeInfoOpen, setUpgradeInfoOpen] = useState<UpgradeKey | null>(null);
   const [pendingUpgrade, setPendingUpgrade] = useState<UpgradeKey | null>(null);
   const [purchasingUpgrade, setPurchasingUpgrade] = useState<UpgradeKey | null>(null);
   const purchaseLockRef = useRef(false);
+
+  const updateClientBehavior = (next: ClientBehavior) => {
+    const safe = sanitizeClientBehavior(next);
+    clientBehaviorRef.current = safe;
+    setClientBehavior(safe);
+    window.setTimeout(() => persistNowRef.current(), 0);
+  };
 
   const requestUpgrade = (key: UpgradeKey) => {
     if (purchaseLockRef.current) return;
@@ -628,6 +646,7 @@ export default function CarWashScene() {
     economy: economyRef.current,
     history: historyRef.current,
     upgrades: upgradesRef.current,
+    clientBehavior: clientBehaviorRef.current,
     rollerCondition: rollerConditionRef.current,
     progress: progressRef.current,
     playerPosition: playerControllerRef.current?.position(),
@@ -644,6 +663,7 @@ export default function CarWashScene() {
     economy?: { money?: unknown; washes?: unknown };
     history?: unknown;
     upgrades?: unknown;
+    clientBehavior?: unknown;
     rollerCondition?: unknown;
     progress?: unknown;
     playerPosition?: unknown;
@@ -705,6 +725,9 @@ export default function CarWashScene() {
       upgradesRef.current = up;
       setUpgrades(up);
     }
+    const restoredClientBehavior = sanitizeClientBehavior(state.clientBehavior);
+    clientBehaviorRef.current = restoredClientBehavior;
+    setClientBehavior(restoredClientBehavior);
     const restoredCondition = sanitizeRollerCondition(state.rollerCondition);
     rollerConditionRef.current = restoredCondition;
     setRollerCondition(restoredCondition);
@@ -2934,7 +2957,7 @@ export default function CarWashScene() {
 
       const ctl = machinesRef.current;
       const up = upgradesRef.current;
-      const beltBoost = beltFactor(up.speed);
+      const beltBoost = effectiveBeltFactor(up, clientBehaviorRef.current);
       const SPEED = 2.6;
       /* même tapis à l'arrêt, la voiture avance lentement pour ne jamais
          rester bloquée dans le portique */
@@ -2967,7 +2990,7 @@ export default function CarWashScene() {
         if (!e.paid && e.d >= WASH_D1) {
           e.paid = true;
           const r = computeReward(up);
-          const adjustedAmount = Math.max(1, Math.round(r.amount * rollerQualityFactor(rollerConditionRef.current)));
+          const adjustedAmount = Math.max(1, Math.round(r.amount * rollerQualityFactor(rollerConditionRef.current) * clientBehaviorRef.current.payment / 100));
           registerWashRef.current(adjustedAmount, r.premium);
         }
 
@@ -3043,10 +3066,8 @@ export default function CarWashScene() {
       /* De temps en temps, une voiture de la ville part au lavage. */
       washCooldown -= dt;
       if (washCooldown <= 0) {
-        const [lo, hi] = washInterval(up.speed, up.parking);
-        // plus la ville compte d'habitants, plus les clients affluent
-        const crowd = 1 / (1 + residentsRef.current / 25);
-        washCooldown = (lo + Math.random() * (hi - lo + 3)) * crowd;
+        const [lo, hi] = effectiveArrivalInterval(up, residentsRef.current, clientBehaviorRef.current);
+        washCooldown = lo + Math.random() * (hi - lo);
         if (ctl.traffic && washCars.length < queueCapacity(up)) sendCityCarToWash();
       }
 
@@ -3541,9 +3562,23 @@ export default function CarWashScene() {
         onBuild={toggleBuild}
         onShop={() => setShopOpen(true)}
         onHistory={() => setHistoryOpen(true)}
+        onClients={() => {
+          setShopOpen(false);
+          setHistoryOpen(false);
+          setClientsOpen(true);
+        }}
         onToggleMachine={toggleMachine}
         onCinema={() => cinemaRef.current()}
         onWalk={toggleWalking}
+      />
+      <ClientsMenu
+        open={clientsOpen}
+        behavior={clientBehavior}
+        upgrades={upgrades}
+        residents={residents}
+        rollerQuality={rollerQualityFactor(rollerCondition)}
+        onChange={updateClientBehavior}
+        onClose={() => setClientsOpen(false)}
       />
       {walking && (
         <InteractionHud
