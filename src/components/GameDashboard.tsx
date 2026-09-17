@@ -23,11 +23,16 @@ type Props = {
   rollerCondition: number;
   rollerLevel: number;
   rollerPartGrade: RollerPartGrade;
+  savedAt: string | null;
+  activeEvent?: { icon: string; title: string; remaining: string } | null;
   hidden?: boolean;
   onBuild: () => void;
   onShop: () => void;
   onHistory: () => void;
   onClients: () => void;
+  onCarWash: () => void;
+  onSave: () => void;
+  onLoad: () => void;
   onToggleMachine: (key: keyof Machines) => void;
   onCinema: () => void;
   onWalk: () => void;
@@ -51,6 +56,11 @@ export function GameDashboard({
   onShop,
   onHistory,
   onClients,
+  onCarWash,
+  onSave,
+  onLoad,
+  savedAt,
+  activeEvent,
   onToggleMachine,
   onCinema,
   onWalk,
@@ -97,33 +107,36 @@ export function GameDashboard({
 
       {open && (
         <div className="fixed inset-0 z-[90] flex items-end justify-center bg-slate-950/45 p-2 backdrop-blur-sm sm:items-center sm:p-4">
-          <div className="flex max-h-[92vh] w-full max-w-xl flex-col overflow-hidden rounded-[28px] bg-white text-slate-900 shadow-2xl">
-            <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-3">
-              <div>
-                <h2 className="text-lg font-black">📊 Tableau de bord</h2>
-                <p className="text-[11px] font-semibold text-slate-500">Ville, argent, car wash et construction au même endroit</p>
+          <div className="flex max-h-[94vh] w-full max-w-xl flex-col overflow-hidden rounded-lg bg-white text-slate-900 shadow-2xl">
+            <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b border-slate-200 px-3 py-2.5">
+              <div className="min-w-0">
+                <h2 className="truncate text-base font-black">📊 Tableau de bord</h2>
+                <p className="truncate text-[10px] font-semibold text-slate-500">Ville, argent et station</p>
               </div>
-              <button type="button" onClick={() => setOpen(false)} className="ml-auto rounded-full bg-slate-100 px-3 py-2 font-black">✕</button>
+              <button type="button" onClick={() => setOpen(false)} className="shrink-0 rounded-lg bg-slate-100 px-3 py-2 text-xs font-black">← Retour</button>
             </div>
 
             <div className="overflow-y-auto p-3 sm:p-4">
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                <div className="rounded-2xl bg-emerald-50 p-3"><p className="text-[11px] font-bold text-emerald-700">ARGENT</p><p className="mt-1 text-lg font-black">{money.toLocaleString("fr-FR")} €</p></div>
-                <div className="rounded-2xl bg-sky-50 p-3"><p className="text-[11px] font-bold text-sky-700">LAVAGES</p><p className="mt-1 text-lg font-black">🫧 {washes}</p></div>
-                <div className="rounded-2xl bg-violet-50 p-3"><p className="text-[11px] font-bold text-violet-700">HABITANTS</p><p className="mt-1 text-lg font-black">👥 {residents}/{capacity}</p></div>
-                <div className="rounded-2xl bg-amber-50 p-3"><p className="text-[11px] font-bold text-amber-700">MAISONS</p><p className="mt-1 text-lg font-black">🏠 {houses}</p></div>
+              <div className="grid grid-cols-4 gap-1.5">
+                <div className="rounded-lg bg-emerald-50 p-2"><p className="text-[9px] font-bold text-emerald-700">ARGENT</p><p className="text-sm font-black">{money.toLocaleString("fr-FR")} €</p></div>
+                <div className="rounded-lg bg-sky-50 p-2"><p className="text-[9px] font-bold text-sky-700">LAVAGES</p><p className="text-sm font-black">{washes}</p></div>
+                <div className="rounded-lg bg-violet-50 p-2"><p className="text-[9px] font-bold text-violet-700">HABITANTS</p><p className="text-sm font-black">{residents}/{capacity}</p></div>
+                <div className="rounded-lg bg-amber-50 p-2"><p className="text-[9px] font-bold text-amber-700">MAISONS</p><p className="text-sm font-black">{houses}</p></div>
               </div>
 
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <button type="button" onClick={() => { setOpen(false); onWalk(); }} className="rounded-2xl bg-emerald-500 p-4 text-left font-black text-white">🚶 {walking ? "Quitter la marche" : "Explorer à pied"}<br/><span className="text-xs font-semibold opacity-90">Parcourir les quartiers</span></button>
-                <button type="button" onClick={() => { setOpen(false); onBuild(); }} className="rounded-2xl bg-sky-500 p-4 text-left font-black text-white">🏗️ Construction<br/><span className="text-xs font-semibold opacity-90">Routes, maisons, parcs, éclairage</span></button>
-                <button type="button" onClick={() => { setOpen(false); onShop(); }} className="rounded-2xl bg-amber-400 p-4 text-left font-black text-slate-900">🛠️ Améliorations<br/><span className="text-xs font-semibold opacity-75">Station et clientèle</span></button>
-                <button type="button" onClick={() => { setOpen(false); onClients(); }} className="rounded-2xl bg-splash p-4 text-left font-black text-splash-foreground">👥 Clients<br/><span className="text-xs font-semibold opacity-90">Fréquence, paiement et durée</span></button>
-                <button type="button" onClick={openRentals} className="rounded-2xl bg-violet-500 p-4 text-left font-black text-white">🏘️ Locations<br/><span className="text-xs font-semibold opacity-90">Loyers, impôts et besoins</span></button>
-                <button type="button" onClick={() => { setOpen(false); onHistory(); }} className="rounded-2xl bg-emerald-500 p-4 text-left font-black text-white">🧾 Argent & historique<br/><span className="text-xs font-semibold opacity-90">Entrées et dépenses</span></button>
+              {activeEvent && <div className="mt-2 flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs font-bold ring-1 ring-amber-200"><span>{activeEvent.icon}</span><span className="min-w-0 flex-1 truncate">{activeEvent.title}</span><span className="shrink-0 tabular-nums text-amber-700">{activeEvent.remaining}</span></div>}
+
+              <div className="mt-2 grid grid-cols-2 gap-1.5 text-xs">
+                <button type="button" onClick={() => { setOpen(false); onWalk(); }} className="rounded-lg bg-emerald-500 p-2.5 text-left font-black text-white">🚶 {walking ? "Quitter la marche" : "Explorer à pied"}</button>
+                <button type="button" onClick={() => { setOpen(false); onBuild(); }} className="rounded-lg bg-sky-500 p-2.5 text-left font-black text-white">🏗️ Construction</button>
+                <button type="button" onClick={() => { setOpen(false); onShop(); }} className="rounded-lg bg-amber-400 p-2.5 text-left font-black text-slate-900">🛠️ Améliorations</button>
+                <button type="button" onClick={() => { setOpen(false); onClients(); }} className="rounded-lg bg-splash p-2.5 text-left font-black text-splash-foreground">👥 Clients</button>
+                <button type="button" onClick={() => { setOpen(false); onCarWash(); }} className="rounded-lg bg-sky-700 p-2.5 text-left font-black text-white">🫧 Car wash</button>
+                <button type="button" onClick={openRentals} className="rounded-lg bg-violet-500 p-2.5 text-left font-black text-white">🏘️ Locations</button>
+                <button type="button" onClick={() => { setOpen(false); onHistory(); }} className="col-span-2 rounded-lg bg-emerald-600 p-2.5 text-left font-black text-white">🧾 Journal & rentabilité</button>
               </div>
 
-              <div className="mt-3 rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-200">
+              <div className="mt-2 rounded-lg bg-slate-50 p-2.5 ring-1 ring-slate-200">
                 <div className="flex items-center"><p className="text-sm font-black">⚙️ État des rouleaux</p><span className="ml-auto text-[11px] font-bold text-slate-500">Niveau {rollerLevel}</span></div>
                 <div className="mt-2 flex items-center text-xs font-extrabold"><span>{rollerStatus}</span><span className="ml-auto tabular-nums">{rollerCondition} %</span></div>
                 <progress className={`mt-1 h-2 w-full ${rollerAccent}`} value={rollerCondition} max={100} aria-label="État des rouleaux" />
@@ -145,12 +158,15 @@ export function GameDashboard({
                 </div>
               </div>
 
-              <div className="mt-3 grid grid-cols-2 gap-2">
+              <div className="mt-2 grid grid-cols-2 gap-1.5">
                 <button type="button" onClick={() => { onCinema(); setOpen(false); }} className="rounded-2xl bg-slate-900 px-3 py-3 text-[12px] font-extrabold text-white">🎥 {cinema ? "Vue libre" : "Vue cinéma"}</button>
                 <button type="button" onClick={fullscreen} className="rounded-2xl bg-slate-200 px-3 py-3 text-[12px] font-extrabold">⛶ Plein écran</button>
               </div>
 
-              <div className="mt-3 rounded-2xl bg-emerald-50 p-3 text-[11px] font-semibold text-emerald-800 ring-1 ring-emerald-200">✅ Sauvegarde locale automatique. La partie et l’APK restent utilisables sans publication Lovable.</div>
+              <div className="mt-2 rounded-lg bg-emerald-50 p-2.5 ring-1 ring-emerald-200">
+                <div className="grid grid-cols-2 gap-1.5"><button type="button" onClick={onSave} className="rounded-lg bg-emerald-600 px-2 py-2 text-[11px] font-black text-white">💾 Sauvegarder maintenant</button><button type="button" onClick={onLoad} disabled={!savedAt} className="rounded-lg bg-white px-2 py-2 text-[11px] font-black text-emerald-800 ring-1 ring-emerald-200 disabled:opacity-50">📥 Charger la sauvegarde</button></div>
+                <p className="mt-1.5 text-[10px] font-semibold text-emerald-800">{savedAt ? `Dernière sauvegarde : ${savedAt}` : "Aucune sauvegarde disponible"}</p>
+              </div>
             </div>
           </div>
         </div>
