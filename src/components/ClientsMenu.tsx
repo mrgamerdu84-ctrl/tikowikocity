@@ -4,8 +4,10 @@ import {
   DEFAULT_CLIENT_BEHAVIOR,
   effectiveArrivalInterval,
   effectiveWashDuration,
+  neighborhoodDemand,
   paymentPreview,
   type ClientBehavior,
+  type NeighborhoodStats,
 } from "@/game/clientBehavior";
 import { queueCapacity, type UpgradeLevels } from "@/game/upgrades";
 
@@ -13,7 +15,7 @@ type Props = {
   open: boolean;
   behavior: ClientBehavior;
   upgrades: UpgradeLevels;
-  residents: number;
+  neighborhood: NeighborhoodStats;
   rollerQuality: number;
   onChange: (next: ClientBehavior) => void;
   onClose: () => void;
@@ -25,9 +27,10 @@ const rows: Array<{ key: keyof ClientBehavior; icon: string; label: string; min:
   { key: "washTime", icon: "⏱️", label: "Temps de lavage", min: 70, max: 140, step: 5, hint: "100 % est la durée normale ; plus haut signifie plus long." },
 ];
 
-export function ClientsMenu({ open, behavior, upgrades, residents, rollerQuality, onChange, onClose }: Props) {
+export function ClientsMenu({ open, behavior, upgrades, neighborhood, rollerQuality, onChange, onClose }: Props) {
   if (!open) return null;
-  const arrival = effectiveArrivalInterval(upgrades, residents, behavior);
+  const arrival = effectiveArrivalInterval(upgrades, neighborhood, behavior);
+  const district = neighborhoodDemand(neighborhood);
   const duration = effectiveWashDuration(upgrades, behavior);
   const payment = paymentPreview(upgrades, behavior, rollerQuality);
   const update = (key: keyof ClientBehavior, value: number) => onChange({ ...behavior, [key]: value });
@@ -49,6 +52,20 @@ export function ClientsMenu({ open, behavior, upgrades, residents, rollerQuality
             <div className="rounded-lg bg-sunny/20 p-2 ring-1 ring-sunny/30"><dt className="text-[10px] font-bold opacity-65">PAIEMENT</dt><dd className="mt-1 text-sm font-black">{payment[0]}–{payment[1]} €</dd></div>
             <div className="rounded-lg bg-ink/5 p-2 ring-1 ring-border"><dt className="text-[10px] font-bold opacity-65">LAVAGE</dt><dd className="mt-1 text-sm font-black">{duration.toFixed(1)} s</dd></div>
           </dl>
+
+          <div className="mt-4 rounded-lg bg-splash/10 p-3 ring-1 ring-splash/20">
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-extrabold">🏙️ Attractivité du quartier</h3>
+              <strong className="ml-auto text-sm text-splash">+{district.bonusPercent} % de clients</strong>
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs font-semibold text-muted-foreground">
+              <span>🏠 {neighborhood.houses} bâtiments</span><span className="text-right">+{district.housesPercent} %</span>
+              <span>🧍 {neighborhood.residents} habitants</span><span className="text-right">+{district.residentsPercent} %</span>
+              <span>🛣️ {neighborhood.roads} routes</span><span className="text-right">+{district.roadsPercent} %</span>
+              <span>🅿️ {neighborhood.parking} parkings</span><span className="text-right">+{district.parkingPercent} %</span>
+            </div>
+            <p className="mt-2 text-[11px] font-medium text-muted-foreground">Construire et accueillir des habitants réduit directement l’attente entre deux clients.</p>
+          </div>
 
           <div className="mt-4 divide-y divide-border rounded-lg border border-border">
             {rows.map((row) => (

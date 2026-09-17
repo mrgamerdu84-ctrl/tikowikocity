@@ -11,4 +11,4 @@
 
 - [x] Ajouter le menu Clients et ses réglages de comportement
 
-- [ ] Relier la fréquentation du car wash au développement du quartier
+- [x] Relier la fréquentation du car wash au développement du quartier
