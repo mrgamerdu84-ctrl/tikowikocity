@@ -558,8 +558,8 @@ export default function CarWashScene() {
     } else if (target.kind === "vendor") {
       const price = target.price ?? 0;
       const grade = sanitizeRollerPartGrade(target.partGrade);
-      if (rollerConditionRef.current >= 100) {
-        toast.info("✅ Les rouleaux sont déjà neufs");
+      if (rollerConditionRef.current >= 100 && rollerPartGradeRef.current === grade) {
+        toast.info(`✅ Les rouleaux utilisent déjà ces ${PART_GRADE_META[grade].label.toLocaleLowerCase("fr-FR")}`);
       } else if (price <= 0 || economyRef.current.money < price) {
         toast.error(`Il manque ${Math.max(0, price - economyRef.current.money).toLocaleString("fr-FR")} € pour acheter les pièces`);
       } else {
@@ -3609,7 +3609,7 @@ export default function CarWashScene() {
           nearby={nearbyInteraction}
           dialogue={activeDialogue}
           machinesRunning={Object.values(machines).every(Boolean)}
-          actionDisabled={activeDialogue?.kind === "vendor" && (rollerCondition >= 100 || economy.money < (activeDialogue.price ?? 0))}
+          actionDisabled={activeDialogue?.kind === "vendor" && ((rollerCondition >= 100 && rollerPartGrade === activeDialogue.partGrade) || economy.money < (activeDialogue.price ?? 0))}
           onInteract={interactNearby}
           onAction={performDialogueAction}
           onClose={closeDialogue}
