@@ -142,6 +142,10 @@ export function GameDashboard({
 
               {activeEvent && <div className="mt-2 flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs font-bold ring-1 ring-amber-200"><span>{activeEvent.icon}</span><span className="min-w-0 flex-1 truncate">{activeEvent.title}</span><span className="shrink-0 tabular-nums text-amber-700">{activeEvent.remaining}</span></div>}
 
+              <AttendanceGauge demand={demand} travelers={travelers} districtBonus={districtDemandBonus(districtLevel)} carsPerHour={carsPerHour} />
+              <DistrictLevelPanel level={districtLevel} money={money} snapshot={districtSnapshot} onUpgrade={onDistrictUpgrade} />
+
+
               <div className="mt-2 grid grid-cols-2 gap-1.5 text-xs">
                 <button type="button" onClick={() => { setOpen(false); onWalk(); }} className="rounded-lg bg-emerald-500 p-2.5 text-left font-black text-white">🚶 {walking ? "Quitter la marche" : "Explorer à pied"}</button>
                 <button type="button" onClick={() => { setOpen(false); onBuild(); }} className="rounded-lg bg-sky-500 p-2.5 text-left font-black text-white">🏗️ Construction</button>
