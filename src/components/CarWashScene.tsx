@@ -764,6 +764,8 @@ export default function CarWashScene() {
     /* Ces listes sont reconstruites avec le plan et servent au cycle nocturne. */
     const streetLampLights: THREE.PointLight[] = [];
     const houseLights: THREE.PointLight[] = [];
+    const washLights: THREE.PointLight[] = [];
+    const citizenTemplates: THREE.Object3D[] = [];
 
     const ground = new THREE.Mesh(
       new THREE.PlaneGeometry(900, 900),
@@ -1488,6 +1490,7 @@ export default function CarWashScene() {
         housesGroup.add(m);
       });
       cityStatsRef.current(plan.houseLevels());
+      pedestrianRef.current?.refresh();
     };
 
     /* ---------- Décor du joueur : parcs et parkings ---------- */
@@ -1654,6 +1657,8 @@ export default function CarWashScene() {
         obj.rotation.y = (d.rot * Math.PI) / 2;
         decorGroup.add(obj);
       });
+      setPlanStats((prev) => ({ ...prev, decor: plan.decor.size }));
+      pedestrianRef.current?.refresh();
     };
 
     /* ---------- Personnalisation du car wash ---------- */
@@ -1680,6 +1685,7 @@ export default function CarWashScene() {
 
     const rebuildWashDecor = (style: WashStyle) => {
       [...washDecor.children].forEach((c) => washDecor.remove(c));
+      washLights.length = 0;
       const hex = WASH_COLORS[style.color]?.hex ?? WASH_COLORS[0]!.hex;
       const themeMat = new THREE.MeshStandardMaterial({ color: hex, roughness: 0.65 });
 
@@ -1706,6 +1712,10 @@ export default function CarWashScene() {
         );
         panel.position.set(0, 6.4, -3.4);
         washDecor.add(panel);
+        const signLight = new THREE.PointLight(hex, 0, 20, 1.7);
+        signLight.position.set(0, 6, -2.4);
+        washDecor.add(signLight);
+        washLights.push(signLight);
         for (const sx of [-4, 4]) {
           const mast = new THREE.Mesh(
             new THREE.BoxGeometry(0.2, 1.6, 0.2),
@@ -1769,6 +1779,23 @@ export default function CarWashScene() {
           flag.position.set(x + 0.55, 2.9, 6.2);
           washDecor.add(pole, flag);
         }
+      }
+
+      for (const [x, z] of [[-8, -5], [8, -5], [-8, 5], [8, 5]] as const) {
+        const pole = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.07, 0.1, 3.7, 8),
+          new THREE.MeshStandardMaterial({ color: 0x58636d, roughness: 0.55 }),
+        );
+        pole.position.set(x, 1.85, z);
+        const bulb = new THREE.Mesh(
+          new THREE.SphereGeometry(0.16, 10, 8),
+          new THREE.MeshStandardMaterial({ color: 0xffe8ae, emissive: 0xffc85c, emissiveIntensity: 0.2 }),
+        );
+        bulb.position.set(x, 3.75, z);
+        const light = new THREE.PointLight(0xffd88a, 0, 18, 1.7);
+        light.position.set(x, 3.65, z);
+        washDecor.add(pole, bulb, light);
+        washLights.push(light);
       }
 
       setShadow(washDecor);
@@ -1836,6 +1863,8 @@ export default function CarWashScene() {
           streetLampLights.push(light);
         }
       });
+      setPlanStats((prev) => ({ ...prev, roads: plan.cells.size }));
+      pedestrianRef.current?.refresh();
     };
 
     let ti = 0;
@@ -2695,6 +2724,9 @@ export default function CarWashScene() {
           });
         });
       });
+      washLights.forEach((light) => {
+        light.intensity = night * 7.5;
+      });
 
       const hourFloat = dayPhase * 24;
       const hour = Math.floor(hourFloat);
@@ -2999,7 +3031,9 @@ export default function CarWashScene() {
         camera.lookAt(2, 2, WASH_SITE_Z);
       }
 
-      controls.update();
+      playerControllerRef.current?.update(dt, camera);
+      pedestrianRef.current?.update(dt, t, residentsRef.current, netCars.map((car) => car.car));
+      if (!walkingRef.current) controls.update();
       renderer.render(scene, camera);
     };
 
@@ -3048,6 +3082,12 @@ export default function CarWashScene() {
         child.removeFromParent();
         kit[child.name] = child;
       });
+
+      const citizenAssets = [citizenMaleA, citizenMaleC, citizenFemaleA, citizenFemaleD];
+      const citizens = await Promise.all(citizenAssets.map((asset) => new Promise<THREE.Group>((resolve, reject) => {
+        loader.load(asset.url, (gltf) => resolve(gltf.scene), undefined, (err) => reject(err instanceof Error ? err : new Error(String(err))));
+      })));
+      citizenTemplates.push(...citizens);
     };
 
 
@@ -3098,6 +3138,11 @@ export default function CarWashScene() {
       .then(() => {
         if (disposed) return;
         buildScene();
+        const playerModel = citizenTemplates[0];
+        if (playerModel) {
+          playerControllerRef.current = createPlayerController(scene, playerModel);
+          pedestrianRef.current = createPedestrianSystem(scene, plan, citizenTemplates.slice(1));
+        }
         /* Restauration de la sauvegarde locale une fois la ville prête. */
         restoreLocalRef.current();
         localReadyRef.current = true;
@@ -3123,6 +3168,10 @@ export default function CarWashScene() {
       renderer.domElement.removeEventListener("pointerup", onPointerUp);
       renderer.domElement.removeEventListener("pointercancel", onPointerCancel);
       controls.dispose();
+      playerControllerRef.current?.dispose();
+      playerControllerRef.current = null;
+      pedestrianRef.current?.dispose();
+      pedestrianRef.current = null;
       renderer.dispose();
       renderer.domElement.remove();
     };
